@@ -2007,6 +2007,46 @@
           />
         </div>
         <div class="combat-stat">
+          <div class="combat-stat-label">Size</div>
+          <div
+            style="
+              display: flex;
+              gap: 4px;
+              align-items: center;
+              justify-content: center;
+            "
+          >
+            <select
+              id="charSize"
+              class="combat-stat-value"
+              style="font-size: 1rem; width: auto; padding: 0"
+            >
+              <option value="Tiny">Tiny</option>
+              <option value="Small">Small</option>
+              <option value="Medium" selected>Med</option>
+              <option value="Large">Large</option>
+              <option value="Huge">Huge</option>
+              <option value="Gargantuan">Garg</option>
+            </select>
+            <div style="display: flex; align-items: center">
+              <input
+                type="number"
+                id="sizeFt"
+                value="5"
+                style="width: 40px; font-size: 1.5rem"
+              />
+              <span
+                style="
+                  font-family: &quot;Cinzel&quot;, serif;
+                  font-size: 0.8rem;
+                  color: var(--red-dark);
+                "
+                >ft</span
+              >
+            </div>
+          </div>
+        </div>
+        <div class="combat-stat">
           <div class="combat-stat-label">Proficiency Bonus</div>
           <input
             type="number"
@@ -2296,9 +2336,22 @@
           + Add Item
         </button>
 
-        <div class="total-weight-box">
-          Total Weight: <span id="totalWeightVal">0</span> /
-          <span id="maxWeightVal">150</span> lbs
+        <div
+          class="total-weight-box"
+          style="
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-items: flex-end;
+          "
+        >
+          <div>
+            Carrying Capacity: <span id="totalWeightVal">0</span> /
+            <span id="maxWeightVal">150</span> lbs
+          </div>
+          <div style="font-size: 0.8rem; font-style: italic; opacity: 0.8">
+            Max Drag/Lift: <span id="maxDragVal">300</span> lbs
+          </div>
         </div>
 
         <div class="attunement-section">
@@ -3749,6 +3802,7 @@
 
       window.calculateWeight = function () {
         let total = 0;
+        // Calculate total weight of inventory
         document.querySelectorAll(".inventory-item").forEach((row) => {
           const qty = parseFloat(row.querySelector(".inv-qty").value) || 0;
           const weight =
@@ -3757,19 +3811,53 @@
         });
 
         const strScore = parseInt(document.getElementById("str").value) || 0;
-        const maxCapacity = strScore * 15;
 
+        // Get Size (Default to Medium if not found)
+        const sizeSelect = document.getElementById("charSize");
+        const size = sizeSelect ? sizeSelect.value : "Medium";
+
+        // Determine Multiplier based on PHB '24 rules
+        let multiplier = 15; // Small & Medium
+
+        switch (size) {
+          case "Tiny":
+            multiplier = 7.5; //
+            break;
+          case "Large":
+            multiplier = 30; //
+            break;
+          case "Huge":
+            multiplier = 60; //
+            break;
+          case "Gargantuan":
+            multiplier = 120; //
+            break;
+          // Small and Medium remain 15
+        }
+
+        const maxCapacity = Math.floor(strScore * multiplier);
+
+        // Update Display
         document.getElementById("totalWeightVal").textContent =
           total.toFixed(1);
         document.getElementById("maxWeightVal").textContent = maxCapacity;
 
+        const dragLimit = maxCapacity * 2; //
+        const dragSpan = document.getElementById("maxDragVal");
+        if (dragSpan) dragSpan.textContent = dragLimit;
+
+        // Visual Warning if Overencumbered
         const weightBox = document.querySelector(".total-weight-box");
         if (total > maxCapacity) {
-          weightBox.style.color = "var(--red-dark)";
-          weightBox.style.borderColor = "var(--red)";
+          weightBox.style.color = "#8b0000"; // Dark red text
+          weightBox.style.borderColor = "#8b0000";
+          weightBox.style.backgroundColor = "#ffdddd"; // Light red bg
+          weightBox.style.fontWeight = "800";
         } else {
           weightBox.style.color = "var(--ink)";
           weightBox.style.borderColor = "var(--gold)";
+          weightBox.style.backgroundColor = "var(--parchment-dark)";
+          weightBox.style.fontWeight = "700";
         }
       };
 
@@ -4832,6 +4920,8 @@
           weaponProfs: document.getElementById("weaponProfs").value,
           toolProfs: document.getElementById("toolProfs").value,
           speed: document.getElementById("speed").value,
+          charSize: document.getElementById("charSize").value,
+          sizeFt: document.getElementById("sizeFt").value,
           hp: document.getElementById("hp").value,
           maxHp: document.getElementById("maxHp").value,
           tempHp: document.getElementById("tempHp").value,
@@ -5102,6 +5192,9 @@
         ["hp", "maxHp", "tempHp"].forEach((id) =>
           document.getElementById(id).addEventListener("input", updateHpBar),
         );
+        document
+          .getElementById("charSize")
+          ?.addEventListener("change", calculateWeight);
 
         // Load Data
         const saved = localStorage.getItem("dndCharacter");
@@ -5181,6 +5274,11 @@
           (data.feats || []).forEach((f) =>
             addFeatureItem("featsContainer", f.title, f.desc),
           );
+
+          if (data.charSize)
+            document.getElementById("charSize").value = data.charSize;
+          if (data.sizeFt)
+            document.getElementById("sizeFt").value = data.sizeFt;
 
           // Weapons
           // Weapons loading section
