@@ -668,7 +668,7 @@
         margin-bottom: 20px;
         flex-wrap: wrap;
       }
-.tab {
+      .tab {
         flex: 1;
         min-width: 120px;
         padding: 12px 20px;
@@ -749,6 +749,10 @@
         box-shadow: 0 4px 12px var(--shadow-heavy);
         transition: all 0.3s ease;
         text-transform: uppercase;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
       }
       .btn-secondary {
         background: linear-gradient(135deg, #5a4838 0%, #2a1810 100%);
@@ -817,13 +821,18 @@
       }
 
       /* =========================================
-         9. SPELLS & INVENTORY
+         9. WEAPONS & SPELLS & INVENTORY
          ========================================= */
+      .weapon-flex-container {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
       /* Spell Tables */
       .spell-list-header,
       .spell-row {
         display: grid;
-        grid-template-columns: 40px 2fr 1fr 1fr 30px;
+        grid-template-columns: 30px 40px 2fr 1fr 1fr 30px;
         gap: 8px;
         align-items: center;
       }
@@ -949,7 +958,10 @@
         font-size: 1.2rem;
         display: flex;
         justify-content: center;
+        align-items: center;
         user-select: none;
+        touch-action: none;
+        padding: 8px;
       }
       .drag-handle:active {
         cursor: grabbing;
@@ -2103,7 +2115,7 @@
         </div>
 
         <div class="attunement-section">
-          <h3 class="section-title">Magical Attunement (Max 3)</h3>
+          <h3 class="section-title">Magical Attunement</h3>
           <div class="attunement-grid">
             <div class="attunement-slot">
               <input
@@ -2166,20 +2178,20 @@
 
         <h3 class="section-title">Cantrips (Level 0)</h3>
         <div class="spell-list-header">
-          <span>Lvl</span><span>Name</span><span>Time</span><span>Range</span
-          ><span></span>
+          <span></span><span>Lvl</span><span>Name</span><span>Time</span
+          ><span>Range</span><span></span>
         </div>
         <div id="cantripList"></div>
         <button class="add-feature-btn" onclick="addSpellRow('cantripList', 0)">
           + Add Cantrip
         </button>
-
+        
         <h3 class="section-title" style="margin-top: 24px">
           Known / Prepared Spells
         </h3>
         <div class="spell-list-header">
-          <span>Lvl</span><span>Name</span><span>Time</span><span>Range</span
-          ><span></span>
+          <span></span><span>Lvl</span><span>Name</span><span>Time</span
+          ><span>Range</span><span></span>
         </div>
         <div id="spellList"></div>
         <button class="add-feature-btn" onclick="addSpellRow('spellList', 1)">
@@ -2991,6 +3003,84 @@
         saveCharacter();
       };
 
+      /* =========================================
+         HELPER: UNIFIED DRAG & DROP (MOUSE + TOUCH)
+         ========================================= */
+      function setupDragItem(item, containerId) {
+        const handle = item.querySelector(".drag-handle");
+        const container = document.getElementById(containerId);
+
+        if (!handle || !container) return;
+
+        // --- DESKTOP (HTML5 Drag & Drop) ---
+        item.draggable = true;
+        item.addEventListener("dragstart", () =>
+          item.classList.add("dragging"),
+        );
+        item.addEventListener("dragend", () => {
+          item.classList.remove("dragging");
+          saveCharacter();
+        });
+
+        // --- MOBILE (Touch Events) ---
+        handle.addEventListener(
+          "touchstart",
+          (e) => {
+            // Prevent scrolling and set dragging state
+            e.preventDefault();
+            item.classList.add("dragging");
+          },
+          { passive: false },
+        );
+
+        handle.addEventListener(
+          "touchmove",
+          (e) => {
+            e.preventDefault(); // Stop screen scrolling
+            const touch = e.touches[0];
+
+            // Calculate position relative to other items
+            const afterElement = getDragAfterElement(container, touch.clientY);
+
+            if (afterElement == null) {
+              container.appendChild(item);
+            } else {
+              container.insertBefore(item, afterElement);
+            }
+          },
+          { passive: false },
+        );
+
+        handle.addEventListener("touchend", (e) => {
+          item.classList.remove("dragging");
+          saveCharacter(); // Save order
+        });
+      }
+
+      /* =========================================
+         HELPER: DRAG CALCULATION (GLOBAL SCOPE)
+         ========================================= */
+      function getDragAfterElement(container, y) {
+        const draggableElements = [
+          ...container.querySelectorAll(
+            ".inventory-item:not(.dragging), .spell-row:not(.dragging)",
+          ),
+        ];
+
+        return draggableElements.reduce(
+          (closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+              return { offset: offset, element: child };
+            } else {
+              return closest;
+            }
+          },
+          { offset: Number.NEGATIVE_INFINITY },
+        ).element;
+      }
+
       window.addWeapon = function () {
         const weaponList = document.getElementById("weapon-list");
         const newWeapon = document.createElement("div");
@@ -3002,8 +3092,8 @@
           <div style="display: flex; flex-direction: column; gap: 10px;">
               <div class="grid grid-3" style="margin-bottom: 0; gap: 10px;">
                   <div class="field"><span class="field-label">Weapon Name</span><input type="text" class="weapon-name" placeholder="e.g. Longsword" /></div>
-                  <div class="field"><span class="field-label">Atk Bonus</span><input type="text" class="weapon-atk" placeholder="+5" /></div>
-                  <div class="field"><span class="field-label">Damage</span><input type="text" class="weapon-damage" placeholder="1d8+3 Slash" /></div>
+                  <div class="field"><span class="field-label">Atk Bonus</span><input type="text" class="weapon-atk" placeholder="Proficiency Bonus + Ability Score Modifier" /></div>
+                  <div class="field"><span class="field-label">Damage</span><input type="text" class="weapon-damage" placeholder="Weapon Dice Damage + Ability Score Modifier + Other Bonus(es)" /></div>
               </div>
               <div class="field"><span class="field-label">Notes</span><input type="text" class="weapon-notes" placeholder="Properties..." /></div>
           </div>
@@ -3024,7 +3114,6 @@
         const list = document.getElementById(targetListId);
         const row = document.createElement("div");
         row.className = "inventory-item";
-        row.draggable = true;
 
         row.innerHTML = `
           <div class="drag-handle">☰</div>
@@ -3035,21 +3124,16 @@
           <button class="delete-feature-btn" onclick="this.parentElement.remove(); calculateWeight(); saveCharacter()">×</button>
         `;
 
-        // Drag Events
-        row.addEventListener("dragstart", () => row.classList.add("dragging"));
-        row.addEventListener("dragend", () => {
-          row.classList.remove("dragging");
-          saveCharacter();
-        });
-
-        // Move logic
+        // Move logic (Equip/Unequip)
         row
           .querySelector(".inv-equipped")
           .addEventListener("change", function () {
-            const target = this.checked
-              ? document.getElementById("equippedList")
-              : document.getElementById("inventoryList");
+            const isNowEquipped = this.checked;
+            const targetId = isNowEquipped ? "equippedList" : "inventoryList";
+            const target = document.getElementById(targetId);
             target.appendChild(row);
+            // Re-setup drag for new container
+            setupDragItem(row, targetId);
             calculateWeight();
             saveCharacter();
           });
@@ -3062,6 +3146,10 @@
         });
 
         list.appendChild(row);
+
+        // Initialize Drag
+        setupDragItem(row, targetListId);
+
         calculateWeight();
         saveCharacter();
       };
@@ -3141,17 +3229,25 @@
         const row = document.createElement("div");
         row.className = "spell-row";
         const lvl = data ? data.level : defaultLevel === 0 ? "0" : "1";
+
+        // Added Drag Handle Column
         row.innerHTML = `
+          <div class="drag-handle">☰</div>
           <input type="number" class="spell-input spell-lvl" value="${lvl}" placeholder="Lvl" style="text-align:center;">
           <input type="text" class="spell-input spell-name" value="${data ? data.name : ""}" placeholder="Spell Name">
           <input type="text" class="spell-input spell-time" value="${data ? data.time : ""}" placeholder="1 Action">
           <input type="text" class="spell-input spell-range" value="${data ? data.range : ""}" placeholder="60 ft">
           <button class="delete-feature-btn" onclick="this.parentElement.remove(); saveCharacter()">×</button>
         `;
+
         row
           .querySelectorAll("input")
           .forEach((input) => input.addEventListener("input", saveCharacter));
         container.appendChild(row);
+
+        // Initialize Drag
+        setupDragItem(row, containerId);
+
         saveCharacter();
       };
 
@@ -3559,6 +3655,30 @@
           });
         });
 
+        [
+          "inventoryList",
+          "equippedList",
+          "weapon-list",
+          "cantripList",
+          "spellList",
+        ].forEach((id) => {
+          const container = document.getElementById(id);
+          if (!container) return;
+
+          container.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            const afterElement = getDragAfterElement(container, e.clientY);
+            const draggable = document.querySelector(".dragging");
+            if (draggable) {
+              if (afterElement == null) {
+                container.appendChild(draggable);
+              } else {
+                container.insertBefore(draggable, afterElement);
+              }
+            }
+          });
+        });
+
         // Helper for Drag
         function getDragAfterElement(container, y) {
           const draggableElements = [
@@ -3679,26 +3799,7 @@
           const weaponList = document.getElementById("weapon-list");
           weaponList.innerHTML = "";
           (data.weapons || []).forEach((w) => {
-            const newWeapon = document.createElement("div");
-            newWeapon.className = "feature-box weapon-item";
-            newWeapon.style.paddingRight = "40px";
-            newWeapon.style.position = "relative";
-            newWeapon.innerHTML = `
-                    <button class="delete-feature-btn" style="position: absolute; top: 5px; right: 5px; z-index:10; width: 24px; height: 24px;" onclick="this.closest('.weapon-item').remove(); saveCharacter();">&times;</button>
-                    <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <div class="grid grid-3" style="margin-bottom: 0; gap: 10px;">
-                            <div class="field"><span class="field-label">Weapon Name</span><input type="text" class="weapon-name" value="${w.name || ""}" /></div>
-                            <div class="field"><span class="field-label">Atk Bonus</span><input type="text" class="weapon-atk" value="${w.atk || ""}" /></div>
-                            <div class="field"><span class="field-label">Damage</span><input type="text" class="weapon-damage" value="${w.damage || ""}" /></div>
-                        </div>
-                        <div class="field"><span class="field-label">Notes</span><input type="text" class="weapon-notes" value="${w.notes || ""}" /></div>
-                    </div>`;
-            weaponList.appendChild(newWeapon);
-            newWeapon
-              .querySelectorAll("input")
-              .forEach((input) =>
-                input.addEventListener("input", saveCharacter),
-              );
+            addWeapon(w); // Update to use the new wrapper function logic
           });
 
           // Inventory
