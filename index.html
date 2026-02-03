@@ -345,8 +345,10 @@
       }
       textarea {
         resize: vertical;
-        min-height: 80px;
+        min-height: 60px;
         line-height: 1.6;
+        overflow-y: hidden;
+        height: auto;
       }
 
       /* =========================================
@@ -840,9 +842,13 @@
       .spell-list-header,
       .spell-row {
         display: grid;
-        grid-template-columns: 30px 40px 2fr 1fr 1fr 30px;
+        /* 30px Drag | 30px Prep | 40px Lvl | Name | Time | Range | 25px R | 25px C | 25px M | 30px Del */
+        grid-template-columns: 30px 30px 40px 2fr 1fr 1fr 25px 25px 25px 30px;
         gap: 8px;
         align-items: center;
+      }
+      .spell-list-header span {
+        text-align: center;
       }
       .spell-list-header {
         font-family: "Cinzel", serif;
@@ -852,6 +858,13 @@
         text-transform: uppercase;
         padding: 0 8px;
         margin-bottom: 6px;
+      }
+      .spell-check {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        margin: 0 auto;
+        accent-color: var(--red);
       }
       .spell-row {
         background: white;
@@ -2181,22 +2194,42 @@
 
         <h3 class="section-title">Cantrips (Level 0)</h3>
         <div class="spell-list-header">
-          <span></span><span>Lvl</span><span>Name</span><span>Time</span
-          ><span>Range</span><span></span>
+          <span></span><span></span><span>Lvl</span><span>Name</span
+          ><span>Time</span><span>Range</span> <span title="Ritual">R</span
+          ><span title="Concentration">C</span><span title="Material">M</span
+          ><span></span>
         </div>
         <div id="cantripList"></div>
         <button class="add-feature-btn" onclick="addSpellRow('cantripList', 0)">
           + Add Cantrip
         </button>
 
-        <h3 class="section-title" style="margin-top: 24px">
-          Known / Prepared Spells
-        </h3>
+        <h3 class="section-title" style="margin-top: 24px">Prepared Spells</h3>
         <div class="spell-list-header">
-          <span></span><span>Lvl</span><span>Name</span><span>Time</span
-          ><span>Range</span><span></span>
+          <span></span><span>Prep</span><span>Lvl</span><span>Name</span
+          ><span>Time</span><span>Range</span> <span title="Ritual">R</span
+          ><span title="Concentration">C</span><span title="Material">M</span
+          ><span></span>
         </div>
-        <div id="spellList"></div>
+        <div
+          id="preparedSpellsList"
+          class="spell-list-container"
+          style="
+            min-height: 40px;
+            border: 1px dashed var(--gold);
+            border-radius: 4px;
+            padding: 4px;
+          "
+        ></div>
+
+        <h3 class="section-title" style="margin-top: 24px">Known Spells</h3>
+        <div class="spell-list-header">
+          <span></span><span>Prep</span><span>Lvl</span><span>Name</span
+          ><span>Time</span><span>Range</span> <span title="Ritual">R</span
+          ><span title="Concentration">C</span><span title="Material">M</span
+          ><span></span>
+        </div>
+        <div id="spellList" class="spell-list-container"></div>
         <button class="add-feature-btn" onclick="addSpellRow('spellList', 1)">
           + Add Spell
         </button>
@@ -2777,6 +2810,30 @@
       ];
 
       /* =========================================
+   AUTO-RESIZE LOGIC
+   ========================================= */
+      function autoResizeTextarea(element) {
+        // Reset height to 'auto' to correctly calculate the new scrollHeight
+        // (This allows the box to shrink if text is deleted)
+        element.style.height = "auto";
+
+        // Set the height to the scrollHeight (the height of the text content)
+        element.style.height = element.scrollHeight + "px";
+      }
+
+      // Global Event Listener using Delegation
+      // This ensures it works on weapons/features added dynamically later
+      document.addEventListener("input", function (event) {
+        if (event.target.tagName.toLowerCase() === "textarea") {
+          autoResizeTextarea(event.target);
+        }
+      });
+
+      function resizeAllTextareas() {
+        document.querySelectorAll("textarea").forEach(autoResizeTextarea);
+      }
+
+      /* =========================================
          2. STATE MANAGEMENT
          ========================================= */
       const skillProficiency = {};
@@ -2787,11 +2844,7 @@
       };
 
       // Spell Slot Data
-      let spellSlotsData = [
-        { level: 1, total: 4, used: 0 },
-        { level: 2, total: 3, used: 0 },
-        { level: 3, total: 2, used: 0 },
-      ];
+      let spellSlotsData = [{ level: 1, total: 1, used: 0 }];
 
       // Point Buy Logic Data
       let pbScores = { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 };
@@ -2857,7 +2910,7 @@
           parseInt(document.getElementById("profBonus").value) || 0;
         document.getElementById("spellDC").value = 8 + profBonus + abilityMod;
       }
-      
+
       window.calculateTotalAC = function () {
         const acInput = document.getElementById("baseAC");
         const shieldBox = document.getElementById("shieldEquipped");
@@ -3229,26 +3282,61 @@
         const container = document.getElementById(containerId);
         const row = document.createElement("div");
         row.className = "spell-row";
+
         const lvl = data ? data.level : defaultLevel === 0 ? "0" : "1";
+        const isPrep = data
+          ? data.prepared
+          : containerId === "preparedSpellsList";
 
-        // Added Drag Handle Column
+        // Logic to hide/disable the Prep checkbox for Cantrips (Level 0)
+        const isCantrip =
+          containerId === "cantripList" || defaultLevel === 0 || lvl === "0";
+        const prepVisibility = isCantrip ? "visibility:hidden;" : "";
+
+        // R, C, M states
+        const rChecked = data && data.ritual ? "checked" : "";
+        const cChecked = data && data.concentration ? "checked" : "";
+        const mChecked = data && data.material ? "checked" : "";
+
         row.innerHTML = `
-          <div class="drag-handle">☰</div>
-          <input type="number" class="spell-input spell-lvl" value="${lvl}" placeholder="Lvl" style="text-align:center;">
-          <input type="text" class="spell-input spell-name" value="${data ? data.name : ""}" placeholder="Spell Name">
-          <input type="text" class="spell-input spell-time" value="${data ? data.time : ""}" placeholder="1 Action">
-          <input type="text" class="spell-input spell-range" value="${data ? data.range : ""}" placeholder="60 ft">
-          <button class="delete-feature-btn" onclick="this.parentElement.remove(); saveCharacter()">×</button>
-        `;
+    <div class="drag-handle">☰</div>
+    <div style="display:flex; justify-content:center;">
+      <input type="checkbox" class="spell-check spell-prep" ${isPrep ? "checked" : ""} style="${prepVisibility}">
+    </div>
+    <input type="number" class="spell-input spell-lvl" value="${lvl}" placeholder="Lvl" style="text-align:center;">
+    <input type="text" class="spell-input spell-name" value="${data ? data.name : ""}" placeholder="Spell Name">
+    <input type="text" class="spell-input spell-time" value="${data ? data.time : ""}" placeholder="1 Act">
+    <input type="text" class="spell-input spell-range" value="${data ? data.range : ""}" placeholder="60 ft">
+    
+    <input type="checkbox" class="spell-check spell-ritual" title="Ritual" ${rChecked}>
+    <input type="checkbox" class="spell-check spell-conc" title="Concentration" ${cChecked}>
+    <input type="checkbox" class="spell-check spell-mat" title="Material" ${mChecked}>
+    
+    <button class="delete-feature-btn" onclick="this.parentElement.remove(); saveCharacter()">×</button>
+  `;
 
+        // --- Logic: Move between Known and Prepared ---
+        const prepBox = row.querySelector(".spell-prep");
+        if (!isCantrip) {
+          prepBox.addEventListener("change", function () {
+            if (this.checked) {
+              // Move to Prepared
+              document.getElementById("preparedSpellsList").appendChild(row);
+            } else {
+              // Move to Known
+              document.getElementById("spellList").appendChild(row);
+            }
+            saveCharacter();
+          });
+        }
+
+        // Auto-save listeners
         row
           .querySelectorAll("input")
           .forEach((input) => input.addEventListener("input", saveCharacter));
+
         container.appendChild(row);
-
-        // Initialize Drag
-        setupDragItem(row, containerId);
-
+        setupDragItem(row, containerId); // Ensure you have your drag helper
         saveCharacter();
       };
 
@@ -3513,6 +3601,21 @@
             name: row.querySelector(".spell-name").value,
             time: row.querySelector(".spell-time").value,
             range: row.querySelector(".spell-range").value,
+            ritual: row.querySelector(".spell-ritual").checked,
+            concentration: row.querySelector(".spell-conc").checked,
+            material: row.querySelector(".spell-mat").checked,
+          })),
+          preparedSpellsList: Array.from(
+            document.querySelectorAll("#preparedSpellsList .spell-row"),
+          ).map((row) => ({
+            level: row.querySelector(".spell-lvl").value,
+            name: row.querySelector(".spell-name").value,
+            time: row.querySelector(".spell-time").value,
+            range: row.querySelector(".spell-range").value,
+            ritual: row.querySelector(".spell-ritual").checked,
+            concentration: row.querySelector(".spell-conc").checked,
+            material: row.querySelector(".spell-mat").checked,
+            prepared: true,
           })),
           spellsList: Array.from(
             document.querySelectorAll("#spellList .spell-row"),
@@ -3521,6 +3624,10 @@
             name: row.querySelector(".spell-name").value,
             time: row.querySelector(".spell-time").value,
             range: row.querySelector(".spell-range").value,
+            ritual: row.querySelector(".spell-ritual").checked,
+            concentration: row.querySelector(".spell-conc").checked,
+            material: row.querySelector(".spell-mat").checked,
+            prepared: false,
           })),
           languages: document.getElementById("languages").value,
           personality: document.getElementById("personality").value,
@@ -3662,6 +3769,7 @@
           "weapon-list",
           "cantripList",
           "spellList",
+          "preparedSpellsList",
         ].forEach((id) => {
           const container = document.getElementById(id);
           if (!container) return;
@@ -3816,10 +3924,16 @@
           (data.cantripsList || []).forEach((s) =>
             addSpellRow("cantripList", 0, s),
           );
+          document.getElementById("preparedSpellsList").innerHTML = "";
+          (data.preparedSpellsList || []).forEach((s) => {
+            s.prepared = true; // Ensure UI reflects state
+            addSpellRow("preparedSpellsList", 1, s);
+          });
           document.getElementById("spellList").innerHTML = "";
-          (data.spellsList || []).forEach((s) =>
-            addSpellRow("spellList", 1, s),
-          );
+          (data.spellsList || []).forEach((s) => {
+            s.prepared = false; // Ensure UI reflects state
+            addSpellRow("spellList", 1, s);
+          });
 
           // Attunement
           if (data.attunement) {
@@ -3845,6 +3959,7 @@
         renderSpellSlots();
         updateHpBar();
         calculateWeight();
+        resizeAllTextareas();
       });
     </script>
   </body>
