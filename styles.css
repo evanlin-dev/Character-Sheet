@@ -94,6 +94,13 @@ input, textarea, select { width: 100%; border: none; background: transparent; fo
 input[type="number"] { font-size: 1.3rem; font-weight: 600; text-align: center; }
 textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hidden; height: auto; }
 
+.styled-select {
+  background-color: white;
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  padding: 4px;
+}
+
 /* =========================================
    5. STAT BLOCKS & SKILLS
    ========================================= */
@@ -337,4 +344,264 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
   background: var(--red-dark);
   box-shadow: 0 4px 8px rgba(0,0,0,0.3);
   transform: translateY(-2px);
+}
+
+/* =========================================
+   12. DM SCREEN
+   ========================================= */
+.dm-content { 
+  max-width: 1100px; 
+  margin: 0 auto; 
+  padding-bottom: 60px; 
+}
+
+/* Players Container */
+.players-container {
+  background: var(--parchment);
+  border: 2px solid var(--gold);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+.section-title-small {
+  margin: 0 0 16px 0;
+  font-family: "Cinzel", serif;
+  color: var(--red-dark);
+  font-size: 1.4rem;
+  border-bottom: 2px solid var(--gold);
+  padding-bottom: 6px;
+  text-shadow: 1px 1px 0 rgba(255,255,255,0.5);
+}
+
+.players-list { 
+  display: grid; 
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); 
+  gap: 12px; 
+  margin-bottom: 20px; 
+}
+
+.player-entry, .monster-entry, .init-entry, .log-entry {
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  padding: 10px 14px; 
+  background: white;
+  border: 1px solid var(--gold); 
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+.player-entry:hover, .monster-entry:hover, .init-entry:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  border-color: var(--gold-dark);
+}
+
+.player-entry span, .monster-entry span, .init-entry span { 
+  font-weight: 700; 
+  color: var(--ink); 
+  font-family: "Cinzel", serif; 
+  font-size: 0.95rem; 
+}
+
+.input-group { 
+  display: flex; 
+  gap: 10px; 
+  align-items: center; 
+}
+
+.input-group input, .input-group select { 
+  flex: 1; 
+  height: 38px;
+}
+
+.input-group .btn { 
+  white-space: nowrap; 
+  height: 38px; 
+  padding: 0 20px;
+  display: flex; 
+  align-items: center;
+  justify-content: center;
+}
+
+/* Session Card */
+.session {
+  background: var(--parchment);
+  border: 2px solid var(--gold); 
+  border-radius: 10px;
+  padding: 24px; 
+  margin-bottom: 40px; 
+  box-shadow: 0 8px 24px var(--shadow-heavy); 
+  position: relative;
+}
+
+.session-header {
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  border-bottom: 2px solid var(--gold-dark); 
+  padding-bottom: 12px; 
+  margin-bottom: 24px;
+}
+
+.session-header h2 { 
+  margin: 0; 
+  color: var(--red-dark); 
+  cursor: pointer; 
+  transition: color 0.2s; 
+  font-size: 1.8rem;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+.session-header h2:hover { 
+  color: var(--red); 
+  text-decoration: underline; 
+  text-decoration-color: var(--gold); 
+}
+
+.session-controls { display: flex; gap: 8px; }
+
+/* Sub-sections */
+.dice-log, .monsters-section, .initiative-tracker, .battle-log {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--gold); 
+  border-radius: 8px;
+  padding: 16px; 
+  margin-bottom: 24px;
+  box-shadow: inset 0 0 10px rgba(212, 165, 116, 0.1);
+}
+
+.sub-header {
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  margin-bottom: 16px; 
+  border-bottom: 1px dashed var(--gold-dark); 
+  padding-bottom: 8px;
+}
+
+.sub-header h3 { 
+  margin: 0; 
+  font-size: 1.1rem; 
+  color: var(--ink-light); 
+  text-transform: uppercase; 
+  letter-spacing: 1.5px; 
+  font-weight: 700;
+}
+
+/* Dice Buckets */
+.dice-rolls-buckets { 
+  display: grid; 
+  grid-template-columns: repeat(5, 1fr); 
+  gap: 10px; 
+  margin-bottom: 16px; 
+}
+
+@media (max-width: 700px) { .dice-rolls-buckets { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 500px) { .dice-rolls-buckets { grid-template-columns: repeat(2, 1fr); } }
+
+.roll-bucket {
+  border: 1px solid var(--gold); 
+  border-radius: 6px; 
+  padding: 6px;
+  background: white; 
+  min-height: 70px; 
+  display: flex; 
+  flex-direction: column;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);
+}
+
+.bucket-label { 
+  font-weight: 800; 
+  color: var(--red-dark); 
+  border-bottom: 1px solid var(--parchment-dark); 
+  margin-bottom: 6px; 
+  text-align: center; 
+  font-size: 1rem; 
+  font-family: "Cinzel", serif;
+}
+
+.bucket-players { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+
+.bucket-chip {
+  background: var(--parchment-dark); 
+  padding: 2px 8px; 
+  border-radius: 12px;
+  font-size: 0.8rem; 
+  border: 1px solid var(--gold); 
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Battle Container Grid */
+.battle-container { display: grid; gap: 24px; }
+@media (min-width: 900px) {
+  .battle-container { grid-template-columns: 1fr 1fr; }
+  .monsters-section { grid-column: 1 / -1; }
+}
+
+/* Lists */
+.list-container { margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
+
+/* Log Entries */
+.log-entry {
+  background: white;
+  border-left: 4px solid var(--gold);
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+.log-content { font-family: "Crimson Text", serif; font-size: 1.1rem; line-height: 1.4; }
+.log-content .damage { color: var(--red); font-weight: bold; font-size: 1.15rem; }
+.log-content .fail { color: var(--ink-light); font-style: italic; text-decoration: line-through; opacity: 0.7; }
+
+/* Styled Inputs */
+.styled-input, .styled-select { 
+  background: white; 
+  border: 2px solid var(--gold); 
+  border-radius: 6px; 
+  padding: 6px 12px; 
+  font-family: "Crimson Text", serif; 
+  font-size: 1rem;
+  color: var(--ink);
+  transition: border-color 0.2s;
+}
+
+.styled-input:focus, .styled-select:focus {
+  border-color: var(--red);
+  outline: none;
+}
+
+/* Buttons in DM Screen */
+.dm-content .btn {
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
+}
+
+.dm-content .btn-secondary {
+  background: linear-gradient(135deg, #6e5532 0%, #47351f 100%);
+  border: 1px solid var(--gold-dark);
+}
+
+.dm-content .btn-danger {
+  background: linear-gradient(135deg, #c0392b 0%, #922b21 100%);
+}
+
+/* Delete buttons */
+.delete-feature-btn {
+  color: var(--gold-dark);
+  font-size: 1.4rem;
+  opacity: 0.6;
+  transition: opacity 0.2s, color 0.2s;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.delete-feature-btn:hover {
+  opacity: 1;
+  color: var(--red);
 }

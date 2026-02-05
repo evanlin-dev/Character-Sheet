@@ -1,3 +1,8 @@
+body.dm-screen-page .character-sheet {
+    max-width: none;
+    width: 100%;
+}
+
 .character-sheet-button {
   position: absolute;
   top: 20px;
@@ -17,4 +22,127 @@
   background: var(--red-dark);
   box-shadow: 0 4px 8px rgba(0,0,0,0.3);
   transform: translateY(-2px);
+}
+
+.dm-content {
+    padding: 20px;
+}
+
+#add-session-btn {
+    margin-bottom: 20px;
+}
+
+.session {
+    background: var(--parchment-dark);
+    border: 2px solid var(--gold);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    padding: 20px;
+}
+
+.session h2 {
+    font-family: 'Cinzel', serif;
+    color: var(--red-dark);
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--gold);
+    padding-bottom: 10px;
+}
+
+.session-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.battle-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.initiative-tracker, .battle-log, .dice-log {
+    background: var(--parchment);
+    padding: 15px;
+    border-radius: 6px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.initiative-tracker h3, .battle-log h3, .dice-log h3 {
+    font-family: 'Cinzel', serif;
+    color: var(--red);
+    margin-bottom: 10px;
+}
+
+.initiative-list, .dice-rolls-list, .battle-log-entries {
+    margin-bottom: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+.add-character, .add-roll {
+    display: flex;
+    gap: 10px;
+}
+
+.add-character input, .add-roll input {
+    flex-grow: 1;
+    border: 1px solid var(--gold);
+    padding: 8px;
+    font-family: "Crimson Text", serif;
+    font-size: 1rem;
+    background: white;
+}
+
+.character-initiative, .dice-roll {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 5px;
+    border-bottom: 1px solid var(--gold-dark);
+    font-family: "Crimson Text", serif;
+}
+
+.character-initiative .char-name, .dice-roll .player-name {
+    font-weight: bold;
+    color: var(--ink);
+}
+
+.character-initiative .char-initiative, .dice-roll .roll-value {
+    font-weight: bold;
+    color: var(--red-dark);
+    font-size: 1.1rem;
+}
+
+.log-entry {
+    padding: 8px 5px;
+    border-bottom: 1px dotted var(--gold-dark);
+    font-family: "Crimson Text", serif;
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.log-entry .damage {
+    font-weight: bold;
+    color: var(--red-dark);
+}
+
+.log-entry .fail {
+    font-style: italic;
+    color: var(--ink-light);
+}
+
+.add-log-form {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr 1fr auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.add-log-form input, .add-log-form select {
+    border: 1px solid var(--gold);
+    padding: 8px;
+    font-family: "Crimson Text", serif;
+    font-size: 1rem;
+    background: white;
+    border-radius: 4px;
 }

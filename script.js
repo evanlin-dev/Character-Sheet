@@ -828,6 +828,9 @@
       6. INITIALIZATION
       ========================================= */
    document.addEventListener("DOMContentLoaded", () => {
+     // Guard clause: Only run initialization if we are on the character sheet (checking for charName input)
+     if (!document.getElementById("charName")) return;
+
      // XP Modal
      const expModal = document.getElementById("expModal");
      document.getElementById("addExpBtn").onclick = () => expModal.style.display = "flex";
