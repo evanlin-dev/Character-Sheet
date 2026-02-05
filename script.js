@@ -444,9 +444,9 @@
            const store = tx.objectStore(STORE_NAME);
            const req = store.get('currentData');
            req.onsuccess = () => {
-               const btnItems = document.getElementById('btn-search-items-data');
-               const btnCantrips = document.getElementById('btn-search-cantrips-data');
-               const btnSpells = document.getElementById('btn-search-spells-data');
+               const btnItems = document.getElementById('btn-search-items-zip');
+               const btnCantrips = document.getElementById('btn-search-cantrips-zip');
+               const btnSpells = document.getElementById('btn-search-spells-zip');
 
                if (req.result) {
                    console.log("Data found in IndexedDB. Showing search buttons.");
@@ -498,7 +498,7 @@
                try { 
                    const json = JSON.parse(file.content);
                    // Strict filtering: Only look in known item arrays to avoid monsters/spells/adventures
-                   const arraysToCheck = [json.item, json.items, json.baseitem, json.magicvariant, json.magicvariants, json.variant];
+                   const arraysToCheck = [json.item, json.items, json.baseitem, json.baseitems, json.magicvariant, json.magicvariants, json.variant];
                    arraysToCheck.forEach(arr => {
                        if (Array.isArray(arr)) {
                            arr.forEach(item => {

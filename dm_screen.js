@@ -734,4 +734,300 @@ document.addEventListener('DOMContentLoaded', () => {
             location.reload();
         }
     });
+
+    // =========================================
+    // SHOP GENERATOR
+    // =========================================
+    const initShopGenerator = async () => {
+        // Check if data exists before showing shop generator
+        try {
+            const db = await openDB();
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const hasData = await new Promise((resolve) => {
+                const req = store.get('currentData');
+                req.onsuccess = () => resolve(!!req.result);
+                req.onerror = () => resolve(false);
+            });
+            if (!hasData) return;
+        } catch (e) { return; }
+
+        const container = document.getElementById('sessions-container');
+        if (!container) return;
+
+        const shopDiv = document.createElement('div');
+        shopDiv.className = 'shop-generator-section';
+        shopDiv.style.background = 'var(--parchment)';
+        shopDiv.style.border = '2px solid var(--gold)';
+        shopDiv.style.borderRadius = '8px';
+        shopDiv.style.padding = '20px';
+        shopDiv.style.marginBottom = '30px';
+        shopDiv.style.boxShadow = '0 4px 12px var(--shadow)';
+
+        shopDiv.innerHTML = `
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom: 15px; border-bottom: 2px solid var(--gold); padding-bottom: 6px;">
+                <h2 class="section-title-small" style="margin:0; border:none; padding:0;">Random Shop Generator</h2>
+                <button id="shop-guide-btn" style="background:var(--parchment-dark); border:1px solid var(--gold); border-radius:50%; width:24px; height:24px; cursor:pointer; font-weight:bold; color:var(--ink-light); display:flex; align-items:center; justify-content:center;" title="Pricing & Weight Guide">?</button>
+            </div>
+
+            <div id="shop-guide-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+                <div style="background:var(--parchment); padding:20px; border:2px solid var(--gold); border-radius:8px; width:90%; max-width:400px; max-height:80vh; overflow-y:auto; position:relative; box-shadow:0 4px 20px rgba(0,0,0,0.5);">
+                    <button id="close-shop-guide" style="position:absolute; top:10px; right:10px; background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--ink);">&times;</button>
+                    <h3 style="color:var(--red-dark); margin-top:0; text-align:center; font-family:'Cinzel',serif; border-bottom:1px solid var(--gold); padding-bottom:8px; margin-bottom:12px;">Shop Guide</h3>
+                    
+                    <h4 style="margin-bottom:4px; color:var(--ink);">Pricing by Rarity</h4>
+                    <table style="width:100%; border-collapse:collapse; font-size:0.9rem; margin-bottom:16px;">
+                        <tr style="background:rgba(0,0,0,0.05);"><th style="text-align:left; padding:4px;">Rarity</th><th style="text-align:right; padding:4px;">Price Range</th></tr>
+                        <tr><td style="padding:4px;">Common</td><td style="text-align:right; padding:4px;">50 - 100 gp</td></tr>
+                        <tr><td style="padding:4px;">Uncommon</td><td style="text-align:right; padding:4px;">101 - 500 gp</td></tr>
+                        <tr><td style="padding:4px;">Rare</td><td style="text-align:right; padding:4px;">501 - 5,000 gp</td></tr>
+                        <tr><td style="padding:4px;">Very Rare</td><td style="text-align:right; padding:4px;">5,001 - 50,000 gp</td></tr>
+                        <tr><td style="padding:4px;">Legendary</td><td style="text-align:right; padding:4px;">50,001+ gp</td></tr>
+                    </table>
+
+                    <h4 style="margin-bottom:4px; color:var(--ink);">Common Weights</h4>
+                    <ul style="font-size:0.9rem; padding-left:20px; margin:0;">
+                        <li><strong>Potion:</strong> 0.5 lb</li>
+                        <li><strong>Scroll:</strong> Negligible</li>
+                        <li><strong>Wand/Rod:</strong> 1 - 2 lbs</li>
+                        <li><strong>Weapon/Armor:</strong> See PHB</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 20px;">
+                <div style="flex: 1; min-width: 200px;">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px; font-family: 'Cinzel', serif;">Rarity</label>
+                    <div id="shop-rarity-options" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        ${['Common', 'Uncommon', 'Rare', 'Very Rare', 'Legendary', 'Artifact'].map(r => 
+                            `<div class="rarity-tag ${['Common', 'Uncommon'].includes(r) ? 'selected' : ''}" data-value="${r.toLowerCase()}" 
+                                  style="padding: 6px 12px; border: 1px solid var(--gold); border-radius: 4px; cursor: pointer; user-select: none; background: ${['Common', 'Uncommon'].includes(r) ? 'var(--red)' : 'white'}; color: ${['Common', 'Uncommon'].includes(r) ? 'white' : 'var(--ink)'}; transition: all 0.2s; font-family: 'Cinzel', serif; font-size: 0.9rem;">
+                                ${r}
+                             </div>`
+                        ).join('')}
+                    </div>
+                </div>
+                <div style="width: 100px;">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px; font-family: 'Cinzel', serif;">Item Count</label>
+                    <input type="number" id="shop-count" value="10" min="1" max="50" style="width: 100%; padding: 8px; border: 1px solid var(--gold); border-radius: 4px;">
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 5px; justify-content: flex-end;">
+                    <label style="display: flex; align-items: center; gap: 5px; font-family: 'Cinzel', serif; font-size: 0.9rem; cursor: pointer; color: var(--ink);">
+                        <input type="checkbox" id="shop-magic-enabled" checked style="width: 16px; height: 16px; accent-color: var(--red);"> Include Magic Items
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 5px; font-family: 'Cinzel', serif; font-size: 0.9rem; cursor: pointer; color: var(--ink);">
+                        <input type="checkbox" id="shop-magic-only" style="width: 16px; height: 16px; accent-color: var(--red);"> Magic Items Only
+                    </label>
+                    <div style="display: flex; gap: 5px;">
+                        <button id="generate-shop-btn" class="btn" style="height: 40px;">Generate</button>
+                        <button id="clear-shop-btn" class="btn btn-secondary" style="height: 40px;">Clear</button>
+                    </div>
+                </div>
+            </div>
+            <div id="shop-results" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;"></div>
+        `;
+
+        container.parentNode.insertBefore(shopDiv, container);
+
+        // Add click handlers for rarity tags
+        shopDiv.querySelectorAll('.rarity-tag').forEach(tag => {
+            tag.addEventListener('click', () => {
+                tag.classList.toggle('selected');
+                if (tag.classList.contains('selected')) {
+                    tag.style.background = 'var(--red)';
+                    tag.style.color = 'white';
+                    tag.style.borderColor = 'var(--red-dark)';
+                } else {
+                    tag.style.background = 'white';
+                    tag.style.color = 'var(--ink)';
+                    tag.style.borderColor = 'var(--gold)';
+                }
+            });
+        });
+
+        // Guide Modal Handlers
+        document.getElementById('shop-guide-btn').addEventListener('click', () => document.getElementById('shop-guide-modal').style.display = 'flex');
+        document.getElementById('close-shop-guide').addEventListener('click', () => document.getElementById('shop-guide-modal').style.display = 'none');
+
+        // Toggle logic
+        const magicEnabledCb = document.getElementById('shop-magic-enabled');
+        const magicOnlyCb = document.getElementById('shop-magic-only');
+        magicEnabledCb.addEventListener('change', () => {
+            if (!magicEnabledCb.checked) magicOnlyCb.checked = false;
+        });
+        magicOnlyCb.addEventListener('change', () => {
+            if (magicOnlyCb.checked) magicEnabledCb.checked = true;
+        });
+
+        document.getElementById('generate-shop-btn').addEventListener('click', generateShop);
+        document.getElementById('clear-shop-btn').addEventListener('click', () => document.getElementById('shop-results').innerHTML = '');
+    };
+
+    const DB_NAME = 'DndDataDB';
+    const STORE_NAME = 'files';
+    const DB_VERSION = 1;
+
+    function openDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+            };
+        });
+    }
+
+    async function generateShop() {
+        const resultsDiv = document.getElementById('shop-results');
+        resultsDiv.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--ink-light);">Loading items...</div>';
+
+        const selectedRarities = Array.from(document.querySelectorAll('#shop-rarity-options .rarity-tag.selected'))
+                                      .map(el => el.dataset.value);
+        const count = parseInt(document.getElementById('shop-count').value) || 10;
+        const magicEnabled = document.getElementById('shop-magic-enabled').checked;
+        const magicOnly = document.getElementById('shop-magic-only').checked;
+
+        try {
+            const db = await openDB();
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const data = await new Promise((resolve, reject) => {
+                const req = store.get('currentData');
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+
+            if (!data) {
+                resultsDiv.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--red);">No item data found. Please upload data in the Character Sheet.</div>';
+                return;
+            }
+
+            let allItems = [];
+            data.forEach(file => {
+                try {
+                    const json = JSON.parse(file.content);
+                    [json.item, json.items, json.baseitem, json.baseitems, json.magicvariant, json.magicvariants, json.variant].forEach(arr => {
+                        if (Array.isArray(arr)) arr.forEach(i => { if (i.name) allItems.push(i); });
+                    });
+                } catch (e) {}
+            });
+
+            const filtered = allItems.filter(item => {
+                const r = (item.rarity || 'None').toLowerCase();
+                const isMundane = (r === 'none' || r === 'unknown');
+                
+                if (!magicEnabled && !isMundane) return false;
+                if (magicOnly && isMundane) return false;
+
+                const effectiveRarity = isMundane ? 'common' : r;
+                
+                if (!selectedRarities.includes(effectiveRarity)) return false;
+                
+                return true;
+            });
+            const uniqueItems = Array.from(new Map(filtered.map(i => [i.name, i])).values());
+            
+            if (uniqueItems.length === 0) {
+                resultsDiv.innerHTML = '<div style="grid-column: 1/-1; text-align: center;">No items found for selected rarities.</div>';
+                return;
+            }
+
+            // Helper to clean 5e-tools style tags
+            const cleanText = (str) => {
+                if (!str) return "";
+                return str.replace(/\{@\w+\s*([^}]+)?\}/g, (match, content) => {
+                    if (!content) return "";
+                    return content.split('|')[0];
+                });
+            };
+
+            // Recursively extract text from entries array
+            const processEntries = (entries) => {
+               if (!entries) return "";
+               if (typeof entries === 'string') return entries;
+               if (!Array.isArray(entries)) return "";
+               
+               return entries.map(e => {
+                   if (!e) return "";
+                   if (typeof e === 'string') return e;
+                   
+                   let text = "";
+                   if (e.name && (e.type === 'section' || e.type === 'entries')) text += `<strong>${e.name}.</strong> `;
+                   
+                   if (e.entries) text += processEntries(e.entries);
+                   else if (e.items) text += processEntries(e.items);
+                   else if (e.entry) text += (typeof e.entry === 'string' ? e.entry : processEntries([e.entry]));
+                   else if (e.caption) text += e.caption;
+                   else if (e.text) text += e.text;
+                   
+                   return text;
+               }).join("<br><br>");
+            };
+
+            resultsDiv.innerHTML = '';
+            for (let i = 0; i < count; i++) {
+                const item = uniqueItems[Math.floor(Math.random() * uniqueItems.length)];
+                
+                // Capitalize Rarity
+                const rarityRaw = item.rarity || 'Common';
+                const rarity = rarityRaw.toLowerCase().split(' ').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+                
+                // Determine Type
+                let itemType = "Item";
+                if (item.wondrous) itemType = "Wondrous Item";
+                else if (item.type) {
+                    const t = typeof item.type === 'string' ? item.type : "";
+                    const typeMap = {
+                        "HA": "Heavy Armor", "MA": "Medium Armor", "LA": "Light Armor", "S": "Shield",
+                        "M": "Melee Weapon", "R": "Ranged Weapon", "A": "Ammunition",
+                        "RD": "Rod", "ST": "Staff", "WD": "Wand", "RG": "Ring",
+                        "P": "Potion", "SC": "Scroll", "W": "Wondrous Item",
+                        "G": "Adventuring Gear", "INS": "Instrument", "$": "Treasure"
+                    };
+                    itemType = typeMap[t] || t || "Item";
+                }
+
+                // Price
+                const price = item.value ? (typeof item.value === 'string' ? item.value : item.value + " gp") : "";
+                
+                // Description
+                let desc = "";
+                if (item.entries) desc = processEntries(item.entries);
+                if (!desc && item.inherits && item.inherits.entries) desc = processEntries(item.inherits.entries);
+                if (!desc && item.description) desc = item.description;
+                if (!desc && item.desc) desc = processEntries(item.desc);
+                if (!desc && item.text) desc = item.text;
+                desc = cleanText(desc);
+                
+                const uniqueId = 'shop-item-' + Math.random().toString(36).substr(2, 9);
+
+                const card = document.createElement('div');
+                card.style.cssText = "background:white; border:1px solid var(--gold); border-radius:4px; padding:10px; display:flex; flex-direction:column; gap:8px; box-shadow:0 2px 4px rgba(0,0,0,0.05); transition:all 0.2s;";
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                        <div>
+                            <div style="font-weight:bold; color:var(--ink);">${item.name}</div>
+                            <div style="font-size:0.8rem; color:var(--ink-light); font-style:italic;">${rarity} &bull; ${itemType}</div>
+                        </div>
+                    </div>
+                    
+                    <div id="desc-${uniqueId}" style="display:none; font-size:0.85rem; color:var(--ink); border-top:1px dashed var(--gold); padding-top:8px; max-height:200px; overflow-y:auto; line-height:1.4;">
+                        ${desc || "No description available."}
+                    </div>
+
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:auto; padding-top:4px;">
+                        <div style="font-weight:bold; color:var(--red-dark); font-size:0.9rem;">${price}</div>
+                        <button onclick="const d = document.getElementById('desc-${uniqueId}'); d.style.display = d.style.display === 'none' ? 'block' : 'none'; this.textContent = d.style.display === 'none' ? 'Details' : 'Close';" 
+                                style="background:var(--parchment-dark); border:1px solid var(--gold); border-radius:4px; padding:2px 8px; font-size:0.8rem; cursor:pointer; color:var(--ink);">
+                            Details
+                        </button>
+                    </div>
+                `;
+                resultsDiv.appendChild(card);
+            }
+        } catch (e) { console.error(e); resultsDiv.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--red);">Error generating shop.</div>'; }
+    }
+    initShopGenerator();
 });
