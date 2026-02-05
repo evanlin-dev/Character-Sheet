@@ -302,6 +302,7 @@
    
    window.addFeatureItem = function (containerId, title = "", desc = "") {
      const container = document.getElementById(containerId);
+     if (!container) return;
      const box = document.createElement("div");
      box.className = "feature-box";
      box.innerHTML = `<div class="feature-header"><input type="text" class="feature-title-input" placeholder="Feature Name" value="${title}" oninput="saveCharacter()"><button class="delete-feature-btn" onclick="this.parentElement.parentElement.remove(); saveCharacter()">×</button></div><textarea class="feature-desc-input" placeholder="Description..." oninput="saveCharacter()">${desc}</textarea>`;
@@ -1186,6 +1187,9 @@
        raceFeatures: getFeatureData("raceFeaturesContainer"),
        backgroundFeatures: getFeatureData("backgroundFeaturesContainer"),
        feats: getFeatureData("featsContainer"),
+       actions: getFeatureData("actionsContainer"),
+       bonusActions: getFeatureData("bonusActionsContainer"),
+       reactions: getFeatureData("reactionsContainer"),
        
        // Using the safe map function here
        inventory: safeInventoryMap(".inventory-item"),
@@ -1352,6 +1356,9 @@
        (data.raceFeatures || []).forEach((f) => addFeatureItem("raceFeaturesContainer", f.title, f.desc));
        (data.backgroundFeatures || []).forEach((f) => addFeatureItem("backgroundFeaturesContainer", f.title, f.desc));
        (data.feats || []).forEach((f) => addFeatureItem("featsContainer", f.title, f.desc));
+       (data.actions || []).forEach((f) => addFeatureItem("actionsContainer", f.title, f.desc));
+       (data.bonusActions || []).forEach((f) => addFeatureItem("bonusActionsContainer", f.title, f.desc));
+       (data.reactions || []).forEach((f) => addFeatureItem("reactionsContainer", f.title, f.desc));
        if (data.charSize) document.getElementById("charSize").value = data.charSize;
        if (data.sizeFt) document.getElementById("sizeFt").value = data.sizeFt;
        
@@ -1370,6 +1377,7 @@
        if (data.shield) document.getElementById("shieldEquipped").checked = true;
      } else {
        addFeatureItem("classFeaturesContainer"); addFeatureItem("raceFeaturesContainer"); addFeatureItem("backgroundFeaturesContainer"); addFeatureItem("featsContainer");
+       addFeatureItem("actionsContainer"); addFeatureItem("bonusActionsContainer"); addFeatureItem("reactionsContainer");
      }
      
      updateModifiers(); renderSpellSlots(); updateHpBar(); calculateWeight(); renderWeaponTags(); resizeAllTextareas();
