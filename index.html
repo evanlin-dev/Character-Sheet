@@ -834,8 +834,33 @@
       <div class="info-modal-content" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
         <button class="close-modal-btn" onclick="closeSpellSearch()">&times;</button>
         <h3 class="info-modal-title" style="text-align: center">Search Spells from Zip</h3>
-        <div style="margin-bottom: 10px;">
-          <input type="text" id="spellSearchInput" placeholder="Search spells..." onkeyup="filterSpellSearch()" style="border: 1px solid var(--gold); padding: 8px; border-radius: 4px; width: 100%;"/>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+            <select id="spellSearchClass" class="styled-select" onchange="filterSpellSearch()">
+                <option value="">All Classes</option>
+            </select>
+            <select id="spellSearchLevel" class="styled-select" onchange="filterSpellSearch()">
+                <option value="">All Levels</option>
+                <option value="0">Cantrip</option>
+                <option value="1">Level 1</option>
+                <option value="2">Level 2</option>
+                <option value="3">Level 3</option>
+                <option value="4">Level 4</option>
+                <option value="5">Level 5</option>
+                <option value="6">Level 6</option>
+                <option value="7">Level 7</option>
+                <option value="8">Level 8</option>
+                <option value="9">Level 9</option>
+            </select>
+        </div>
+        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+             <input type="text" id="spellSearchInput" placeholder="Search spells..." onkeyup="filterSpellSearch()" style="border: 1px solid var(--gold); padding: 8px; border-radius: 4px; flex: 1;"/>
+             <select id="spellSearchSort" class="styled-select" onchange="filterSpellSearch()" style="width: 130px;">
+                <option value="name-asc">Name A-Z</option>
+                <option value="name-desc">Name Z-A</option>
+                <option value="level-asc">Level Low-High</option>
+                <option value="level-desc">Level High-Low</option>
+            </select>
         </div>
         <div id="spellSearchList" class="checklist-grid" style="grid-template-columns: 1fr; flex: 1; overflow-y: auto; gap: 8px;"></div>
         <div id="spellSearchPagination" style="display: flex; justify-content: center; gap: 10px; margin-top: 10px; align-items: center; border-top: 1px solid var(--gold); padding-top: 10px;">

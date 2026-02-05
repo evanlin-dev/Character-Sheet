@@ -500,6 +500,7 @@
            data.forEach(file => {
                try { 
                    const json = JSON.parse(file.content);
+                   console.log("Item Data:", json);
                    // Strict filtering: Only look in known item arrays to avoid monsters/spells/adventures
                    const arraysToCheck = [json.item, json.items, json.baseitem, json.baseitems, json.magicvariant, json.magicvariants, json.variant];
                    arraysToCheck.forEach(arr => {
@@ -659,6 +660,23 @@
        spellSearchFilterType = filterType;
        document.getElementById('spellSearchModal').style.display = 'flex';
        document.getElementById('spellSearchInput').value = '';
+       document.getElementById('spellSearchSort').value = 'name-asc';
+       
+       // Reset and setup filters
+       const levelSelect = document.getElementById('spellSearchLevel');
+       const classSelect = document.getElementById('spellSearchClass');
+       classSelect.innerHTML = '<option value="">All Classes</option>';
+       
+       if (filterType === 'cantrip') {
+           levelSelect.value = "0";
+           levelSelect.disabled = true;
+           levelSelect.style.opacity = "0.5";
+       } else {
+           levelSelect.value = "";
+           levelSelect.disabled = false;
+           levelSelect.style.opacity = "1";
+       }
+
        const list = document.getElementById('spellSearchList');
        list.innerHTML = '<div style="padding:10px; color:#666; text-align:center;">Loading spells library...</div>';
        document.getElementById('spellSearchPagination').style.display = 'none';
@@ -678,15 +696,71 @@
                return;
            }
 
+           // Pass 1: Build Spell Class Map from Book Data
+           const spellClassMap = {};
+           data.forEach(file => {
+               try {
+                   const json = JSON.parse(file.content);
+                   if (json.data && Array.isArray(json.data)) {
+                       const spellsChapter = json.data.find(entry => entry.name === "Spells" && entry.type === "section");
+                       if (spellsChapter && spellsChapter.entries) {
+                           spellsChapter.entries.forEach(classSection => {
+                               if (classSection.name && classSection.name.endsWith(" Spells")) {
+                                   const className = classSection.name.replace(" Spells", "");
+                                   if (classSection.entries) {
+                                       classSection.entries.forEach(subEntry => {
+                                           if (subEntry.items && Array.isArray(subEntry.items)) {
+                                               subEntry.items.forEach(item => {
+                                                   const match = /{@spell ([^}|]+)/.exec(item);
+                                                   if (match) {
+                                                       const spellName = match[1].toLowerCase().trim();
+                                                       if (!spellClassMap[spellName]) spellClassMap[spellName] = new Set();
+                                                       spellClassMap[spellName].add(className);
+                                                   }
+                                               });
+                                           }
+                                       });
+                                   }
+                               }
+                           });
+                       }
+                   }
+               } catch (e) {}
+           });
+
            const results = [];
            data.forEach(file => {
                try { 
                    const json = JSON.parse(file.content);
-                   const arraysToCheck = [json.spell, json.spells];
+                   // console.log("Spell Data:", json);
+                   let arraysToCheck = [json.spell, json.spells, json.data];
+                   if (Array.isArray(json)) arraysToCheck.push(json);
+
                    arraysToCheck.forEach(arr => {
                        if (Array.isArray(arr)) {
                            arr.forEach(spell => {
                                if (spell.name && typeof spell.name === 'string') {
+                                   // Enrich with class info from book if available
+                                   const mappedClasses = spellClassMap[spell.name.toLowerCase().trim()];
+                                   if (mappedClasses) {
+                                       if (!spell.classes) {
+                                           spell.classes = Array.from(mappedClasses);
+                                       } else if (Array.isArray(spell.classes)) {
+                                            mappedClasses.forEach(c => {
+                                                if (!spell.classes.some(existing => (typeof existing === 'string' ? existing : existing.name) === c)) {
+                                                    spell.classes.push(c);
+                                                }
+                                            });
+                                       } else if (typeof spell.classes === 'object') {
+                                            if (!spell.classes.fromClassList) spell.classes.fromClassList = [];
+                                            mappedClasses.forEach(c => {
+                                                if (!spell.classes.fromClassList.some(cl => cl.name === c)) {
+                                                    spell.classes.fromClassList.push({name: c, source: "PHB"});
+                                                }
+                                            });
+                                       }
+                                   }
+
                                    // Filter based on type
                                    if (spellSearchFilterType === 'cantrip' && spell.level === 0) {
                                        results.push(spell);
@@ -697,17 +771,68 @@
                            });
                        }
                    });
-               } catch (e) {}
+               } catch (e) { console.error("Error parsing spell file:", e); }
+           });
+
+           // Filter out PHB if newer exists
+           const spellsByName = new Map();
+           results.forEach(s => {
+               if (!spellsByName.has(s.name)) spellsByName.set(s.name, []);
+               spellsByName.get(s.name).push(s);
+           });
+
+           const filteredResults = [];
+           spellsByName.forEach((variants) => {
+               const hasNonPHB = variants.some(s => s.source !== 'PHB');
+               if (hasNonPHB) {
+                   variants.forEach(s => {
+                       if (s.source !== 'PHB') filteredResults.push(s);
+                   });
+               } else {
+                   variants.forEach(s => filteredResults.push(s));
+               }
            });
 
            // Deduplicate
-           const uniqueResults = Array.from(new Map(results.map(s => [s.name + s.source, s])).values());
+           const uniqueResults = Array.from(new Map(filteredResults.map(s => [s.name + s.source, s])).values());
            uniqueResults.sort((a, b) => a.name.localeCompare(b.name));
            
            allSpellsCache = uniqueResults;
            currentSpellResults = allSpellsCache;
            spellSearchPage = 1;
            
+           // Populate Class Filter
+           const classSet = new Set(["Artificer", "Bard", "Cleric", "Druid", "Paladin", "Ranger", "Sorcerer", "Warlock", "Wizard"]);
+           allSpellsCache.forEach(s => {
+               if (!s.classes) return;
+               
+               if (s.classes.fromClassList) {
+                   s.classes.fromClassList.forEach(c => { if (c.name) classSet.add(c.name); });
+               }
+               if (s.classes.fromClassListVariant) {
+                   s.classes.fromClassListVariant.forEach(c => { if (c.name) classSet.add(c.name); });
+               }
+               if (s.classes.fromSubclass) {
+                   s.classes.fromSubclass.forEach(sc => {
+                       if (sc.class && sc.class.name) classSet.add(sc.class.name);
+                   });
+               }
+               // Fallback for array of strings or objects
+               if (Array.isArray(s.classes)) {
+                   s.classes.forEach(c => {
+                       if (typeof c === 'string') classSet.add(c);
+                       else if (c.name) classSet.add(c.name);
+                   });
+               }
+           });
+           
+           const sortedClasses = Array.from(classSet).sort();
+           let optionsHTML = '<option value="">All Classes</option>';
+           sortedClasses.forEach(c => {
+               optionsHTML += `<option value="${c}">${c}</option>`;
+           });
+           classSelect.innerHTML = optionsHTML;
+
            renderSpellSearchPage();
            document.getElementById('spellSearchInput').focus();
 
@@ -723,11 +848,45 @@
 
    window.filterSpellSearch = function() {
        const term = document.getElementById('spellSearchInput').value.toLowerCase();
-       if (!term) {
-           currentSpellResults = allSpellsCache;
-       } else {
-           currentSpellResults = allSpellsCache.filter(s => s.name.toLowerCase().includes(term));
+       const classFilter = document.getElementById('spellSearchClass').value;
+       const levelFilter = document.getElementById('spellSearchLevel').value;
+       const sortFilter = document.getElementById('spellSearchSort').value;
+
+       let results = allSpellsCache;
+
+       // Filter Name
+       if (term) {
+           results = results.filter(s => s.name.toLowerCase().includes(term));
        }
+       // Filter Class
+       if (classFilter) {
+           const target = classFilter.toLowerCase().trim();
+           results = results.filter(s => {
+               if (!s.classes) return false;
+               let match = false;
+               const check = (name) => name && name.toLowerCase().trim() === target;
+               if (s.classes.fromClassList && s.classes.fromClassList.some(c => check(c.name))) match = true;
+               if (!match && s.classes.fromClassListVariant && s.classes.fromClassListVariant.some(c => check(c.name))) match = true;
+               if (!match && s.classes.fromSubclass && s.classes.fromSubclass.some(sc => sc.class && check(sc.class.name))) match = true;
+               if (!match && Array.isArray(s.classes) && s.classes.some(c => check(typeof c === 'string' ? c : c.name))) match = true;
+               return match;
+           });
+       }
+       // Filter Level
+       if (levelFilter !== "") {
+           results = results.filter(s => s.level === parseInt(levelFilter));
+       }
+
+       // Sort
+       results.sort((a, b) => {
+           if (sortFilter === 'name-asc') return a.name.localeCompare(b.name);
+           if (sortFilter === 'name-desc') return b.name.localeCompare(a.name);
+           if (sortFilter === 'level-asc') return a.level - b.level || a.name.localeCompare(b.name);
+           if (sortFilter === 'level-desc') return b.level - a.level || a.name.localeCompare(b.name);
+           return 0;
+       });
+
+       currentSpellResults = results;
        spellSearchPage = 1;
        renderSpellSearchPage();
    };
@@ -1316,7 +1475,6 @@
        spellAttackBonus: document.getElementById("spellAttackBonus").value,
        skillProficiency, saveProficiency, deathSaves, currentTheme: document.body.className,
      };
-     console.log("Saving Character Data:", characterData);
      localStorage.setItem("dndCharacter", JSON.stringify(characterData));
    };
    
