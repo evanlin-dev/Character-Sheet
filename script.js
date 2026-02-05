@@ -148,6 +148,8 @@
    const pbCosts = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
    const maxPoints = 27;
    
+   window.isInitializing = true;
+   
    /* =========================================
       2. FUNCTIONS
       ========================================= */
@@ -161,9 +163,9 @@
      element.style.height = element.scrollHeight + "px";
    }
    document.addEventListener("input", function (event) {
-     if (event.target.tagName.toLowerCase() === "textarea") { autoResizeTextarea(event.target); }
+     if (event.target.tagName.toLowerCase() === "textarea" && event.target.id !== "lastSavedTextarea") { autoResizeTextarea(event.target); }
    });
-   function resizeAllTextareas() { document.querySelectorAll("textarea").forEach(autoResizeTextarea); }
+   function resizeAllTextareas() { document.querySelectorAll("textarea:not(#lastSavedTextarea)").forEach(autoResizeTextarea); }
    
    // Update Logic
    window.updateModifiers = function () {
@@ -305,7 +307,7 @@
      if (!container) return;
      const box = document.createElement("div");
      box.className = "feature-box";
-     box.innerHTML = `<div class="feature-header"><input type="text" class="feature-title-input" placeholder="Feature Name" value="${title}" oninput="saveCharacter()"><button class="delete-feature-btn" onclick="this.parentElement.parentElement.remove(); saveCharacter()">×</button></div><textarea class="feature-desc-input" placeholder="Description..." oninput="saveCharacter()">${desc}</textarea>`;
+     box.innerHTML = `<div class="feature-header"><input type="text" class="feature-title-input" placeholder="Feature Name" value="${title.replace(/"/g, '&quot;')}" oninput="saveCharacter()"><button class="delete-feature-btn" onclick="this.parentElement.parentElement.remove(); saveCharacter()">×</button></div><textarea class="feature-desc-input" placeholder="Description..." oninput="saveCharacter()">${desc}</textarea>`;
      container.appendChild(box);
      saveCharacter();
    };
@@ -340,7 +342,7 @@
    /* =========================================
       3. INVENTORY & NOTES
       ========================================= */
-   window.addInventoryItem = function (name = "", qty = 1, weight = 0, isEquipped = false, description = "") {
+   window.addInventoryItem = function (name = "", qty = 1, weight = 0, isEquipped = false, description = "", skipSave = false) {
      const listId = isEquipped ? "equippedList" : "inventoryList";
      const list = document.getElementById(listId);
      const div = document.createElement("div");
@@ -385,6 +387,7 @@
      list.appendChild(div);
      setupDragItem(div, listId);
      calculateWeight();
+     if (!skipSave) saveCharacter();
    };
    
    window.openNoteEditor = function (itemName, inputElement, btnElement) {
@@ -883,6 +886,14 @@
      renderConditionTags();
      saveCharacter();
    }
+
+   window.renderConditionTags = function() {
+     const val = document.getElementById("activeConditionsInput").value;
+     const display = document.getElementById("conditionsDisplay");
+     if (!val) { display.textContent = "None"; display.style.color = "var(--ink-light)"; return; }
+     display.textContent = val.split(",").join(", "); display.style.color = "var(--red)";
+   };
+
    window.openWeaponProfModal = function () {
      const currentVal = document.getElementById("weaponProfs").value;
      const currentArray = currentVal ? currentVal.split(",").map((s) => s.trim()) : [];
@@ -979,6 +990,7 @@
      newWeapon.innerHTML = `<button class="delete-feature-btn" style="position: absolute; top: 5px; right: 5px; z-index:10; width: 24px; height: 24px;" onclick="this.closest('.weapon-item').remove(); saveCharacter();">&times;</button><div style="display: flex; flex-direction: column; gap: 10px;"><div class="grid grid-3" style="margin-bottom: 0; gap: 10px;"><div class="field"><span class="field-label">Weapon Name</span><input type="text" class="weapon-name" placeholder="Click to select..." onclick="openWeaponPicker(this)" readonly value="${data ? data.name : ""}" style="cursor: pointer; color: var(--red-dark); font-weight: bold;" /></div><div class="field"><span class="field-label">Atk Bonus</span><input type="text" class="weapon-atk" placeholder="+0" value="${data ? data.atk : ""}" /></div><div class="field"><span class="field-label">Damage</span><input type="text" class="weapon-damage" placeholder="1d6+0" value="${data ? data.damage : ""}" /></div></div><div class="field"><span class="field-label">Notes</span><input type="text" class="weapon-notes" placeholder="Properties..." value="${data ? data.notes : ""}" /></div></div>`;
      weaponList.appendChild(newWeapon);
      newWeapon.querySelectorAll("input").forEach(input => input.addEventListener("input", saveCharacter));
+     if (!window.isInitializing) saveCharacter();
    };
    
    // Spells
@@ -1051,6 +1063,53 @@
    window.closeInfoModal = (e) => { if (e.target.id === "infoModal") document.getElementById("infoModal").style.display = "none"; };
    window.openCurrencyModal = () => document.getElementById("currencyModal").style.display = "flex";
    window.closeCurrencyModal = (e) => { if (e.target.id === "currencyModal") document.getElementById("currencyModal").style.display = "none"; };
+   
+   // Split Money Logic
+   window.openSplitMoneyModal = () => {
+       ['splitCp', 'splitSp', 'splitEp', 'splitGp', 'splitPp'].forEach(id => document.getElementById(id).value = '');
+       document.getElementById("splitMoneyModal").style.display = "flex";
+   };
+   window.closeSplitMoneyModal = () => document.getElementById("splitMoneyModal").style.display = "none";
+   
+   window.applySplitLoot = function() {
+       const partySize = parseInt(document.getElementById('splitPartySize').value) || 1;
+       if (partySize < 1) return;
+
+       const currencies = ['cp', 'sp', 'ep', 'gp', 'pp'];
+       currencies.forEach(curr => {
+           const totalFound = parseInt(document.getElementById('split' + curr.charAt(0).toUpperCase() + curr.slice(1)).value) || 0;
+           const share = Math.floor(totalFound / partySize);
+           if (share > 0) {
+               const currentVal = parseInt(document.getElementById(curr).value) || 0;
+               document.getElementById(curr).value = currentVal + share;
+           }
+       });
+       saveCharacter();
+       closeSplitMoneyModal();
+   };
+
+   // Manage Money Logic
+   window.openManageMoneyModal = () => {
+       ['manageCp', 'manageSp', 'manageEp', 'manageGp', 'managePp'].forEach(id => document.getElementById(id).value = '');
+       document.getElementById("manageMoneyModal").style.display = "flex";
+   };
+   window.closeManageMoneyModal = () => document.getElementById("manageMoneyModal").style.display = "none";
+
+   window.applyMoneyChange = function(multiplier) {
+       const currencies = ['cp', 'sp', 'ep', 'gp', 'pp'];
+       currencies.forEach(curr => {
+           const change = parseInt(document.getElementById('manage' + curr.charAt(0).toUpperCase() + curr.slice(1)).value) || 0;
+           if (change !== 0) {
+               const currentVal = parseInt(document.getElementById(curr).value) || 0;
+               // Allow negative values or clamp to 0? Usually D&D sheets allow debt or just 0. Let's allow math to happen.
+               let newVal = currentVal + (change * multiplier);
+               if (newVal < 0) newVal = 0; // Prevent negative currency
+               document.getElementById(curr).value = newVal;
+           }
+       });
+       saveCharacter();
+       closeManageMoneyModal();
+   };
    
    window.openXpTableModal = function () {
      const container = document.getElementById("xpTableContent");
@@ -1139,6 +1198,7 @@
    }
    
    window.saveCharacter = function () {
+     if (window.isInitializing) return;
      // CRITICAL FIX: Safe element selection for Inventory
      // We filter out any null entries in case a row is half-deleted or malformed
      const safeInventoryMap = (selector) => {
@@ -1256,6 +1316,7 @@
        spellAttackBonus: document.getElementById("spellAttackBonus").value,
        skillProficiency, saveProficiency, deathSaves, currentTheme: document.body.className,
      };
+     console.log("Saving Character Data:", characterData);
      localStorage.setItem("dndCharacter", JSON.stringify(characterData));
    };
    
@@ -1282,6 +1343,45 @@
      reader.readAsText(file);
    };
    
+   window.openLastSavedModal = function () {
+     const saved = localStorage.getItem("dndCharacter");
+     const textarea = document.getElementById("lastSavedTextarea");
+     if (saved) {
+         try {
+             textarea.value = JSON.stringify(JSON.parse(saved), null, 2);
+         } catch (e) {
+             textarea.value = saved;
+         }
+     } else {
+         textarea.value = "";
+     }
+     document.getElementById("lastSavedModal").style.display = "flex";
+   };
+
+   window.restoreFromModal = function () {
+       const val = document.getElementById("lastSavedTextarea").value;
+       if (!val) return;
+       try {
+           JSON.parse(val); // Validate
+           localStorage.setItem("dndCharacter", val);
+           location.reload();
+       } catch (e) {
+           alert("Invalid JSON data. Cannot load.");
+       }
+   };
+
+   window.copyLastSaved = function() {
+       const textarea = document.getElementById("lastSavedTextarea");
+       textarea.select();
+       textarea.setSelectionRange(0, 99999);
+       try {
+           document.execCommand("copy");
+           alert("Copied to clipboard!");
+       } catch (err) {
+           alert("Failed to copy.");
+       }
+   };
+
    window.resetSheet = function () {
      if (confirm("Clear all data? This cannot be undone.")) { localStorage.removeItem("dndCharacter"); location.reload(); }
    };
@@ -1290,107 +1390,125 @@
       6. INITIALIZATION
       ========================================= */
    document.addEventListener("DOMContentLoaded", () => {
-     console.log("Script initialized.");
      // Guard clause: Only run initialization if we are on the character sheet (checking for charName input)
      if (!document.getElementById("charName")) return;
      
-     // Check for data immediately
-     checkDataUploadStatus();
+     window.isInitializing = true;
      
-     // Re-check when tab becomes visible (e.g. returning from Data Viewer)
-     document.addEventListener("visibilitychange", () => {
-         if (document.visibilityState === "visible") checkDataUploadStatus();
-     });
+     try {
+         // Check for data immediately
+         checkDataUploadStatus();
+         
+         // Re-check when tab becomes visible (e.g. returning from Data Viewer)
+         document.addEventListener("visibilitychange", () => {
+             if (document.visibilityState === "visible") checkDataUploadStatus();
+         });
 
-     // XP Modal
-     const expModal = document.getElementById("expModal");
-     document.getElementById("addExpBtn").onclick = () => expModal.style.display = "flex";
-     document.getElementById("cancelExp").onclick = () => expModal.style.display = "none";
-     document.getElementById("confirmExp").onclick = function () {
-       const toAdd = parseInt(document.getElementById("expToAdd").value) || 0;
-       let currentXp = parseInt(document.getElementById("experience").value) || 0;
-       let currentLevel = parseInt(document.getElementById("level").value) || 1;
-       currentXp += toAdd;
-       let checkedLevel = true;
-       while (checkedLevel) {
-         let nextLevelEntry = xpTable.find((x) => x.lvl === currentLevel + 1);
-         let currentLevelEntry = xpTable.find((x) => x.lvl === currentLevel);
-         if (!nextLevelEntry) { checkedLevel = false; break; }
-         let xpNeeded = nextLevelEntry.xp - currentLevelEntry.xp;
-         if (currentXp >= xpNeeded) { currentXp -= xpNeeded; currentLevel++; document.getElementById("profBonus").value = xpTable.find((x) => x.lvl === currentLevel).prof; }
-         else { checkedLevel = false; }
-       }
-       document.getElementById("experience").value = currentXp;
-       document.getElementById("level").value = currentLevel;
-       expModal.style.display = "none"; document.getElementById("expToAdd").value = "";
-       updateModifiers(); saveCharacter();
-     };
-   
-     // Drag Listeners
-     ["inventoryList", "equippedList", "weapon-list", "cantripList", "spellList", "preparedSpellsList"].forEach((id) => {
-       const container = document.getElementById(id);
-       if (!container) return;
-       container.addEventListener("dragover", (e) => {
-         e.preventDefault();
-         const afterElement = getDragAfterElement(container, e.clientY);
-         const draggable = document.querySelector(".dragging");
-         if (draggable) { if (afterElement == null) { container.appendChild(draggable); } else { container.insertBefore(draggable, afterElement); } }
-       });
-     });
-   
-     // Global Auto-save
-     document.querySelectorAll("input, textarea, select").forEach((el) => {
-       el.addEventListener("input", saveCharacter); el.addEventListener("change", saveCharacter);
-     });
-     abilities.forEach((a) => document.getElementById(a).addEventListener("input", updateModifiers));
-     document.getElementById("profBonus").addEventListener("input", () => { updateModifiers(); updateSpellDC(); });
-     document.getElementById("spellAbility").addEventListener("change", updateSpellDC);
-     document.getElementById("str").addEventListener("input", calculateWeight);
-     ["hp", "maxHp", "tempHp"].forEach((id) => document.getElementById(id).addEventListener("input", updateHpBar));
-     document.getElementById("charSize")?.addEventListener("change", calculateWeight);
-   
-     // Load Data
-     const saved = localStorage.getItem("dndCharacter");
-     if (saved) {
-       const data = JSON.parse(saved);
-       if (data.currentTheme) document.body.className = data.currentTheme;
-       Object.keys(data).forEach((key) => {
-         const el = document.getElementById(key);
-         if (el && !key.includes("Features") && !["weapons", "inventory", "attunement", "skillProficiency", "saveProficiency", "deathSaves"].includes(key)) {
-           if (el.type === "checkbox") el.checked = data[key]; else el.value = data[key];
+         // XP Modal
+         const expModal = document.getElementById("expModal");
+         document.getElementById("addExpBtn").onclick = () => {
+             document.getElementById("expTotalInput").value = "";
+             document.getElementById("expPartySize").value = "1";
+             expModal.style.display = "flex";
+         };
+         document.getElementById("cancelExp").onclick = () => expModal.style.display = "none";
+         document.getElementById("confirmExp").onclick = function () {
+           const totalXp = parseInt(document.getElementById("expTotalInput").value) || 0;
+           const partySize = parseInt(document.getElementById("expPartySize").value) || 1;
+           if (partySize < 1) return;
+           const toAdd = Math.floor(totalXp / partySize);
+           
+           let currentXp = parseInt(document.getElementById("experience").value) || 0;
+           let currentLevel = parseInt(document.getElementById("level").value) || 1;
+           currentXp += toAdd;
+           let checkedLevel = true;
+           while (checkedLevel) {
+             let nextLevelEntry = xpTable.find((x) => x.lvl === currentLevel + 1);
+             let currentLevelEntry = xpTable.find((x) => x.lvl === currentLevel);
+             if (!nextLevelEntry) { checkedLevel = false; break; }
+             let xpNeeded = nextLevelEntry.xp - currentLevelEntry.xp;
+             if (currentXp >= xpNeeded) { currentXp -= xpNeeded; currentLevel++; document.getElementById("profBonus").value = xpTable.find((x) => x.lvl === currentLevel).prof; }
+             else { checkedLevel = false; }
+           }
+           document.getElementById("experience").value = currentXp;
+           document.getElementById("level").value = currentLevel;
+           expModal.style.display = "none";
+           updateModifiers(); saveCharacter();
+         };
+       
+         // Drag Listeners
+         ["inventoryList", "equippedList", "weapon-list", "cantripList", "spellList", "preparedSpellsList"].forEach((id) => {
+           const container = document.getElementById(id);
+           if (!container) return;
+           container.addEventListener("dragover", (e) => {
+             e.preventDefault();
+             const afterElement = getDragAfterElement(container, e.clientY);
+             const draggable = document.querySelector(".dragging");
+             if (draggable) { if (afterElement == null) { container.appendChild(draggable); } else { container.insertBefore(draggable, afterElement); } }
+           });
+         });
+       
+         // Global Auto-save
+         document.querySelectorAll("input, textarea, select").forEach((el) => {
+           el.addEventListener("input", saveCharacter); el.addEventListener("change", saveCharacter);
+         });
+         abilities.forEach((a) => document.getElementById(a).addEventListener("input", updateModifiers));
+         document.getElementById("profBonus").addEventListener("input", () => { updateModifiers(); updateSpellDC(); });
+         document.getElementById("spellAbility").addEventListener("change", updateSpellDC);
+         document.getElementById("str").addEventListener("input", calculateWeight);
+         ["hp", "maxHp", "tempHp"].forEach((id) => document.getElementById(id).addEventListener("input", updateHpBar));
+         document.getElementById("charSize")?.addEventListener("change", calculateWeight);
+       
+         // Load Data
+         const saved = localStorage.getItem("dndCharacter");
+         if (saved) {
+           const data = JSON.parse(saved);
+           if (data.currentTheme) document.body.className = data.currentTheme;
+           Object.keys(data).forEach((key) => {
+             const el = document.getElementById(key);
+             if (el && !key.includes("Features") && !["weapons", "inventory", "attunement", "skillProficiency", "saveProficiency", "deathSaves"].includes(key)) {
+               if (el.type === "checkbox") el.checked = data[key]; else el.value = data[key];
+             }
+           });
+           if (data.skillProficiency) { Object.assign(skillProficiency, data.skillProficiency); Object.keys(skillProficiency).forEach((k) => { if (skillProficiency[k]) document.getElementById(`skillCheck_${k}`)?.classList.add("checked"); }); }
+           if (data.saveProficiency) { Object.assign(saveProficiency, data.saveProficiency); Object.keys(saveProficiency).forEach((k) => { if (saveProficiency[k]) document.getElementById(`saveCheck_${k}`)?.classList.add("checked"); }); }
+           if (data.deathSaves) { Object.assign(deathSaves, data.deathSaves); deathSaves.successes.forEach((v, i) => document.getElementById(`deathSuccess${i}`)?.classList.toggle("checked", v)); deathSaves.failures.forEach((v, i) => document.getElementById(`deathFailure${i}`)?.classList.toggle("checked", v)); }
+           if (data.activeConditions) { document.getElementById("activeConditionsInput").value = data.activeConditions; renderConditionTags(); }
+           (data.classFeatures || []).forEach((f) => addFeatureItem("classFeaturesContainer", f.title, f.desc));
+           (data.raceFeatures || []).forEach((f) => addFeatureItem("raceFeaturesContainer", f.title, f.desc));
+           (data.backgroundFeatures || []).forEach((f) => addFeatureItem("backgroundFeaturesContainer", f.title, f.desc));
+           (data.feats || []).forEach((f) => addFeatureItem("featsContainer", f.title, f.desc));
+           (data.actions || []).forEach((f) => addFeatureItem("actionsContainer", f.title, f.desc));
+           (data.bonusActions || []).forEach((f) => addFeatureItem("bonusActionsContainer", f.title, f.desc));
+           (data.reactions || []).forEach((f) => addFeatureItem("reactionsContainer", f.title, f.desc));
+           if (data.charSize) document.getElementById("charSize").value = data.charSize;
+           if (data.sizeFt) document.getElementById("sizeFt").value = data.sizeFt;
+           
+           const weaponList = document.getElementById("weapon-list"); weaponList.innerHTML = "";
+           if (data.weapons && data.weapons.length > 0) { data.weapons.forEach((w) => { try { addWeapon(w); } catch(e) { console.error("Error adding weapon:", w, e); } }); }
+           
+           document.getElementById("inventoryList").innerHTML = ""; document.getElementById("equippedList").innerHTML = "";
+           (data.inventory || []).forEach((item) => { try { addInventoryItem(item.name, item.qty, item.weight, item.equipped, item.description); } catch(e) { console.error("Error adding item:", item, e); } });
+           
+           if (data.spellSlotsData) spellSlotsData = data.spellSlotsData;
+           document.getElementById("cantripList").innerHTML = ""; (data.cantripsList || []).forEach((s) => { try { addSpellRow("cantripList", 0, s); } catch(e) { console.error("Error adding cantrip:", s, e); } });
+           document.getElementById("preparedSpellsList").innerHTML = ""; (data.preparedSpellsList || []).forEach((s) => { try { s.prepared = true; addSpellRow("preparedSpellsList", 1, s); } catch(e) { console.error("Error adding prepared spell:", s, e); } });
+           document.getElementById("spellList").innerHTML = ""; (data.spellsList || []).forEach((s) => { try { s.prepared = false; addSpellRow("spellList", 1, s); } catch(e) { console.error("Error adding spell:", s, e); } });
+           
+           if (data.attunement) { data.attunement.forEach((v, i) => (document.getElementById(`attune${i + 1}`).value = v || "")); }
+           if (data.shield) document.getElementById("shieldEquipped").checked = true;
+         } else {
+           addFeatureItem("classFeaturesContainer"); addFeatureItem("raceFeaturesContainer"); addFeatureItem("backgroundFeaturesContainer"); addFeatureItem("featsContainer");
+           addFeatureItem("actionsContainer"); addFeatureItem("bonusActionsContainer"); addFeatureItem("reactionsContainer");
          }
-       });
-       if (data.skillProficiency) { Object.assign(skillProficiency, data.skillProficiency); Object.keys(skillProficiency).forEach((k) => { if (skillProficiency[k]) document.getElementById(`skillCheck_${k}`)?.classList.add("checked"); }); }
-       if (data.saveProficiency) { Object.assign(saveProficiency, data.saveProficiency); Object.keys(saveProficiency).forEach((k) => { if (saveProficiency[k]) document.getElementById(`saveCheck_${k}`)?.classList.add("checked"); }); }
-       if (data.deathSaves) { Object.assign(deathSaves, data.deathSaves); deathSaves.successes.forEach((v, i) => document.getElementById(`deathSuccess${i}`)?.classList.toggle("checked", v)); deathSaves.failures.forEach((v, i) => document.getElementById(`deathFailure${i}`)?.classList.toggle("checked", v)); }
-       if (data.activeConditions) { document.getElementById("activeConditionsInput").value = data.activeConditions; renderConditionTags(); }
-       (data.classFeatures || []).forEach((f) => addFeatureItem("classFeaturesContainer", f.title, f.desc));
-       (data.raceFeatures || []).forEach((f) => addFeatureItem("raceFeaturesContainer", f.title, f.desc));
-       (data.backgroundFeatures || []).forEach((f) => addFeatureItem("backgroundFeaturesContainer", f.title, f.desc));
-       (data.feats || []).forEach((f) => addFeatureItem("featsContainer", f.title, f.desc));
-       (data.actions || []).forEach((f) => addFeatureItem("actionsContainer", f.title, f.desc));
-       (data.bonusActions || []).forEach((f) => addFeatureItem("bonusActionsContainer", f.title, f.desc));
-       (data.reactions || []).forEach((f) => addFeatureItem("reactionsContainer", f.title, f.desc));
-       if (data.charSize) document.getElementById("charSize").value = data.charSize;
-       if (data.sizeFt) document.getElementById("sizeFt").value = data.sizeFt;
-       
-       const weaponList = document.getElementById("weapon-list"); weaponList.innerHTML = "";
-       if (data.weapons && data.weapons.length > 0) { data.weapons.forEach((w) => { addWeapon(w); }); }
-       
-       document.getElementById("inventoryList").innerHTML = ""; document.getElementById("equippedList").innerHTML = "";
-       (data.inventory || []).forEach((item) => addInventoryItem(item.name, item.qty, item.weight, item.equipped, item.description));
-       
-       if (data.spellSlotsData) spellSlotsData = data.spellSlotsData;
-       document.getElementById("cantripList").innerHTML = ""; (data.cantripsList || []).forEach((s) => addSpellRow("cantripList", 0, s));
-       document.getElementById("preparedSpellsList").innerHTML = ""; (data.preparedSpellsList || []).forEach((s) => { s.prepared = true; addSpellRow("preparedSpellsList", 1, s); });
-       document.getElementById("spellList").innerHTML = ""; (data.spellsList || []).forEach((s) => { s.prepared = false; addSpellRow("spellList", 1, s); });
-       
-       if (data.attunement) { data.attunement.forEach((v, i) => (document.getElementById(`attune${i + 1}`).value = v || "")); }
-       if (data.shield) document.getElementById("shieldEquipped").checked = true;
-     } else {
-       addFeatureItem("classFeaturesContainer"); addFeatureItem("raceFeaturesContainer"); addFeatureItem("backgroundFeaturesContainer"); addFeatureItem("featsContainer");
-       addFeatureItem("actionsContainer"); addFeatureItem("bonusActionsContainer"); addFeatureItem("reactionsContainer");
+         
+         updateModifiers(); renderSpellSlots(); updateHpBar(); calculateWeight(); renderWeaponTags(); resizeAllTextareas();
+     } catch (e) {
+         console.error("Initialization error:", e);
+     } finally {
+         // Delay unlocking to allow any pending DOM events to fire without triggering a save
+         setTimeout(() => {
+             window.isInitializing = false;
+         }, 200);
      }
-     
-     updateModifiers(); renderSpellSlots(); updateHpBar(); calculateWeight(); renderWeaponTags(); resizeAllTextareas();
    });

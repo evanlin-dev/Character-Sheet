@@ -1,4 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const link = document.createElement('link');
+    link.rel = 'icon';
+    link.href = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%238b2e2e' stroke='%23d4a574' stroke-width='3' stroke-linejoin='round' d='M32 4 L56 18 L56 46 L32 60 L8 46 L8 18 Z M32 4 L32 32 M32 32 L56 18 M32 32 L8 18 M32 32 L32 60 M32 32 L56 46 M32 32 L8 46'/%3E%3C/svg%3E";
+    document.head.appendChild(link);
+
     const dataList = document.createElement('datalist');
     dataList.id = 'player-datalist';
     document.body.appendChild(dataList);

@@ -519,9 +519,11 @@
       <div class="tab-content" id="equipment">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
           <h3 style="font-family: 'Cinzel', serif; font-size: 1rem; color: var(--red-dark); margin: 0;">Currency</h3>
-          <button onclick="openCurrencyModal()" style="background: none; border: 1px solid var(--gold); border-radius: 4px; padding: 2px 8px; font-size: 0.8rem; cursor: pointer; color: var(--ink-light);">
-            Exchange Rates
-          </button>
+          <div style="display: flex; gap: 5px;">
+            <button class="btn btn-secondary" onclick="openCurrencyModal()" style="padding: 4px 10px; font-size: 0.8rem;">Exchange Rates</button>
+            <button class="btn btn-secondary" onclick="openSplitMoneyModal()" style="padding: 4px 10px; font-size: 0.8rem;">Split Loot</button>
+            <button class="btn btn-secondary" onclick="openManageMoneyModal()" style="padding: 4px 10px; font-size: 0.8rem;">Add/Spend</button>
+          </div>
         </div>
         <div class="grid grid-3" style="margin-bottom: 16px">
           <div class="field"><label class="field-label">Copper</label><input type="number" id="cp" value="0" /></div>
@@ -639,6 +641,7 @@
         <button class="btn btn-secondary" onclick="downloadJSON()">Save JSON</button>
         <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">Load JSON</button>
         <input type="file" id="fileInput" accept=".json" style="display: none" onchange="loadJSON(this)" />
+        <button class="btn btn-secondary" onclick="openLastSavedModal()">Last Saved Data</button>
         <button class="btn btn-danger" onclick="resetSheet()">Reset Sheet</button>
       </div>
     </div>
@@ -717,13 +720,72 @@
       </div>
     </div>
 
+    <div id="splitMoneyModal" class="info-modal-overlay">
+      <div class="info-modal-content" style="max-width: 400px; text-align: center">
+        <button class="close-modal-btn" onclick="closeSplitMoneyModal()">&times;</button>
+        <h3 class="info-modal-title">Split Loot</h3>
+        <p style="font-size: 0.9rem; color: var(--ink-light); margin-bottom: 15px;">Enter total loot found. It will be divided by the party size and added to your current funds.</p>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 15px;">
+          <div class="field"><label class="field-label">CP</label><input type="number" id="splitCp" placeholder="0"></div>
+          <div class="field"><label class="field-label">SP</label><input type="number" id="splitSp" placeholder="0"></div>
+          <div class="field"><label class="field-label">EP</label><input type="number" id="splitEp" placeholder="0"></div>
+          <div class="field"><label class="field-label">GP</label><input type="number" id="splitGp" placeholder="0"></div>
+          <div class="field"><label class="field-label">PP</label><input type="number" id="splitPp" placeholder="0"></div>
+        </div>
+        <div class="field" style="margin-bottom: 20px;">
+            <label class="field-label">Party Size (Divide By)</label>
+            <input type="number" id="splitPartySize" value="1" min="1" style="text-align: center; font-weight: bold;">
+        </div>
+        <button class="btn" onclick="applySplitLoot()">Calculate & Add Share</button>
+      </div>
+    </div>
+
+    <div id="manageMoneyModal" class="info-modal-overlay">
+      <div class="info-modal-content" style="max-width: 400px; text-align: center">
+        <button class="close-modal-btn" onclick="closeManageMoneyModal()">&times;</button>
+        <h3 class="info-modal-title">Manage Money</h3>
+        <p style="font-size: 0.9rem; color: var(--ink-light); margin-bottom: 15px;">Enter amount to add or spend.</p>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 20px;">
+          <div class="field"><label class="field-label">CP</label><input type="number" id="manageCp" placeholder="0"></div>
+          <div class="field"><label class="field-label">SP</label><input type="number" id="manageSp" placeholder="0"></div>
+          <div class="field"><label class="field-label">EP</label><input type="number" id="manageEp" placeholder="0"></div>
+          <div class="field"><label class="field-label">GP</label><input type="number" id="manageGp" placeholder="0"></div>
+          <div class="field"><label class="field-label">PP</label><input type="number" id="managePp" placeholder="0"></div>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button class="btn" onclick="applyMoneyChange(1)" style="flex: 1; background: linear-gradient(135deg, #27ae60 0%, #145a32 100%);">Gain (+)</button>
+            <button class="btn" onclick="applyMoneyChange(-1)" style="flex: 1; background: linear-gradient(135deg, #c0392b 0%, #922b21 100%);">Spend (-)</button>
+        </div>
+      </div>
+    </div>
+
     <div id="expModal" class="info-modal-overlay">
       <div class="info-modal-content" style="max-width: 300px; text-align: center">
         <h3 class="info-modal-title">Add Experience</h3>
-        <input type="number" id="expToAdd" placeholder="Amount to add..." style="background: white; border: 1px solid var(--gold); padding: 8px; margin-bottom: 16px; text-align: center; width: 100%;"/>
+        <div style="margin-bottom: 10px;">
+            <label class="field-label" style="display:block; margin-bottom:4px;">Total XP</label>
+            <input type="number" id="expTotalInput" placeholder="Total Amount" style="background: white; border: 1px solid var(--gold); padding: 8px; text-align: center; width: 100%;"/>
+        </div>
+        <div style="margin-bottom: 16px;">
+            <label class="field-label" style="display:block; margin-bottom:4px;">Split By (Players)</label>
+            <input type="number" id="expPartySize" value="1" min="1" style="background: white; border: 1px solid var(--gold); padding: 8px; text-align: center; width: 100%;"/>
+        </div>
         <div style="display: flex; gap: 10px; justify-content: center">
-          <button id="confirmExp" class="btn" style="padding: 8px 16px">Add</button>
+          <button id="confirmExp" class="btn" style="padding: 8px 16px">Add Share</button>
           <button id="cancelExp" class="btn btn-secondary" style="padding: 8px 16px">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="lastSavedModal" class="info-modal-overlay">
+      <div class="info-modal-content" style="max-width: 600px; display: flex; flex-direction: column; height: 80vh;">
+        <button class="close-modal-btn" onclick="document.getElementById('lastSavedModal').style.display = 'none'">&times;</button>
+        <h3 class="info-modal-title" style="text-align: center">Last Saved Data</h3>
+        <p style="font-size: 0.9rem; color: var(--ink-light); margin-bottom: 10px;">This is the raw data currently stored in your browser. You can copy this as a backup or paste valid JSON here to restore.</p>
+        <textarea id="lastSavedTextarea" style="flex: 1; font-family: monospace; font-size: 0.85rem; padding: 10px; border: 1px solid var(--gold); border-radius: 4px; resize: none; background: white; margin-bottom: 15px; overflow-y: auto;"></textarea>
+        <div style="text-align: center; display: flex; gap: 10px; justify-content: center;">
+            <button class="btn" onclick="restoreFromModal()">Load / Restore</button>
+            <button class="btn btn-secondary" onclick="copyLastSaved()">Copy to Clipboard</button>
         </div>
       </div>
     </div>
