@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // DB Setup
     const DB_NAME = 'DndDataDB';
     const STORE_NAME = 'files';
-    const DB_VERSION = 1;
+    const DB_VERSION = 2;
 
     // Helper to process entries recursively
     const processEntries = (entries) => {
@@ -47,6 +47,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
             request.onerror = () => reject(request.error);
             request.onsuccess = () => resolve(request.result);
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME);
+                }
+            };
         });
     }
 
