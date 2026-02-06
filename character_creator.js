@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // DB Setup
     const DB_NAME = 'DndDataDB';
     const STORE_NAME = 'files';
-    const DB_VERSION = 3;
+    const DB_VERSION = 4;
 
     // Helper to process entries recursively
     const processEntries = (entries) => {
@@ -44,12 +44,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function openDB() {
         return new Promise((resolve, reject) => {
+            console.log(`[DB] Opening ${DB_NAME} version ${DB_VERSION}...`);
             const request = indexedDB.open(DB_NAME, DB_VERSION);
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve(request.result);
+            
+            request.onerror = (event) => {
+                console.error("[DB] Error opening database:", request.error);
+                reject(request.error);
+            };
+
+            request.onblocked = (event) => {
+                console.warn("[DB] Database upgrade blocked. Please close other tabs.");
+                alert("Database upgrade blocked. Please close other tabs with this site open and reload.");
+            };
+
+            request.onsuccess = (event) => {
+                console.log("[DB] Database opened successfully.");
+                resolve(request.result);
+            };
+            
             request.onupgradeneeded = (e) => {
+                console.log(`[DB] Upgrade needed: ${e.oldVersion} -> ${e.newVersion}`);
                 const db = e.target.result;
                 if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    console.log(`[DB] Creating object store: ${STORE_NAME}`);
                     db.createObjectStore(STORE_NAME);
                 }
             };
@@ -58,13 +75,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadClassData() {
         try {
+            console.log("[Data] Loading class data...");
             const db = await openDB();
+            
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                console.error(`[Data] Store '${STORE_NAME}' not found in database!`);
+                return;
+            }
+
             const tx = db.transaction(STORE_NAME, 'readonly');
             const store = tx.objectStore(STORE_NAME);
             const data = await new Promise((resolve) => {
                 const req = store.get('currentData');
-                req.onsuccess = () => resolve(req.result);
-                req.onerror = () => resolve(null);
+                req.onsuccess = () => {
+                    console.log("[Data] Fetch success. Data found:", !!req.result);
+                    resolve(req.result);
+                };
+                req.onerror = (e) => {
+                    console.error("[Data] Fetch error:", e);
+                    resolve(null);
+                };
             });
             if (data) {
                 // Pass 1: Build Spell Class Map from Book Data (Logic from script.js)
@@ -792,13 +822,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const cLvl = parseInt(charLevel);
         const available = uniqueOptions.filter(opt => {
             if (opt.prerequisite) {
-                return opt.prerequisite.every(req => {
+                // 5e-tools prerequisites: Top-level array is OR (any group met), Object keys are AND (all keys in group met)
+                const meetsAnyPrereq = opt.prerequisite.some(req => {
                     if (req.level) {
                         let reqLvl = req.level;
                         if (typeof req.level === 'object') {
                             reqLvl = req.level.level;
-                            // If class is specified and doesn't match, we fail (assuming single class context)
-                            if (req.level.class && req.level.class.name && className && req.level.class.name.toLowerCase() !== className.toLowerCase()) return false;
+                            // Check class restriction if present
+                            if (req.level.class && req.level.class.name && className) {
+                                if (req.level.class.name.toLowerCase() !== className.toLowerCase()) return false;
+                            }
                         }
                         if (cLvl < reqLvl) return false;
                     }
@@ -808,7 +841,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const pactName = `Pact of the ${req.pact}`;
                         let hasPact = false;
                         for (const selected of selectedOptionalFeatures) {
-                            if (selected.toLowerCase() === pactName.toLowerCase()) { hasPact = true; break; }
+                            if (selected.toLowerCase().includes(pactName.toLowerCase())) { hasPact = true; break; }
                         }
                         if (!hasPact) return false;
                     }
@@ -818,15 +851,34 @@ document.addEventListener('DOMContentLoaded', () => {
                         const hasFeat = req.optionalfeature.some(f => {
                             const clean = f.split('|')[0].toLowerCase();
                             for (const selected of selectedOptionalFeatures) {
-                                if (selected.toLowerCase() === clean) return true;
+                                if (selected.toLowerCase().includes(clean)) return true;
                             }
                             return false;
                         });
                         if (!hasFeat) return false;
                     }
 
+                    // Spell Check
+                    if (req.spell) {
+                        const hasSpell = req.spell.some(s => {
+                            const sName = (typeof s === 'string' ? s : s.entry || "").split('|')[0].split('#')[0].toLowerCase();
+                            for (const selected of selectedSpells) {
+                                if (selected.toLowerCase() === sName) return true;
+                            }
+                            return false;
+                        });
+                        if (!hasSpell) return false;
+                    }
+
                     return true;
                 });
+
+                if (!meetsAnyPrereq) {
+                    // Debug log for filtered items
+                    // console.log(`Filtered out ${opt.name} due to prereqs`, opt.prerequisite);
+                    return false;
+                }
+                return true;
             }
             return true;
         }).sort((a, b) => a.name.localeCompare(b.name));

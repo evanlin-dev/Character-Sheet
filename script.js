@@ -453,7 +453,7 @@
       ========================================= */
    const DB_NAME = 'DndDataDB';
    const STORE_NAME = 'files';
-   const DB_VERSION = 3;
+   const DB_VERSION = 4;
 
    function openDB() {
        return new Promise((resolve, reject) => {
