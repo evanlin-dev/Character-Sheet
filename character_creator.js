@@ -607,6 +607,64 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderOptionalFeatures(div, ["MM"], selectedClass, f.level, selectedSubclass);
             } else if (f.name === "Weapon Mastery") {
                 renderWeaponMasteryChoices(div, f, selectedClass, f.level);
+            } else if (f.name === "Primal Knowledge") {
+                const clsObj = allClasses.find(c => c.name === selectedClass && c.source === currentClassSource);
+                if (clsObj && clsObj.startingProficiencies && clsObj.startingProficiencies.skills) {
+                    const s = clsObj.startingProficiencies.skills;
+                    let skillOptions = [];
+                    if (Array.isArray(s)) {
+                        s.forEach(sk => {
+                            if (sk.choose && sk.choose.from) {
+                                skillOptions = sk.choose.from;
+                            }
+                        });
+                    }
+                    
+                    if (skillOptions.length > 0) {
+                        const pkDiv = document.createElement('div');
+                        pkDiv.style.marginTop = "10px";
+                        pkDiv.style.padding = "10px";
+                        pkDiv.style.background = "rgba(255,255,255,0.5)";
+                        pkDiv.style.border = "1px solid var(--gold)";
+                        pkDiv.style.borderRadius = "4px";
+                        
+                        pkDiv.innerHTML = `<strong>Primal Knowledge:</strong> Choose one additional skill proficiency from the Barbarian list.`;
+                        
+                        const select = document.createElement('select');
+                        select.className = 'styled-select';
+                        select.style.width = '100%';
+                        select.style.marginTop = '5px';
+                        
+                        const cap = str => str.charAt(0).toUpperCase() + str.slice(1);
+                        
+                        const populateOptions = () => {
+                            const coreSelects = document.querySelectorAll('.skill-select-dropdown');
+                            const coreValues = new Set(Array.from(coreSelects).map(s => s.value));
+                            const currentVal = select.value;
+                            
+                            let html = `<option value="" disabled ${!currentVal ? 'selected' : ''}>Select Skill</option>`;
+                            skillOptions.forEach(opt => {
+                                const label = cap(opt);
+                                if (!coreValues.has(label)) {
+                                    html += `<option value="${opt}" ${opt === currentVal ? 'selected' : ''}>${label}</option>`;
+                                }
+                            });
+                            select.innerHTML = html;
+                        };
+
+                        populateOptions();
+                        select.addEventListener('focus', populateOptions);
+
+                        select.addEventListener('change', () => {
+                            Array.from(selectedOptionalFeatures).forEach(feat => { if (feat.startsWith("Primal Knowledge Skill:")) selectedOptionalFeatures.delete(feat); });
+                            if (select.value) selectedOptionalFeatures.add(`Primal Knowledge Skill: ${select.value}`);
+                        });
+                        Array.from(selectedOptionalFeatures).forEach(feat => { if (feat.startsWith("Primal Knowledge Skill:")) select.value = feat.replace("Primal Knowledge Skill: ", ""); });
+
+                        pkDiv.appendChild(select);
+                        div.appendChild(pkDiv);
+                    }
+                }
             }
 
             // Check for Feats in entries and render them
@@ -2360,6 +2418,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     desc: `You have mastery with the ${wName}. Property: ${w.mastery || "See rules"}.`, 
                     type: 'class' 
                 });
+            } else if (name.startsWith("Primal Knowledge Skill: ")) {
+                const skill = name.replace("Primal Knowledge Skill: ", "");
+                features.push({
+                    title: "Primal Knowledge",
+                    desc: `You gain proficiency in the ${skill.charAt(0).toUpperCase() + skill.slice(1)} skill.`,
+                    type: 'class'
+                });
+                // Note: Skill proficiency boolean update is not handled here as charData structure 
+                // for skills is complex and usually handled by the sheet logic after load.
+                // The feature description serves as the record.
             } else {
                 const candidates = allOptionalFeatures.filter(f => f.name === name);
                 let feat = candidates.find(f => f.source === 'XPHB') || candidates.find(f => f.source === 'PHB') || candidates[0];
