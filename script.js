@@ -231,11 +231,43 @@
    }
    
    function updateSpellDC() {
-     const spellAbility = document.getElementById("spellAbility").value;
-     const abilityScore = parseInt(document.getElementById(spellAbility).value) || 10;
+     const spellAbilityEl = document.getElementById("spellAbility");
+     if (!spellAbilityEl) return;
+     const spellAbility = spellAbilityEl.value;
+     if (!spellAbility) return;
+
+     const abilityInput = document.getElementById(spellAbility);
+     if (!abilityInput) return;
+
+     const abilityScore = parseInt(abilityInput.value) || 10;
      const abilityMod = calcMod(abilityScore);
      const profBonus = parseInt(document.getElementById("profBonus").value) || 0;
-     document.getElementById("spellDC").value = 8 + profBonus + abilityMod;
+     
+     const dcEl = document.getElementById("spellDC");
+     if (dcEl) dcEl.value = 8 + profBonus + abilityMod;
+     
+     const totalAtk = abilityMod + profBonus;
+     const atkEl = document.getElementById("spellAttackBonus");
+     if (atkEl) {
+       if (atkEl.tagName === "INPUT" || atkEl.tagName === "TEXTAREA") {
+         if (atkEl.type === "number") atkEl.value = totalAtk;
+         else atkEl.value = totalAtk >= 0 ? `+${totalAtk}` : totalAtk;
+       } else {
+         atkEl.textContent = totalAtk >= 0 ? `+${totalAtk}` : totalAtk;
+       }
+     }
+
+     const modEl = document.getElementById("spellAttackMod");
+     if (modEl) {
+       if (modEl.tagName === "INPUT" || modEl.tagName === "TEXTAREA") {
+         if (modEl.type === "number") modEl.value = abilityMod;
+         else modEl.value = abilityMod >= 0 ? `+${abilityMod}` : abilityMod;
+       } else {
+         modEl.textContent = abilityMod >= 0 ? `+${abilityMod}` : abilityMod;
+       }
+     }
+     
+     saveCharacter();
    }
    
    window.calculateTotalAC = function () {
@@ -698,32 +730,38 @@
 
            // Pass 1: Build Spell Class Map from Book Data
            const spellClassMap = {};
+           
+           const processBookEntries = (entries, currentClass = null) => {
+               if (!entries || !Array.isArray(entries)) return;
+               entries.forEach(entry => {
+                   let className = currentClass;
+                   if (entry.name && typeof entry.name === 'string' && entry.name.endsWith(" Spells")) {
+                       className = entry.name.replace(" Spells", "").trim();
+                   }
+                   
+                   if (className) {
+                       if (entry.items && Array.isArray(entry.items)) {
+                           entry.items.forEach(item => {
+                               const itemStr = typeof item === 'string' ? item : (item.name || "");
+                               const match = /{@spell ([^}|]+)/.exec(itemStr);
+                               if (match) {
+                                   const spellName = match[1].toLowerCase().trim();
+                                   if (!spellClassMap[spellName]) spellClassMap[spellName] = new Set();
+                                   spellClassMap[spellName].add(className);
+                               }
+                           });
+                       }
+                   }
+                   
+                   if (entry.entries) processBookEntries(entry.entries, className);
+               });
+           };
+
            data.forEach(file => {
                try {
                    const json = JSON.parse(file.content);
                    if (json.data && Array.isArray(json.data)) {
-                       const spellsChapter = json.data.find(entry => entry.name === "Spells" && entry.type === "section");
-                       if (spellsChapter && spellsChapter.entries) {
-                           spellsChapter.entries.forEach(classSection => {
-                               if (classSection.name && classSection.name.endsWith(" Spells")) {
-                                   const className = classSection.name.replace(" Spells", "");
-                                   if (classSection.entries) {
-                                       classSection.entries.forEach(subEntry => {
-                                           if (subEntry.items && Array.isArray(subEntry.items)) {
-                                               subEntry.items.forEach(item => {
-                                                   const match = /{@spell ([^}|]+)/.exec(item);
-                                                   if (match) {
-                                                       const spellName = match[1].toLowerCase().trim();
-                                                       if (!spellClassMap[spellName]) spellClassMap[spellName] = new Set();
-                                                       spellClassMap[spellName].add(className);
-                                                   }
-                                               });
-                                           }
-                                       });
-                                   }
-                               }
-                           });
-                       }
+                       processBookEntries(json.data);
                    }
                } catch (e) {}
            });
@@ -1471,8 +1509,8 @@
        gp: document.getElementById("gp").value,
        pp: document.getElementById("pp").value,
        spellAbility: document.getElementById("spellAbility").value,
-       spellAttackMod: document.getElementById("spellAttackMod").value,
-       spellAttackBonus: document.getElementById("spellAttackBonus").value,
+       spellAttackMod: document.getElementById("spellAttackMod")?.value || "",
+       spellAttackBonus: document.getElementById("spellAttackBonus")?.value || "",
        skillProficiency, saveProficiency, deathSaves, currentTheme: document.body.className,
      };
      localStorage.setItem("dndCharacter", JSON.stringify(characterData));
@@ -1656,6 +1694,10 @@
            if (data.attunement) { data.attunement.forEach((v, i) => (document.getElementById(`attune${i + 1}`).value = v || "")); }
            if (data.shield) document.getElementById("shieldEquipped").checked = true;
          } else {
+           document.querySelectorAll("input, textarea, select").forEach(el => {
+             if (el.type === "checkbox" || el.type === "radio") el.checked = false;
+             else el.value = "";
+           });
            addFeatureItem("classFeaturesContainer"); addFeatureItem("raceFeaturesContainer"); addFeatureItem("backgroundFeaturesContainer"); addFeatureItem("featsContainer");
            addFeatureItem("actionsContainer"); addFeatureItem("bonusActionsContainer"); addFeatureItem("reactionsContainer");
          }
