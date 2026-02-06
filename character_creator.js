@@ -603,8 +603,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (selectedClass === "Paladin") codes.push("FS:P");
                 if (selectedClass === "Bard") codes.push("FS:B");
                 renderOptionalFeatures(div, codes, selectedClass, f.level, selectedSubclass);
-            } else if (f.name.includes("Metamagic")) {
-                renderOptionalFeatures(div, ["MM"], selectedClass, f.level, selectedSubclass);
+            } else if (f.name === "Metamagic") {
+                if (f.level <= 3) {
+                    let limit = 2;
+                    if (selectedLevel >= 10) limit = 4;
+                    if (selectedLevel >= 17) limit = 6;
+                    renderOptionalFeatures(div, ["MM"], selectedClass, f.level, selectedSubclass, limit);
+                }
             } else if (f.name === "Weapon Mastery") {
                 renderWeaponMasteryChoices(div, f, selectedClass, f.level);
             } else if (f.name === "Ability Score Improvement") {
@@ -619,6 +624,43 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
                     }
                 }
+
+                if (selectedFeatName) {
+                    const candidates = allFeats.filter(ft => ft.name === selectedFeatName);
+                    let feat = candidates.find(ft => ft.source === 'XPHB') || candidates.find(ft => ft.source === 'PHB') || candidates[0];
+                    if (feat) {
+                        const featDiv = document.createElement('div');
+                        featDiv.style.marginTop = "10px";
+                        featDiv.style.padding = "10px";
+                        featDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
+                        featDiv.style.border = "1px solid var(--gold)";
+                        featDiv.style.borderRadius = "4px";
+                        
+                        let featDesc = processEntries(feat.entries);
+                        featDesc = featDesc.replace(/\{@\w+\s*([^}]+)?\}/g, (match, content) => content ? content.split('|')[0] : "");
+
+                        featDiv.innerHTML = `
+                            <div style="font-weight:bold; color:var(--red-dark); border-bottom:1px solid var(--gold-dark); padding-bottom:4px; margin-bottom:6px;">Feat: ${feat.name}</div>
+                            <div style="font-size:0.85rem; color:var(--ink); line-height:1.4;">${featDesc}</div>
+                        `;
+                        div.appendChild(featDiv);
+                    }
+                }
+            } else if (f.name === "Epic Boon") {
+                const selectionKey = `ASI Level ${f.level}`;
+                let selectedFeatName = null;
+                for (const item of selectedOptionalFeatures) {
+                    if (item.startsWith(selectionKey + ":")) {
+                        selectedFeatName = item.substring(selectionKey.length + 2);
+                        break;
+                    }
+                }
+
+                if (selectedFeatName) {
+                    div.innerHTML = `<div><span style="font-weight:bold; color:var(--red-dark); margin-right:5px;">Lvl ${f.level}</span> <span style="font-weight:bold;">${f.name}</span>${subLabel}</div>`;
+                }
+
+                renderFeatSelection(div, f, selectedClass, f.level);
 
                 if (selectedFeatName) {
                     const candidates = allFeats.filter(ft => ft.name === selectedFeatName);
@@ -1313,7 +1355,7 @@ document.addEventListener('DOMContentLoaded', () => {
         parentElement.appendChild(container);
     }
 
-    function renderOptionalFeatures(parentElement, featureTypes, className, charLevel, subclass) {
+    function renderOptionalFeatures(parentElement, featureTypes, className, charLevel, subclass, limit = null) {
         if (!allOptionalFeatures.length) return;
 
         // 1. Filter by Feature Type & Group by Name
@@ -1511,7 +1553,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             div.onclick = () => {
                 if (selectedOptionalFeatures.has(opt.name)) selectedOptionalFeatures.delete(opt.name);
-                else selectedOptionalFeatures.add(opt.name);
+                else {
+                    if (limit !== null) {
+                        let currentCount = 0;
+                        available.forEach(a => {
+                            if (selectedOptionalFeatures.has(a.name)) currentCount++;
+                        });
+                        if (currentCount >= limit) {
+                            alert(`You can only select ${limit} options.`);
+                            return;
+                        }
+                    }
+                    selectedOptionalFeatures.add(opt.name);
+                }
                 renderClassFeatures();
             };
 
