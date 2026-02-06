@@ -104,6 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const processBookEntries = (entries, currentClass = null) => {
                     if (!entries || !Array.isArray(entries)) return;
                     entries.forEach(entry => {
+                        if (!entry) return;
                         let className = currentClass;
                         if (entry.name && typeof entry.name === 'string' && entry.name.endsWith(" Spells")) {
                             className = entry.name.replace(" Spells", "").trim();
@@ -126,6 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 data.forEach(file => {
+                    if (!file.name.toLowerCase().endsWith('.json')) return;
                     try {
                         const json = JSON.parse(file.content);
                         if (json.data && Array.isArray(json.data)) processBookEntries(json.data);
@@ -134,6 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Pass 2: Load Items
                 data.forEach(file => {
+                    if (!file.name.toLowerCase().endsWith('.json')) return;
                     try {
                         const json = JSON.parse(file.content);
                         // Use loops instead of spread to avoid stack overflow on large arrays

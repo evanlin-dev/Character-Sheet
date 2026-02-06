@@ -534,6 +534,7 @@
 
            const results = [];
            data.forEach(file => {
+               if (!file.name.toLowerCase().endsWith('.json')) return;
                try { 
                    const json = JSON.parse(file.content);
                    console.log("Item Data:", json);
@@ -738,6 +739,7 @@
            const processBookEntries = (entries, currentClass = null) => {
                if (!entries || !Array.isArray(entries)) return;
                entries.forEach(entry => {
+                   if (!entry) return;
                    let className = currentClass;
                    if (entry.name && typeof entry.name === 'string' && entry.name.endsWith(" Spells")) {
                        className = entry.name.replace(" Spells", "").trim();
@@ -762,6 +764,7 @@
            };
 
            data.forEach(file => {
+               if (!file.name.toLowerCase().endsWith('.json')) return;
                try {
                    const json = JSON.parse(file.content);
                    if (json.data && Array.isArray(json.data)) {
@@ -772,6 +775,7 @@
 
            const results = [];
            data.forEach(file => {
+               if (!file.name.toLowerCase().endsWith('.json')) return;
                try { 
                    const json = JSON.parse(file.content);
                    // console.log("Spell Data:", json);
@@ -813,7 +817,7 @@
                            });
                        }
                    });
-               } catch (e) { console.error("Error parsing spell file:", e); }
+               } catch (e) { console.error(`Error parsing spell file (${file.name}):`, e); }
            });
 
            // Filter out PHB if newer exists
