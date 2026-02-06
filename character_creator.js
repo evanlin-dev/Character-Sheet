@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedSpells = new Set();
     let allBackgrounds = [];
     let selectedBackground = null;
+    let allSpecies = [];
+    let selectedSpecies = null;
 
     // DB Setup
     const DB_NAME = 'DndDataDB';
@@ -205,6 +207,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (json.background && Array.isArray(json.background)) {
                             for (const b of json.background) allBackgrounds.push(b);
                         }
+                        if (json.race && Array.isArray(json.race)) {
+                            for (const r of json.race) allSpecies.push(r);
+                        }
                         
                         // Robust spell loading with enrichment
                         const spells = json.spell || json.spells || json.data;
@@ -387,6 +392,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (step3.style.display === 'none') {
             step3.style.display = 'block';
             renderBackgroundOptions();
+            renderSpeciesSection();
+            renderAbilityScoreSection();
             step3.scrollIntoView({ behavior: 'smooth' });
             // nextBtn.textContent = "Finish"; // Optional: Change button text
         } else {
@@ -1502,5 +1509,284 @@ document.addEventListener('DOMContentLoaded', () => {
                 container.innerHTML = "No description available.";
             }
         }
+    }
+
+    function renderSpeciesSection() {
+        const step3 = document.getElementById('step-3-section');
+        if (document.getElementById('creator-species')) return;
+
+        const container = document.createElement('div');
+        container.style.marginTop = "30px";
+        container.style.borderTop = "2px solid var(--gold)";
+        container.style.paddingTop = "20px";
+        
+        container.innerHTML = `
+            <h3 class="section-title" style="margin-top:0;">Select Species</h3>
+            <div class="field" style="margin-bottom: 20px;">
+                <span class="field-label">Species</span>
+                <select id="creator-species" class="styled-select" style="width: 100%;">
+                    <option value="" disabled selected>Select Species</option>
+                </select>
+            </div>
+            <div id="creator-species-info" style="background: rgba(255,255,255,0.5); padding: 15px; border-radius: 4px; border: 1px dashed var(--gold);">
+                <em style="color:var(--ink-light);">Select a species to view details...</em>
+            </div>
+        `;
+        
+        step3.appendChild(container);
+
+        const speciesSelect = document.getElementById('creator-species');
+        speciesSelect.addEventListener('change', () => {
+            selectedSpecies = speciesSelect.value;
+            renderSpeciesInfo();
+        });
+
+        const uniqueMap = new Map();
+        allSpecies.forEach(r => {
+            if (!uniqueMap.has(r.name)) {
+                uniqueMap.set(r.name, r);
+            } else {
+                const existing = uniqueMap.get(r.name);
+                if (r.source === 'XPHB') uniqueMap.set(r.name, r);
+                else if (r.source === 'PHB' && existing.source !== 'XPHB') uniqueMap.set(r.name, r);
+            }
+        });
+        
+        const sorted = Array.from(uniqueMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+        sorted.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.name;
+            opt.textContent = r.name;
+            speciesSelect.appendChild(opt);
+        });
+    }
+
+    function renderSpeciesInfo() {
+        const container = document.getElementById('creator-species-info');
+        if (!selectedSpecies) return;
+        const candidates = allSpecies.filter(r => r.name === selectedSpecies);
+        let race = candidates.find(r => r.source === 'XPHB') || candidates.find(r => r.source === 'PHB') || candidates[0];
+        if (race && race._copy && !race.entries) { const orig = allSpecies.find(r => r.name === race._copy.name); if(orig) race = {...orig, ...race, entries: orig.entries}; }
+        if (race && race.entries) { let desc = processEntries(race.entries); desc = desc.replace(/{@\w+\s*([^}]+)?}/g, (m, c) => c ? c.split('|')[0] : ""); container.innerHTML = desc; }
+    }
+
+    function renderAbilityScoreSection() {
+        const step3 = document.getElementById('step-3-section');
+        if (document.getElementById('creator-abilities')) return;
+
+        const container = document.createElement('div');
+        container.style.marginTop = "30px";
+        container.style.borderTop = "2px solid var(--gold)";
+        container.style.paddingTop = "20px";
+        container.id = 'creator-abilities';
+        
+        container.innerHTML = `
+            <h3 class="section-title" style="margin-top:0;">Ability Scores</h3>
+            <div style="margin-bottom: 15px;">
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <button id="btn-method-standard" class="btn" style="flex:1; font-size:0.8rem;">Standard Array</button>
+                    <button id="btn-method-pointbuy" class="btn btn-secondary" style="flex:1; font-size:0.8rem;">Point Buy</button>
+                    <button id="btn-method-random" class="btn btn-secondary" style="flex:1; font-size:0.8rem;">Random</button>
+                </div>
+                <div id="ability-score-content" style="background:rgba(255,255,255,0.5); padding:15px; border-radius:4px; border:1px solid var(--gold);"></div>
+            </div>
+        `;
+        
+        step3.appendChild(container);
+
+        const setMethod = (method) => {
+            ['standard', 'pointbuy', 'random'].forEach(m => {
+                const btn = document.getElementById(`btn-method-${m}`);
+                if (m === method) {
+                    btn.classList.remove('btn-secondary');
+                    btn.classList.add('btn');
+                } else {
+                    btn.classList.add('btn-secondary');
+                    btn.classList.remove('btn');
+                }
+            });
+            if (method === 'standard') renderStandardArray();
+            if (method === 'pointbuy') renderPointBuy();
+            if (method === 'random') renderRandomStats();
+        };
+
+        document.getElementById('btn-method-standard').onclick = () => setMethod('standard');
+        document.getElementById('btn-method-pointbuy').onclick = () => setMethod('pointbuy');
+        document.getElementById('btn-method-random').onclick = () => setMethod('random');
+        
+        renderStandardArray();
+    }
+
+    function renderStandardArray() {
+        const container = document.getElementById('ability-score-content');
+        container.innerHTML = `
+            <div style="margin-bottom:10px; font-style:italic; color:var(--ink-light);">Assign the standard array (15, 14, 13, 12, 10, 8) to your abilities.</div>
+            <div id="sa-container" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;"></div>
+        `;
+        
+        const abilities = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'];
+        const standardValues = [15, 14, 13, 12, 10, 8];
+        const saContainer = document.getElementById('sa-container');
+
+        abilities.forEach(ab => {
+            const div = document.createElement('div');
+            div.innerHTML = `
+                <label style="font-weight:bold; font-size:0.9rem;">${ab}</label>
+                <select class="styled-select sa-select" data-ability="${ab}" style="width:100%;">
+                    <option value="" selected>--</option>
+                    ${standardValues.map(v => `<option value="${v}">${v}</option>`).join('')}
+                </select>
+            `;
+            saContainer.appendChild(div);
+        });
+
+        const selects = container.querySelectorAll('.sa-select');
+        selects.forEach(sel => {
+            sel.addEventListener('change', () => {
+                const used = Array.from(selects).map(s => s.value).filter(v => v);
+                selects.forEach(s => {
+                    const current = s.value;
+                    Array.from(s.options).forEach(opt => {
+                        if (!opt.value) return;
+                        if (opt.value === current) opt.disabled = false;
+                        else opt.disabled = used.includes(opt.value);
+                    });
+                });
+            });
+        });
+    }
+
+    function renderPointBuy() {
+        const container = document.getElementById('ability-score-content');
+        container.innerHTML = `
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                <span style="font-style:italic; color:var(--ink-light);">27 Points Total</span>
+                <span id="pb-remaining" style="font-weight:bold; color:var(--ink);">Remaining: 27</span>
+            </div>
+            <div id="pb-container"></div>
+        `;
+
+        const abilities = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'];
+        const pbContainer = document.getElementById('pb-container');
+        const scores = { Strength: 8, Dexterity: 8, Constitution: 8, Intelligence: 8, Wisdom: 8, Charisma: 8 };
+        const costs = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
+
+        const update = () => {
+            let spent = 0;
+            Object.values(scores).forEach(s => spent += costs[s]);
+            const remaining = 27 - spent;
+            const remEl = document.getElementById('pb-remaining');
+            remEl.textContent = `Remaining: ${remaining}`;
+            remEl.style.color = remaining < 0 ? 'red' : 'var(--ink)';
+
+            pbContainer.innerHTML = '';
+            abilities.forEach(ab => {
+                const score = scores[ab];
+                const cost = costs[score];
+                const nextCost = costs[score + 1];
+                
+                const canInc = score < 15 && (remaining >= (nextCost - cost));
+                const canDec = score > 8;
+
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.justifyContent = 'space-between';
+                row.style.alignItems = 'center';
+                row.style.marginBottom = '5px';
+                row.style.padding = '5px';
+                row.style.background = 'white';
+                row.style.border = '1px solid var(--gold)';
+                row.style.borderRadius = '4px';
+
+                row.innerHTML = `
+                    <span style="font-weight:bold; width:100px;">${ab}</span>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <button class="btn-dec" style="width:24px; height:24px; cursor:pointer;">-</button>
+                        <span style="font-weight:bold; font-size:1.1rem; width:20px; text-align:center;">${score}</span>
+                        <button class="btn-inc" style="width:24px; height:24px; cursor:pointer;">+</button>
+                    </div>
+                    <span style="color:var(--ink-light); font-size:0.8rem; width:50px; text-align:right;">(${cost} pts)</span>
+                `;
+
+                const btnDec = row.querySelector('.btn-dec');
+                const btnInc = row.querySelector('.btn-inc');
+
+                if (!canDec) btnDec.disabled = true;
+                if (!canInc) btnInc.disabled = true;
+
+                btnDec.onclick = () => { scores[ab]--; update(); };
+                btnInc.onclick = () => { scores[ab]++; update(); };
+
+                pbContainer.appendChild(row);
+            });
+        };
+        update();
+    }
+
+    function renderRandomStats() {
+        const container = document.getElementById('ability-score-content');
+        container.innerHTML = `
+            <div style="text-align:center; margin-bottom:15px;">
+                <button id="btn-roll-stats" class="btn" style="width:100%;">Roll Stats (4d6 drop lowest)</button>
+            </div>
+            <div id="random-results" style="display:flex; justify-content:center; gap:10px; margin-bottom:15px; font-weight:bold; font-size:1.2rem;"></div>
+            <div id="random-assign-container" style="display:none; grid-template-columns: 1fr 1fr; gap:10px;"></div>
+        `;
+
+        const abilities = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'];
+
+        document.getElementById('btn-roll-stats').onclick = () => {
+            const rolls = [];
+            for(let i=0; i<6; i++) {
+                const dice = [
+                    Math.floor(Math.random()*6)+1,
+                    Math.floor(Math.random()*6)+1,
+                    Math.floor(Math.random()*6)+1,
+                    Math.floor(Math.random()*6)+1
+                ];
+                dice.sort((a,b) => a-b);
+                rolls.push(dice[1] + dice[2] + dice[3]);
+            }
+            
+            const resultsDiv = document.getElementById('random-results');
+            resultsDiv.innerHTML = rolls.map(r => `<span style="padding:5px 10px; background:white; border:1px solid var(--gold); border-radius:4px;">${r}</span>`).join('');
+            
+            const assignContainer = document.getElementById('random-assign-container');
+            assignContainer.style.display = 'grid';
+            assignContainer.innerHTML = '';
+
+            abilities.forEach(ab => {
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <label style="font-weight:bold; font-size:0.9rem;">${ab}</label>
+                    <select class="styled-select random-select" data-ability="${ab}" style="width:100%;">
+                        <option value="" selected>--</option>
+                        ${rolls.map((v, i) => `<option value="${v}" data-index="${i}">${v}</option>`).join('')}
+                    </select>
+                `;
+                assignContainer.appendChild(div);
+            });
+
+            const selects = assignContainer.querySelectorAll('.random-select');
+            selects.forEach(sel => {
+                sel.addEventListener('change', () => {
+                    const usedIndices = Array.from(selects).map(s => {
+                        if (s.selectedIndex === -1) return null;
+                        const opt = s.options[s.selectedIndex];
+                        return opt.dataset.index;
+                    }).filter(v => v !== undefined);
+
+                    selects.forEach(s => {
+                        const currentIndex = s.options[s.selectedIndex]?.dataset.index;
+                        Array.from(s.options).forEach(opt => {
+                            if (!opt.value) return;
+                            const optIndex = opt.dataset.index;
+                            if (optIndex === currentIndex) opt.disabled = false;
+                            else opt.disabled = usedIndices.includes(optIndex);
+                        });
+                    });
+                });
+            });
+        };
     }
 });
