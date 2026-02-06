@@ -607,6 +607,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderOptionalFeatures(div, ["MM"], selectedClass, f.level, selectedSubclass);
             } else if (f.name === "Weapon Mastery") {
                 renderWeaponMasteryChoices(div, f, selectedClass, f.level);
+            } else if (f.name === "Ability Score Improvement") {
+                renderFeatSelection(div, f, selectedClass, f.level);
+                
+                // Render selected feat description if any
+                const selectionKey = `ASI Level ${f.level}`;
+                let selectedFeatName = null;
+                for (const item of selectedOptionalFeatures) {
+                    if (item.startsWith(selectionKey + ":")) {
+                        selectedFeatName = item.substring(selectionKey.length + 2);
+                        break;
+                    }
+                }
+
+                if (selectedFeatName) {
+                    const candidates = allFeats.filter(ft => ft.name === selectedFeatName);
+                    let feat = candidates.find(ft => ft.source === 'XPHB') || candidates.find(ft => ft.source === 'PHB') || candidates[0];
+                    if (feat) {
+                        const featDiv = document.createElement('div');
+                        featDiv.style.marginTop = "10px";
+                        featDiv.style.padding = "10px";
+                        featDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
+                        featDiv.style.border = "1px solid var(--gold)";
+                        featDiv.style.borderRadius = "4px";
+                        
+                        let featDesc = processEntries(feat.entries);
+                        featDesc = featDesc.replace(/\{@\w+\s*([^}]+)?\}/g, (match, content) => content ? content.split('|')[0] : "");
+
+                        featDiv.innerHTML = `
+                            <div style="font-weight:bold; color:var(--red-dark); border-bottom:1px solid var(--gold-dark); padding-bottom:4px; margin-bottom:6px;">Feat: ${feat.name}</div>
+                            <div style="font-size:0.85rem; color:var(--ink); line-height:1.4;">${featDesc}</div>
+                        `;
+                        div.appendChild(featDiv);
+                    }
+                }
             } else if (f.name === "Primal Knowledge") {
                 const clsObj = allClasses.find(c => c.name === selectedClass && c.source === currentClassSource);
                 if (clsObj && clsObj.startingProficiencies && clsObj.startingProficiencies.skills) {
@@ -668,6 +702,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Check for Feats in entries and render them
+            // Skip for ASI feature as we handle it dynamically
+            if (f.name !== "Ability Score Improvement") {
             const featsInFeature = new Set();
             const scanForFeats = (obj) => {
                 if (!obj) return;
@@ -707,6 +743,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         div.appendChild(featDiv);
                     }
                 });
+            }
             }
 
             container.appendChild(div);
@@ -1612,6 +1649,121 @@ document.addEventListener('DOMContentLoaded', () => {
         parentElement.appendChild(container);
     }
 
+    function renderFeatSelection(parentElement, feature, className, charLevel) {
+        const container = document.createElement('div');
+        container.style.marginTop = "10px";
+        container.style.padding = "10px";
+        container.style.background = "rgba(255,255,255,0.5)";
+        container.style.border = "1px solid var(--gold)";
+        container.style.borderRadius = "4px";
+        container.style.maxHeight = "400px";
+        container.style.overflowY = "auto";
+
+        container.innerHTML = `<div style="font-weight:bold; margin-bottom:8px; border-bottom:1px solid var(--gold-dark);">Select a Feat (Level ${charLevel}):</div>`;
+
+        // Deduplicate Feats
+        const candidates = new Map();
+        allFeats.forEach(feat => {
+            if (!candidates.has(feat.name)) candidates.set(feat.name, []);
+            candidates.get(feat.name).push(feat);
+        });
+
+        const uniqueFeats = [];
+        candidates.forEach((opts) => {
+            let selected = opts.find(o => o.source === 'XPHB');
+            if (!selected) selected = opts.find(o => o.source === 'PHB');
+            if (!selected) selected = opts[0];
+            uniqueFeats.push(selected);
+        });
+
+        // Filter by Level Prerequisite
+        const available = uniqueFeats.filter(feat => {
+            if (feat.prerequisite) {
+                return feat.prerequisite.every(req => {
+                    if (req.level) {
+                        let reqLvl = typeof req.level === 'object' ? req.level.level : req.level;
+                        return charLevel >= reqLvl;
+                    }
+                    return true;
+                });
+            }
+            return true;
+        }).sort((a, b) => a.name.localeCompare(b.name));
+
+        // Search
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Search feats...';
+        searchInput.className = 'styled-input';
+        searchInput.style.width = '100%';
+        searchInput.style.marginBottom = '8px';
+        searchInput.style.padding = '4px';
+        searchInput.style.border = '1px solid var(--gold)';
+        searchInput.style.borderRadius = '4px';
+        
+        const list = document.createElement('div');
+        list.style.display = 'flex';
+        list.style.flexDirection = 'column';
+        list.style.gap = '4px';
+
+        searchInput.oninput = () => {
+            const term = searchInput.value.toLowerCase();
+            Array.from(list.children).forEach(child => {
+                const text = child.querySelector('.feat-name').textContent.toLowerCase();
+                child.style.display = text.includes(term) ? 'flex' : 'none';
+            });
+        };
+
+        container.appendChild(searchInput);
+
+        const selectionKey = `ASI Level ${charLevel}`;
+        let currentSelection = null;
+        for (const item of selectedOptionalFeatures) {
+            if (item.startsWith(selectionKey + ":")) {
+                currentSelection = item.substring(selectionKey.length + 2);
+                break;
+            }
+        }
+
+        available.forEach(feat => {
+            const div = document.createElement('div');
+            div.className = 'checklist-item';
+            div.style.flexDirection = 'column';
+            div.style.alignItems = 'flex-start';
+            div.style.padding = '8px';
+            
+            const header = document.createElement('div');
+            header.className = 'feat-name';
+            header.style.fontWeight = 'bold';
+            header.textContent = feat.name;
+            
+            div.appendChild(header);
+
+            if (currentSelection === feat.name) {
+                div.style.background = 'var(--red)';
+                div.style.color = 'white';
+            }
+
+            div.onclick = () => {
+                const toRemove = [];
+                selectedOptionalFeatures.forEach(k => {
+                    if (k.startsWith(selectionKey + ":")) toRemove.push(k);
+                });
+                toRemove.forEach(k => selectedOptionalFeatures.delete(k));
+
+                if (currentSelection !== feat.name) {
+                    selectedOptionalFeatures.add(`${selectionKey}: ${feat.name}`);
+                }
+                renderClassFeatures();
+            };
+
+            list.appendChild(div);
+        });
+
+        container.appendChild(list);
+        parentElement.appendChild(container);
+    }
+
     function renderGrantedSpells() {
         const container = document.getElementById('creator-granted-spells');
         const wrapper = document.getElementById('creator-granted-spells-container');
@@ -2428,6 +2580,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Note: Skill proficiency boolean update is not handled here as charData structure 
                 // for skills is complex and usually handled by the sheet logic after load.
                 // The feature description serves as the record.
+            } else if (name.startsWith("ASI Level ")) {
+                const featName = name.substring(name.indexOf(':') + 2);
+                const candidates = allFeats.filter(f => f.name === featName);
+                let feat = candidates.find(f => f.source === 'XPHB') || candidates.find(f => f.source === 'PHB') || candidates[0];
+                if (feat) {
+                    let desc = processEntries(feat.entries);
+                    features.push({ title: `Feat: ${feat.name}`, desc: cleanText(desc), type: 'feat' });
+                }
             } else {
                 const candidates = allOptionalFeatures.filter(f => f.name === name);
                 let feat = candidates.find(f => f.source === 'XPHB') || candidates.find(f => f.source === 'PHB') || candidates[0];
@@ -2479,7 +2639,7 @@ document.addEventListener('DOMContentLoaded', () => {
             classFeatures: features.filter(f => f.type === 'class'),
             raceFeatures: features.filter(f => f.type === 'race'),
             backgroundFeatures: features.filter(f => f.type === 'background'),
-            feats: [], // Could parse feats from selections if needed
+            feats: features.filter(f => f.type === 'feat'),
             spellsList: Array.from(selectedSpells).map(s => ({ name: s, level: 1, prepared: false })) // Simplified spell mapping
         };
 
