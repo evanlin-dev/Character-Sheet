@@ -81,45 +81,7 @@
    ];
    
    // Weapon DB
-   const dndWeaponsDB = {
-     "Club": { type: "Simple", cat: "Melee", dmg: "1d4", dtype: "bludgeoning", props: ["Light"], mastery: "Slow" },
-     "Dagger": { type: "Simple", cat: "Melee", dmg: "1d4", dtype: "piercing", props: ["Finesse", "Light", "Thrown (20/60)"], mastery: "Nick" },
-     "Greatclub": { type: "Simple", cat: "Melee", dmg: "1d8", dtype: "bludgeoning", props: ["Two-Handed"], mastery: "Push" },
-     "Handaxe": { type: "Simple", cat: "Melee", dmg: "1d6", dtype: "slashing", props: ["Light", "Thrown (20/60)"], mastery: "Vex" },
-     "Javelin": { type: "Simple", cat: "Melee", dmg: "1d6", dtype: "piercing", props: ["Thrown (30/120)"], mastery: "Slow" },
-     "Light Hammer": { type: "Simple", cat: "Melee", dmg: "1d4", dtype: "bludgeoning", props: ["Light", "Thrown (20/60)"], mastery: "Nick" },
-     "Mace": { type: "Simple", cat: "Melee", dmg: "1d6", dtype: "bludgeoning", props: [], mastery: "Sap" },
-     "Quarterstaff": { type: "Simple", cat: "Melee", dmg: "1d6", dtype: "bludgeoning", props: ["Versatile (1d8)"], mastery: "Topple" },
-     "Sickle": { type: "Simple", cat: "Melee", dmg: "1d4", dtype: "slashing", props: ["Light"], mastery: "Nick" },
-     "Spear": { type: "Simple", cat: "Melee", dmg: "1d6", dtype: "piercing", props: ["Thrown (20/60)", "Versatile (1d8)"], mastery: "Sap" },
-     "Light Crossbow": { type: "Simple", cat: "Ranged", dmg: "1d8", dtype: "piercing", props: ["Ammunition (80/320)", "Loading", "Two-Handed"], mastery: "Slow" },
-     "Dart": { type: "Simple", cat: "Ranged", dmg: "1d4", dtype: "piercing", props: ["Finesse", "Thrown (20/60)"], mastery: "Vex" },
-     "Shortbow": { type: "Simple", cat: "Ranged", dmg: "1d6", dtype: "piercing", props: ["Ammunition (80/320)", "Two-Handed"], mastery: "Vex" },
-     "Sling": { type: "Simple", cat: "Ranged", dmg: "1d4", dtype: "bludgeoning", props: ["Ammunition (30/120)"], mastery: "Slow" },
-     "Battleaxe": { type: "Martial", cat: "Melee", dmg: "1d8", dtype: "slashing", props: ["Versatile (1d10)"], mastery: "Topple" },
-     "Flail": { type: "Martial", cat: "Melee", dmg: "1d8", dtype: "bludgeoning", props: [], mastery: "Sap" },
-     "Glaive": { type: "Martial", cat: "Melee", dmg: "1d10", dtype: "slashing", props: ["Heavy", "Reach", "Two-Handed"], mastery: "Graze" },
-     "Greataxe": { type: "Martial", cat: "Melee", dmg: "1d12", dtype: "slashing", props: ["Heavy", "Two-Handed"], mastery: "Cleave" },
-     "Greatsword": { type: "Martial", cat: "Melee", dmg: "2d6", dtype: "slashing", props: ["Heavy", "Two-Handed"], mastery: "Graze" },
-     "Halberd": { type: "Martial", cat: "Melee", dmg: "1d10", dtype: "slashing", props: ["Heavy", "Reach", "Two-Handed"], mastery: "Cleave" },
-     "Lance": { type: "Martial", cat: "Melee", dmg: "1d12", dtype: "piercing", props: ["Reach", "Special"], mastery: "Topple" },
-     "Longsword": { type: "Martial", cat: "Melee", dmg: "1d8", dtype: "slashing", props: ["Versatile (1d10)"], mastery: "Sap" },
-     "Maul": { type: "Martial", cat: "Melee", dmg: "2d6", dtype: "bludgeoning", props: ["Heavy", "Two-Handed"], mastery: "Topple" },
-     "Morningstar": { type: "Martial", cat: "Melee", dmg: "1d8", dtype: "piercing", props: [], mastery: "Sap" },
-     "Pike": { type: "Martial", cat: "Melee", dmg: "1d10", dtype: "piercing", props: ["Heavy", "Reach", "Two-Handed"], mastery: "Push" },
-     "Rapier": { type: "Martial", cat: "Melee", dmg: "1d8", dtype: "piercing", props: ["Finesse"], mastery: "Vex" },
-     "Scimitar": { type: "Martial", cat: "Melee", dmg: "1d6", dtype: "slashing", props: ["Finesse", "Light"], mastery: "Nick" },
-     "Shortsword": { type: "Martial", cat: "Melee", dmg: "1d6", dtype: "piercing", props: ["Finesse", "Light"], mastery: "Vex" },
-     "Trident": { type: "Martial", cat: "Melee", dmg: "1d6", dtype: "piercing", props: ["Thrown (20/60)", "Versatile (1d8)"], mastery: "Topple" },
-     "War Pick": { type: "Martial", cat: "Melee", dmg: "1d8", dtype: "piercing", props: [], mastery: "Sap" },
-     "Warhammer": { type: "Martial", cat: "Melee", dmg: "1d8", dtype: "bludgeoning", props: ["Versatile (1d10)"], mastery: "Push" },
-     "Whip": { type: "Martial", cat: "Melee", dmg: "1d4", dtype: "slashing", props: ["Finesse", "Reach"], mastery: "Slow" },
-     "Blowgun": { type: "Martial", cat: "Ranged", dmg: "1", dtype: "piercing", props: ["Ammunition (25/100)", "Loading"], mastery: "Vex" },
-     "Hand Crossbow": { type: "Martial", cat: "Ranged", dmg: "1d6", dtype: "piercing", props: ["Ammunition (30/120)", "Light", "Loading"], mastery: "Vex" },
-     "Heavy Crossbow": { type: "Martial", cat: "Ranged", dmg: "1d10", dtype: "piercing", props: ["Ammunition (100/400)", "Heavy", "Loading", "Two-Handed"], mastery: "Push" },
-     "Longbow": { type: "Martial", cat: "Ranged", dmg: "1d8", dtype: "piercing", props: ["Ammunition (150/600)", "Heavy", "Two-Handed"], mastery: "Slow" },
-     "Net": { type: "Martial", cat: "Ranged", dmg: "0", dtype: "-", props: ["Special", "Thrown (5/15)"], mastery: null },
-   };
+   let dndWeaponsDB = {};
    
    const conditionsDB = {
      "Blinded": "You can't see. Attacks against you have Advantage. Your attacks have Disadvantage.",
@@ -476,6 +438,61 @@
        });
    }
 
+   function loadWeaponsFromData(data) {
+       if (!data) return;
+       data.forEach(file => {
+           if (!file.name.toLowerCase().endsWith('.json')) return;
+           try {
+               const json = JSON.parse(file.content);
+               if (json.baseitem && Array.isArray(json.baseitem)) {
+                   json.baseitem.forEach(item => {
+                       if (item.weaponCategory) {
+                           const name = item.name;
+                           const type = item.weaponCategory.toLowerCase() === "martial" ? "Martial" : "Simple";
+                           const rawType = (item.type || "").split('|')[0];
+                           const cat = (rawType === "R" || rawType === "F") ? "Ranged" : "Melee";
+                           const dmg = item.dmg1 || "";
+                           const dmgTypeMap = { "S": "slashing", "P": "piercing", "B": "bludgeoning" };
+                           const dtype = dmgTypeMap[item.dmgType] || item.dmgType || "";
+                           
+                           const propMap = {
+                               "L": "Light", "F": "Finesse", "T": "Thrown", "2H": "Two-Handed", 
+                               "H": "Heavy", "R": "Reach", "V": "Versatile", "LD": "Loading", "A": "Ammunition"
+                           };
+                           
+                           const props = [];
+                           if (item.property) {
+                               item.property.forEach(p => {
+                                   const pStr = typeof p === 'string' ? p : (p.uid || p.name || "");
+                                   const cleanP = pStr.split('|')[0];
+                                   let propName = propMap[cleanP] || cleanP;
+                                   if (cleanP === "T" || cleanP === "A") {
+                                       if (item.range) {
+                                           if (typeof item.range === 'string') {
+                                               propName += ` (${item.range})`;
+                                           } else if (item.range.normal) {
+                                               propName += ` (${item.range.normal}/${item.range.long})`;
+                                           }
+                                       }
+                                   }
+                                   if (cleanP === "V" && item.dmg2) {
+                                       propName += ` (${item.dmg2})`;
+                                   }
+                                   props.push(propName);
+                               });
+                           }
+
+                           let mastery = item.mastery || null;
+                           if (Array.isArray(mastery)) mastery = mastery[0];
+                           if (mastery) mastery = mastery.split('|')[0];
+                           dndWeaponsDB[name] = { type, cat, dmg, dtype, props, mastery };
+                       }
+                   });
+               }
+           } catch (e) { console.error("Error parsing weapon data:", e); }
+       });
+   }
+
    async function checkDataUploadStatus() {
        console.log(`Checking data upload status (DB v${DB_VERSION})...`);
        try {
@@ -484,6 +501,9 @@
            const store = tx.objectStore(STORE_NAME);
            const req = store.get('currentData');
            req.onsuccess = () => {
+               if (req.result) {
+                   loadWeaponsFromData(req.result);
+               }
                const btnItems = document.getElementById('btn-search-items-zip');
                const btnCantrips = document.getElementById('btn-search-cantrips-zip');
                const btnSpells = document.getElementById('btn-search-spells-zip');

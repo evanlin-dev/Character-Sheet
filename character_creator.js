@@ -3258,12 +3258,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!group.colLabels || !rows || !rows[selectedLevel - 1]) return;
                     
                     const row = rows[selectedLevel - 1];
+                    const isSpellGroup = (group.title && group.title.toLowerCase().includes("spell slots")) || group.rowsSpellProgression;
+
                     group.colLabels.forEach((label, idx) => {
                         // Clean label (remove tags)
                         const cleanLabel = label.replace(/\{@\w+\s*([^}]+)?\}/g, (m, c) => c ? c.split('|')[0] : "").trim();
                         
                         // Match "1st", "2nd", "3rd", etc.
-                        const slotMatch = cleanLabel.match(/(\d+)(?:st|nd|rd|th)/i);
+                        let slotMatch = cleanLabel.match(/(\d+)(?:st|nd|rd|th)/i);
+                        if (!slotMatch && isSpellGroup) {
+                            slotMatch = cleanLabel.match(/^(\d+)$/);
+                        }
                         
                         if (slotMatch) {
                             const lvl = parseInt(slotMatch[1]);
