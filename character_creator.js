@@ -562,6 +562,48 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!selectedClass) return;
         const className = selectedClass;
         const container = document.getElementById('creator-class-features');
+        
+        // Move container below subclass container if possible to reduce clutter
+        const subContainer = document.getElementById('subclass-container');
+        if (container && subContainer && container.parentNode === subContainer.parentNode) {
+             // Insert after subclass container
+             subContainer.parentNode.insertBefore(container, subContainer.nextSibling);
+             // Check for label
+             const label = container.previousElementSibling;
+             const isLabel = label && label.tagName === 'LABEL' && label.textContent.includes("Features");
+             
+             if (isLabel) {
+                 // Move label after subclass container
+                 subContainer.parentNode.insertBefore(label, subContainer.nextSibling);
+                 // Move container after label
+                 subContainer.parentNode.insertBefore(container, label.nextSibling);
+                 
+                 // Ensure label takes full width
+                 label.style.gridColumn = "1 / -1";
+                 label.style.width = "100%";
+             } else {
+                 // Insert after subclass container
+                 subContainer.parentNode.insertBefore(container, subContainer.nextSibling);
+             }
+        }
+
+        // Ensure it takes full width to appear below, not on the side
+        if (container) {
+            container.style.gridColumn = "1 / -1";
+            container.style.width = "100%";
+        }
+
+        // Capture open state of features before clearing
+        const openKeys = new Set();
+        if (container) {
+            container.querySelectorAll('.feature-wrapper').forEach(wrapper => {
+                const content = wrapper.querySelector('.feature-content');
+                if (content && content.style.display !== 'none') {
+                    openKeys.add(wrapper.dataset.key);
+                }
+            });
+        }
+
         container.innerHTML = '';
         
         if (allClassFeatures.length === 0) {
@@ -603,52 +645,117 @@ document.addEventListener('DOMContentLoaded', () => {
 
         uniqueFeatures.forEach(f => {
             const div = document.createElement('div');
+            div.className = 'feature-wrapper';
+            const featureKey = `${f.name}-${f.level}`;
+            div.dataset.key = featureKey;
             div.style.marginBottom = '10px';
-            div.style.borderBottom = '1px dashed var(--gold)';
-            div.style.paddingBottom = '5px';
+            div.style.border = '1px solid var(--gold)';
+            div.style.borderRadius = '4px';
+            div.style.backgroundColor = 'white';
+            div.style.overflow = 'hidden';
 
             if (f.isSubclassFeature) {
-                div.style.backgroundColor = "rgba(212, 165, 116, 0.2)";
-                div.style.padding = "5px";
-                div.style.borderRadius = "4px";
-                div.style.borderLeft = "3px solid var(--gold-dark)";
+                div.style.backgroundColor = "rgba(212, 165, 116, 0.1)";
+                div.style.borderColor = "var(--gold-dark)";
             }
             
             let desc = processEntries(f.entries);
             desc = desc.replace(/\{@\w+\s*([^}]+)?\}/g, (match, content) => content ? content.split('|')[0] : "");
             
             const subLabel = f.isSubclassFeature ? `<span style="font-size:0.75rem; color:var(--ink-light); font-style:italic; margin-left:4px;">(Subclass)</span>` : "";
-            div.innerHTML = `<div><span style="font-weight:bold; color:var(--red-dark); margin-right:5px;">Lvl ${f.level}</span> <span style="font-weight:bold;">${f.name}</span>${subLabel}</div><div style="font-size:0.85rem; color:var(--ink-light); margin-top:2px;">${desc}</div>`;
+            
+            // Header
+            const header = document.createElement('div');
+            header.style.padding = '10px';
+            header.style.display = 'flex';
+            header.style.justifyContent = 'space-between';
+            header.style.alignItems = 'center';
+            header.style.cursor = 'pointer';
+            header.style.background = f.isSubclassFeature ? "rgba(212, 165, 116, 0.2)" : "rgba(0,0,0,0.02)";
+            header.style.transition = "background 0.2s";
+            
+            header.onmouseover = () => header.style.background = "rgba(0,0,0,0.05)";
+            header.onmouseout = () => header.style.background = f.isSubclassFeature ? "rgba(212, 165, 116, 0.2)" : "rgba(0,0,0,0.02)";
+
+            header.innerHTML = `
+                <div>
+                    <span style="font-weight:bold; color:var(--red-dark); margin-right:5px;">Lvl ${f.level}</span> 
+                    <span style="font-weight:bold;">${f.name}</span>${subLabel}
+                </div>
+                <span class="toggle-icon" style="font-size:0.8rem; color:var(--ink-light);">▼</span>
+            `;
+
+            // Content Container
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'feature-content';
+            const isOpen = openKeys.has(featureKey);
+            contentDiv.style.display = isOpen ? 'block' : 'none';
+            contentDiv.style.padding = '10px';
+            contentDiv.style.borderTop = '1px solid var(--gold)';
+            contentDiv.style.fontSize = '0.9rem';
+            contentDiv.style.lineHeight = '1.5';
+            contentDiv.style.color = 'var(--ink)';
+            
+            contentDiv.innerHTML = `<div style="margin-bottom:10px;">${desc}</div>`;
+
+            // Toggle Logic
+            header.onclick = () => {
+                const icon = header.querySelector('.toggle-icon');
+                if (contentDiv.style.display === 'none') {
+                    contentDiv.style.display = 'block';
+                    icon.textContent = '▲';
+                    icon.style.color = 'var(--red)';
+                } else {
+                    contentDiv.style.display = 'none';
+                    icon.textContent = '▼';
+                    icon.style.color = 'var(--ink-light)';
+                }
+            };
+
+            // Restore icon state if open
+            if (isOpen) {
+                const icon = header.querySelector('.toggle-icon');
+                if (icon) {
+                    icon.textContent = '▲';
+                    icon.style.color = 'var(--red)';
+                }
+            }
+
+            div.appendChild(header);
+            div.appendChild(contentDiv);
+
+            // Use contentDiv as the parent for interactive elements
+            const targetParent = contentDiv;
             
             // Append Spells if this feature grants them
             if (f.name.includes("Spellcasting") || f.name === "Pact Magic") {
-                renderSpellsForFeature(div, selectedClass, selectedLevel, selectedSubclass);
+                renderSpellsForFeature(targetParent, selectedClass, selectedLevel, selectedSubclass);
             } else if (f.name.includes("Mystic Arcanum")) {
                 // Extract level for Mystic Arcanum (e.g. "Mystic Arcanum (6th level)")
                 const match = f.name.match(/(\d+)(?:st|nd|rd|th)\s+level/i);
                 if (match) {
-                    renderSpellsForFeature(div, selectedClass, selectedLevel, selectedSubclass, parseInt(match[1]));
+                    renderSpellsForFeature(targetParent, selectedClass, selectedLevel, selectedSubclass, parseInt(match[1]));
                 }
             } else if (f.name.includes("Eldritch Invocations")) {
-                renderOptionalFeatures(div, ["EI"], selectedClass, f.level, selectedSubclass);
+                renderOptionalFeatures(targetParent, ["EI"], selectedClass, f.level, selectedSubclass);
             } else if (f.name.includes("Fighting Style")) {
                 const codes = ["FS"];
                 if (selectedClass === "Fighter") codes.push("FS:F");
                 if (selectedClass === "Ranger") codes.push("FS:R");
                 if (selectedClass === "Paladin") codes.push("FS:P");
                 if (selectedClass === "Bard") codes.push("FS:B");
-                renderOptionalFeatures(div, codes, selectedClass, f.level, selectedSubclass);
+                renderOptionalFeatures(targetParent, codes, selectedClass, f.level, selectedSubclass);
             } else if (f.name === "Metamagic") {
                 if (f.level <= 3) {
                     let limit = 2;
                     if (selectedLevel >= 10) limit = 4;
                     if (selectedLevel >= 17) limit = 6;
-                    renderOptionalFeatures(div, ["MM"], selectedClass, f.level, selectedSubclass, limit);
+                    renderOptionalFeatures(targetParent, ["MM"], selectedClass, f.level, selectedSubclass, limit);
                 }
             } else if (f.name === "Weapon Mastery") {
-                renderWeaponMasteryChoices(div, f, selectedClass, f.level);
+                renderWeaponMasteryChoices(targetParent, f, selectedClass, f.level);
             } else if (f.name === "Ability Score Improvement") {
-                renderFeatSelection(div, f, selectedClass, f.level);
+                renderFeatSelection(targetParent, f, selectedClass, f.level);
                 
                 // Render selected feat description if any
                 const selectionKey = `ASI Level ${f.level}`;
@@ -678,7 +785,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div style="font-weight:bold; color:var(--red-dark); border-bottom:1px solid var(--gold-dark); padding-bottom:4px; margin-bottom:6px;">Feat: ${feat.name}</div>
                             <div style="font-size:0.85rem; color:var(--ink); line-height:1.4;">${featDesc}</div>
                         `;
-                        div.appendChild(featDiv);
+                        targetParent.appendChild(featDiv);
                     }
                 }
             } else if (f.name === "Epic Boon") {
@@ -691,11 +798,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                if (selectedFeatName) {
-                    div.innerHTML = `<div><span style="font-weight:bold; color:var(--red-dark); margin-right:5px;">Lvl ${f.level}</span> <span style="font-weight:bold;">${f.name}</span>${subLabel}</div>`;
-                }
-
-                renderFeatSelection(div, f, selectedClass, f.level);
+                renderFeatSelection(targetParent, f, selectedClass, f.level);
 
                 if (selectedFeatName) {
                     const candidates = allFeats.filter(ft => ft.name === selectedFeatName);
@@ -715,7 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div style="font-weight:bold; color:var(--red-dark); border-bottom:1px solid var(--gold-dark); padding-bottom:4px; margin-bottom:6px;">Feat: ${feat.name}</div>
                             <div style="font-size:0.85rem; color:var(--ink); line-height:1.4;">${featDesc}</div>
                         `;
-                        div.appendChild(featDiv);
+                        targetParent.appendChild(featDiv);
                     }
                 }
             } else if (f.name === "Primal Knowledge") {
@@ -773,7 +876,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         Array.from(selectedOptionalFeatures).forEach(feat => { if (feat.startsWith("Primal Knowledge Skill:")) select.value = feat.replace("Primal Knowledge Skill: ", ""); });
 
                         pkDiv.appendChild(select);
-                        div.appendChild(pkDiv);
+                        targetParent.appendChild(pkDiv);
                     }
                 }
             }
@@ -817,7 +920,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div style="font-weight:bold; color:var(--red-dark); border-bottom:1px solid var(--gold-dark); padding-bottom:4px; margin-bottom:6px;">Feat: ${feat.name}</div>
                             <div style="font-size:0.85rem; color:var(--ink); line-height:1.4;">${featDesc}</div>
                         `;
-                        div.appendChild(featDiv);
+                        targetParent.appendChild(featDiv);
                     }
                 });
             }
@@ -1366,8 +1469,6 @@ document.addEventListener('DOMContentLoaded', () => {
         container.style.background = "rgba(255,255,255,0.5)";
         container.style.border = "1px solid var(--gold)";
         container.style.borderRadius = "4px";
-        container.style.maxHeight = "300px";
-        container.style.overflowY = "auto";
 
         const title = document.createElement('div');
         title.textContent = specificSpellLevel !== null ? `Available Spells (Level ${specificSpellLevel})` : "Available Spells";
@@ -1550,8 +1651,6 @@ document.addEventListener('DOMContentLoaded', () => {
         container.style.background = "rgba(255,255,255,0.5)";
         container.style.border = "1px solid var(--gold)";
         container.style.borderRadius = "4px";
-        container.style.maxHeight = "300px";
-        container.style.overflowY = "auto";
 
         const title = document.createElement('div');
         title.textContent = "Available Options";
@@ -1807,8 +1906,6 @@ document.addEventListener('DOMContentLoaded', () => {
         container.style.background = "rgba(255,255,255,0.5)";
         container.style.border = "1px solid var(--gold)";
         container.style.borderRadius = "4px";
-        container.style.maxHeight = "400px";
-        container.style.overflowY = "auto";
 
         container.innerHTML = `<div style="font-weight:bold; margin-bottom:8px; border-bottom:1px solid var(--gold-dark);">Select a Feat (Level ${charLevel}):</div>`;
 
@@ -1841,32 +1938,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return true;
         }).sort((a, b) => a.name.localeCompare(b.name));
 
-        // Search
-        const searchInput = document.createElement('input');
-        searchInput.type = 'text';
-        searchInput.placeholder = 'Search feats...';
-        searchInput.className = 'styled-input';
-        searchInput.style.width = '100%';
-        searchInput.style.marginBottom = '8px';
-        searchInput.style.padding = '4px';
-        searchInput.style.border = '1px solid var(--gold)';
-        searchInput.style.borderRadius = '4px';
-        
-        const list = document.createElement('div');
-        list.style.display = 'flex';
-        list.style.flexDirection = 'column';
-        list.style.gap = '4px';
-
-        searchInput.oninput = () => {
-            const term = searchInput.value.toLowerCase();
-            Array.from(list.children).forEach(child => {
-                const text = child.querySelector('.feat-name').textContent.toLowerCase();
-                child.style.display = text.includes(term) ? 'flex' : 'none';
-            });
-        };
-
-        container.appendChild(searchInput);
-
         const selectionKey = `ASI Level ${charLevel}`;
         let currentSelection = null;
         for (const item of selectedOptionalFeatures) {
@@ -1876,42 +1947,40 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        const select = document.createElement('select');
+        select.className = 'styled-select';
+        select.style.width = '100%';
+        
+        const defaultOption = document.createElement('option');
+        defaultOption.value = "";
+        defaultOption.textContent = "Select a Feat...";
+        if (!currentSelection) defaultOption.selected = true;
+        select.appendChild(defaultOption);
+
         available.forEach(feat => {
-            const div = document.createElement('div');
-            div.className = 'checklist-item';
-            div.style.flexDirection = 'column';
-            div.style.alignItems = 'flex-start';
-            div.style.padding = '8px';
-            
-            const header = document.createElement('div');
-            header.className = 'feat-name';
-            header.style.fontWeight = 'bold';
-            header.textContent = feat.name;
-            
-            div.appendChild(header);
-
-            if (currentSelection === feat.name) {
-                div.style.background = 'var(--red)';
-                div.style.color = 'white';
-            }
-
-            div.onclick = () => {
-                const toRemove = [];
-                selectedOptionalFeatures.forEach(k => {
-                    if (k.startsWith(selectionKey + ":")) toRemove.push(k);
-                });
-                toRemove.forEach(k => selectedOptionalFeatures.delete(k));
-
-                if (currentSelection !== feat.name) {
-                    selectedOptionalFeatures.add(`${selectionKey}: ${feat.name}`);
-                }
-                renderClassFeatures();
-            };
-
-            list.appendChild(div);
+            const option = document.createElement('option');
+            option.value = feat.name;
+            option.textContent = feat.name;
+            if (currentSelection === feat.name) option.selected = true;
+            select.appendChild(option);
         });
 
-        container.appendChild(list);
+        select.addEventListener('change', () => {
+            const selectedFeatName = select.value;
+            
+            const toRemove = [];
+            selectedOptionalFeatures.forEach(k => {
+                if (k.startsWith(selectionKey + ":")) toRemove.push(k);
+            });
+            toRemove.forEach(k => selectedOptionalFeatures.delete(k));
+
+            if (selectedFeatName) {
+                selectedOptionalFeatures.add(`${selectionKey}: ${selectedFeatName}`);
+            }
+            renderClassFeatures();
+        });
+
+        container.appendChild(select);
         parentElement.appendChild(container);
     }
 
