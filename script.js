@@ -136,6 +136,33 @@
    
    function calcMod(score) { return Math.floor((score - 10) / 2); }
    function formatMod(mod) { return mod >= 0 ? `+${mod}` : `${mod}`; }
+
+   // Helper to process entries recursively (Global)
+   window.processEntries = function(entries) {
+       if (!entries) return "";
+       if (typeof entries === 'string') return entries;
+       if (Array.isArray(entries)) return entries.map(e => window.processEntries(e)).join("<br><br>");
+       
+       if (entries.type === "list") {
+           return "<ul>" + (entries.items || []).map(i => `<li>${window.processEntries(i)}</li>`).join("") + "</ul>";
+       }
+       if (entries.type === "table") {
+           let html = "<table class='currency-table' style='width:100%; font-size:0.8rem; margin-top:5px;'>";
+           if (entries.colLabels) {
+               html += "<thead><tr>" + entries.colLabels.map(l => `<th>${window.processEntries(l)}</th>`).join("") + "</tr></thead>";
+           }
+           if (entries.rows) {
+               html += "<tbody>" + entries.rows.map(row => "<tr>" + row.map(cell => `<td>${window.processEntries(cell)}</td>`).join("") + "</tr>").join("") + "</tbody>";
+           }
+           html += "</table>";
+           return html;
+       }
+       
+       let text = "";
+       if (entries.name) text += `<strong>${entries.name}.</strong> `;
+       if (entries.entries) text += window.processEntries(entries.entries);
+       return text || (entries.text || "");
+   };
    
    // Auto-resize logic
    function autoResizeTextarea(element) {
@@ -318,14 +345,56 @@
      const container = document.getElementById(containerId);
      if (!container) return;
      
+     const isCompact = ["actionsContainer", "bonusActionsContainer", "reactionsContainer"].includes(containerId);
+
      const box = document.createElement("div");
      box.className = "feature-box";
-     box.innerHTML = `<div class="feature-header"><input type="text" class="feature-title-input" placeholder="Feature Name" value="${title.replace(/"/g, '&quot;')}" oninput="saveCharacter()"><button class="delete-feature-btn" onclick="this.closest('.feature-box').remove(); saveCharacter()">×</button></div>`;
+     
+     if (isCompact) {
+         box.style.display = "flex";
+         box.style.alignItems = "center";
+         box.style.justifyContent = "space-between";
+         box.style.padding = "8px";
+         box.style.gap = "8px";
+     }
+     
+     // Header with Textarea for Title (allows wrapping)
+     const header = document.createElement("div");
+     header.className = "feature-header";
+     
+     if (isCompact) {
+         header.style.borderBottom = "none";
+         header.style.marginBottom = "0";
+         header.style.paddingBottom = "0";
+         header.style.flexGrow = "1";
+     }
+     
+     const titleInput = document.createElement("textarea");
+     titleInput.className = "feature-title-input";
+     titleInput.placeholder = "Feature Name";
+     titleInput.rows = 1;
+     titleInput.value = title;
+     titleInput.oninput = function() { saveCharacter(); autoResizeTextarea(this); };
+
+     if (isCompact) {
+         titleInput.style.width = "100%";
+     }
+
+     const delBtn = document.createElement("button");
+     delBtn.className = "delete-feature-btn";
+     delBtn.innerHTML = "×";
+     delBtn.onclick = function() { box.remove(); saveCharacter(); };
+
+     header.appendChild(titleInput);
+     
+     if (!isCompact) {
+         header.appendChild(delBtn);
+     }
+     
+     box.appendChild(header);
      
      const descContainer = document.createElement("div");
      descContainer.className = "feature-desc-container";
-     descContainer.style.cursor = "pointer";
-     descContainer.style.minHeight = "20px";
      
      const display = document.createElement("div");
      display.className = "feature-desc-display";
@@ -343,15 +412,40 @@
      descContainer.appendChild(display);
      descContainer.appendChild(input);
      
-     descContainer.onclick = function() {
-         const titleVal = box.querySelector('.feature-title-input').value;
-         openNoteEditor(titleVal || "Feature Description", input, null, (newVal) => {
-             display.innerHTML = newVal ? newVal.replace(/\n/g, '<br>') : "<em style='color:#999'>Click to edit description...</em>";
-         });
-     };
+     if (isCompact) {
+         descContainer.style.display = "none";
+         
+         // Add Info Button for Compact Mode
+         const infoBtn = document.createElement("button");
+         infoBtn.className = "skill-info-btn";
+         infoBtn.innerHTML = "?";
+         infoBtn.title = "View Description";
+         infoBtn.style.marginRight = "4px";
+         infoBtn.style.flexShrink = "0";
+         
+         infoBtn.onclick = function() {
+             const titleVal = titleInput.value;
+             openNoteEditor(titleVal || "Feature Description", input, null, (newVal) => {
+                 display.innerHTML = newVal ? newVal.replace(/\n/g, '<br>') : "<em style='color:#999'>Click to edit description...</em>";
+             });
+         };
+
+         box.appendChild(infoBtn);
+         box.appendChild(delBtn);
+     } else {
+         descContainer.style.cursor = "pointer";
+         descContainer.style.minHeight = "20px";
+         descContainer.onclick = function() {
+             const titleVal = titleInput.value;
+             openNoteEditor(titleVal || "Feature Description", input, null, (newVal) => {
+                 display.innerHTML = newVal ? newVal.replace(/\n/g, '<br>') : "<em style='color:#999'>Click to edit description...</em>";
+             });
+         };
+         box.appendChild(descContainer);
+     }
      
-     box.appendChild(descContainer);
      container.appendChild(box);
+     autoResizeTextarea(titleInput); // Initial resize
      saveCharacter();
    };
    
@@ -550,6 +644,33 @@
        });
    }
 
+   function loadActionsFromData(data) {
+       if (!data) return;
+       let actions = [];
+       data.forEach(file => {
+           if (!file.name.toLowerCase().endsWith('.json')) return;
+           try {
+               const json = JSON.parse(file.content);
+               if (json.action && Array.isArray(json.action)) {
+                   actions.push(...json.action);
+               }
+           } catch (e) {}
+       });
+
+       if (actions.length > 0) {
+           // Deduplicate preferring XPHB
+           const uniqueActions = new Map();
+           actions.forEach(a => {
+               if (!uniqueActions.has(a.name)) uniqueActions.set(a.name, a);
+               else {
+                   const existing = uniqueActions.get(a.name);
+                   if (a.source === 'XPHB') uniqueActions.set(a.name, a);
+               }
+           });
+           window.injectCombatActions(Array.from(uniqueActions.values()).sort((a,b) => a.name.localeCompare(b.name)));
+       }
+   }
+
    async function checkDataUploadStatus() {
        console.log(`Checking data upload status (DB v${DB_VERSION})...`);
        try {
@@ -560,6 +681,7 @@
            req.onsuccess = () => {
                if (req.result) {
                    loadWeaponsFromData(req.result);
+                   loadActionsFromData(req.result);
                }
                const btnItems = document.getElementById('btn-search-items-zip');
                const btnCantrips = document.getElementById('btn-search-cantrips-zip');
@@ -1879,6 +2001,67 @@
            });
            actionsDiv.style.display = 'none';
        }
+   };
+
+   window.injectCombatActions = function(actionsData) {
+       const actionsContainer = document.getElementById("actionsContainer");
+       if (!actionsContainer) return;
+       
+       let refDiv = document.getElementById("combat-actions-ref");
+       if (!refDiv) {
+           refDiv = document.createElement("div");
+           refDiv.id = "combat-actions-ref";
+           refDiv.className = "feature-box";
+           refDiv.style.background = "var(--parchment-dark)";
+           refDiv.style.marginBottom = "15px";
+           
+           // Insert Logic
+           const tabContent = actionsContainer.closest('.tab-content');
+           let inserted = false;
+           if (tabContent && tabContent.parentElement) {
+               const tabs = tabContent.parentElement.querySelector('.tabs');
+               if (tabs) {
+                   tabs.parentNode.insertBefore(refDiv, tabs);
+                   inserted = true;
+               }
+           }
+           if (!inserted && actionsContainer.parentElement && actionsContainer.parentElement.parentElement && actionsContainer.parentElement.parentElement.classList.contains('grid')) {
+               const grid = actionsContainer.parentElement.parentElement;
+               grid.parentNode.insertBefore(refDiv, grid);
+               inserted = true;
+           }
+           if (!inserted) {
+               actionsContainer.parentNode.insertBefore(refDiv, actionsContainer);
+           }
+       }
+
+       refDiv.innerHTML = `
+           <div style="font-family:'Cinzel',serif; font-weight:bold; color:var(--red-dark); border-bottom:1px solid var(--gold); margin-bottom:5px; padding-bottom:2px; font-size:0.9rem;">
+               Actions in Combat
+           </div>
+           <div class="combat-actions-list" style="font-size:0.85rem; color:var(--ink); line-height:1.4; display:flex; flex-wrap:wrap; gap:4px;"></div>
+       `;
+
+       const list = refDiv.querySelector('.combat-actions-list');
+       actionsData.forEach((action, index) => {
+           const span = document.createElement("span");
+           span.textContent = action.name;
+           span.style.cursor = "help";
+           span.style.borderBottom = "1px dotted var(--ink-light)";
+           span.title = "Click for details";
+           span.onclick = () => {
+               document.getElementById("infoModalTitle").textContent = action.name;
+               let desc = window.processEntries(action.entries);
+               // Clean tags
+               desc = desc.replace(/\{@\w+\s*([^}]+)?\}/g, (m, c) => c ? c.split('|')[0] : "");
+               document.getElementById("infoModalText").innerHTML = desc;
+               document.getElementById("infoModal").style.display = "flex";
+           };
+           list.appendChild(span);
+           if (index < actionsData.length - 1) {
+               list.appendChild(document.createTextNode(", "));
+           }
+       });
    };
 
    window.toggleSidebar = function() {

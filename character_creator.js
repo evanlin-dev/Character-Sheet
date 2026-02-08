@@ -3702,27 +3702,49 @@ document.addEventListener('DOMContentLoaded', () => {
             return clean.trim();
         };
 
+        // Helper to recursively extract text from the complex 'entries' structure
+        const getFullText = (entry) => {
+            if (!entry) return '';
+            if (typeof entry === 'string') return entry;
+            if (Array.isArray(entry)) return entry.map(getFullText).join(' ');
+            if (entry.items) return entry.items.map(getFullText).join(' ');
+            if (entry.entries) return getFullText(entry.entries);
+            return '';
+        };
+
         const actions = [];
         const bonusActions = [];
         const reactions = [];
 
         const getActionType = (feature) => {
-            if (!feature || !feature.entries || !feature.entries.length) return "trait";
-            if (typeof feature.entries[0] !== "string") return "trait";
-
-            const text = cleanText(feature.entries[0]);
-
-            if (/\b(?:as a|can use (?:a|their)) bonus action\b/i.test(text)) return "bonus";
-            if (/\b(?:as a|can use (?:a|their)) reaction\b/i.test(text)) return "reaction";
-            if (/\b(?:(?:as|use) (an|their) action|takes the [A-Z][^.!?]+ action\b)\b/i.test(text)) return "action";
+            if (!feature || !feature.entries) return "trait";
             
+            const text = getFullText(feature.entries).toLowerCase();
+
+            // 1. Bonus Actions (Explicit)
+            if (text.includes('bonus action') || text.includes('{@variantrule bonus action')) return "bonus";
+
+            // 2. Reactions (Explicit)
+            if (text.includes('reaction') || text.includes('{@variantrule reaction')) return "reaction";
+
+            // 3. Standard Actions (Explicit)
+            if (text.includes('as an action') || text.includes('use your action') || text.includes('{@action ')) return "action";
+            
+            // 4. Special / Free / Conditional (Heuristic)
+            if (
+                (text.includes('when you') && (text.includes('can decide') || text.includes('can choose'))) ||
+                text.includes('no action required')
+            ) {
+                return "special";
+            }
+
             return "trait";
         };
 
         const addToActionLists = (feature, title, desc) => {
             const type = getActionType(feature);
             const item = { title, desc };
-            if (type === "action") actions.push(item);
+            if (type === "action" || type === "special") actions.push(item);
             else if (type === "bonus") bonusActions.push(item);
             else if (type === "reaction") reactions.push(item);
         };
