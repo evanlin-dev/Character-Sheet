@@ -2958,6 +2958,11 @@ window.initQuickNav = function () {
         icon: '<path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>',
       },
       {
+        id: "resources",
+        label: "Resources",
+        icon: '<path d="M7 2v11h3v9l7-12h-4l4-8z"/>',
+      },
+      {
         id: "actions",
         label: "Actions",
         icon: '<path d="M6 2l10 10L6 22l-2-2 10-10L4 4z"/>',
@@ -3016,6 +3021,10 @@ window.initQuickNav = function () {
         } else if (target === "combat") {
           document
             .getElementById("section-combat")
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        } else if (target === "resources") {
+          document
+            .getElementById("section-resources")
             ?.scrollIntoView({ behavior: "smooth", block: "center" });
         } else if (target === "actions") {
           document
