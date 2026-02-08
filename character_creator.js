@@ -2304,6 +2304,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             sel.addEventListener('change', () => {
                                 // Store selection in a way getFinalAbilityScores can read
                                 // We'll use a specific ID pattern or class for retrieval
+                                updateAbilityScoreBonuses();
                             });
                             
                             asiDiv.appendChild(sel);
@@ -2319,6 +2320,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
                 container.appendChild(asiDiv);
+                updateAbilityScoreBonuses();
             }
 
             // Custom UI for Magic Initiate (2024)
@@ -3102,8 +3104,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
 
                     selects.forEach(s => s.addEventListener('change', updateOptions));
-                    selects.forEach(s => s.addEventListener('change', () => renderClassFeatures())); // Re-check feats
+                    selects.forEach(s => s.addEventListener('change', () => {
+                        renderClassFeatures();
+                        updateAbilityScoreBonuses();
+                    })); // Re-check feats & bonuses
                     updateOptions();
+                    updateAbilityScoreBonuses();
                 };
 
                 methodSelect.addEventListener('change', renderInputs);
@@ -3558,6 +3564,52 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function updateAbilityScoreBonuses() {
+        const bonuses = { Strength: 0, Dexterity: 0, Constitution: 0, Intelligence: 0, Wisdom: 0, Charisma: 0 };
+
+        // 1. Background ASI
+        const bgMethod = document.getElementById('bg_asi_method')?.value;
+        if (bgMethod === 'flat') {
+            ['bg_asi_s1', 'bg_asi_s2', 'bg_asi_s3'].forEach(id => {
+                const val = document.getElementById(id)?.value;
+                if (val && bonuses[val] !== undefined) bonuses[val] += 1;
+            });
+        } else if (bgMethod === 'split') {
+            const p2 = document.getElementById('bg_asi_p2')?.value;
+            const p1 = document.getElementById('bg_asi_p1')?.value;
+            if (p2 && bonuses[p2] !== undefined) bonuses[p2] += 2;
+            if (p1 && bonuses[p1] !== undefined) bonuses[p1] += 1;
+        }
+
+        // 2. Feat ASI
+        document.querySelectorAll('.feat-asi-select').forEach(sel => {
+            if (sel.value && bonuses[sel.value] !== undefined) {
+                bonuses[sel.value] += parseInt(sel.dataset.amount || 1);
+            }
+        });
+        document.querySelectorAll('.feat-asi-static').forEach(inp => {
+            const ability = inp.dataset.ability;
+            const amount = parseInt(inp.dataset.amount);
+            if (ability && bonuses[ability] !== undefined) bonuses[ability] += amount;
+        });
+
+        // Update UI
+        const abilities = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'];
+        abilities.forEach(ab => {
+            const bonus = bonuses[ab];
+            const text = bonus > 0 ? `(+${bonus})` : "";
+            
+            const saSpan = document.getElementById(`bonus-sa-${ab}`);
+            if (saSpan) saSpan.textContent = text;
+
+            const pbSpan = document.getElementById(`bonus-pb-${ab}`);
+            if (pbSpan) pbSpan.textContent = text;
+
+            const rndSpan = document.getElementById(`bonus-rnd-${ab}`);
+            if (rndSpan) rndSpan.textContent = text;
+        });
+    }
+
     function renderAbilityScoreSection() {
         const step3 = document.getElementById('step-3-section');
         if (document.getElementById('creator-abilities')) return;
@@ -3619,7 +3671,7 @@ document.addEventListener('DOMContentLoaded', () => {
         abilities.forEach(ab => {
             const div = document.createElement('div');
             div.innerHTML = `
-                <label style="font-weight:bold; font-size:0.9rem;">${ab}</label>
+                <label style="font-weight:bold; font-size:0.9rem;">${ab} <span id="bonus-sa-${ab}" style="color:var(--red); font-size:0.8rem; margin-left:4px;"></span></label>
                 <select class="styled-select sa-select" data-ability="${ab}" style="width:100%;">
                     <option value="" selected>--</option>
                     ${standardValues.map(v => `<option value="${v}">${v}</option>`).join('')}
@@ -3643,6 +3695,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
         });
+        updateAbilityScoreBonuses();
     }
 
     function renderPointBuy() {
@@ -3688,7 +3741,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 row.style.borderRadius = '4px';
 
                 row.innerHTML = `
-                    <span style="font-weight:bold; width:100px;">${ab}</span>
+                    <span style="font-weight:bold; width:100px;">${ab} <span id="bonus-pb-${ab}" style="color:var(--red); font-size:0.8rem; margin-left:4px;"></span></span>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <button class="btn-dec" style="width:24px; height:24px; cursor:pointer;">-</button>
                         <span style="font-weight:bold; font-size:1.1rem; width:20px; text-align:center;">${score}</span>
@@ -3711,6 +3764,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         };
         update();
+        updateAbilityScoreBonuses();
     }
 
     function renderRandomStats() {
@@ -3748,7 +3802,7 @@ document.addEventListener('DOMContentLoaded', () => {
             abilities.forEach(ab => {
                 const div = document.createElement('div');
                 div.innerHTML = `
-                    <label style="font-weight:bold; font-size:0.9rem;">${ab}</label>
+                    <label style="font-weight:bold; font-size:0.9rem;">${ab} <span id="bonus-rnd-${ab}" style="color:var(--red); font-size:0.8rem; margin-left:4px;"></span></label>
                     <select class="styled-select random-select" data-ability="${ab}" style="width:100%;">
                         <option value="" selected>--</option>
                         ${rolls.map((v, i) => `<option value="${v}" data-index="${i}">${v}</option>`).join('')}
@@ -3779,6 +3833,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
         };
+        updateAbilityScoreBonuses();
     }
 
     function renderReviewSection() {
