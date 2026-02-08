@@ -681,7 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 div.style.borderColor = "var(--gold-dark)";
             }
             
-            let desc = processEntries(f.entries);
+            let desc = processEntries(f.entries || f.entry);
             desc = desc.replace(/\{@\w+\s*([^}]+)?\}/g, (match, content) => content ? content.split('|')[0] : "");
             
             const subLabel = f.isSubclassFeature ? `<span style="font-size:0.75rem; color:var(--ink-light); font-style:italic; margin-left:4px;">(Subclass)</span>` : "";
@@ -1119,7 +1119,7 @@ document.addEventListener('DOMContentLoaded', () => {
             div.style.paddingBottom = '4px';
             div.style.cursor = 'pointer';
             
-            let desc = processEntries(f.entries);
+            let desc = processEntries(f.entries || f.entry);
             desc = desc.replace(/\{@\w+\s*([^}]+)?\}/g, (match, content) => content ? content.split('|')[0] : "");
 
             const uniqueId = `preview-${f.name.replace(/[^a-zA-Z0-9]/g, '')}-${f.level}-${Math.random().toString(36).substr(2, 5)}`;
@@ -1881,7 +1881,7 @@ document.addEventListener('DOMContentLoaded', () => {
             titleDiv.innerHTML = `${opt.name}${prereqText}`;
             div.appendChild(titleDiv);
             
-            let desc = processEntries(opt.entries);
+            let desc = processEntries(opt.entries || opt.entry);
             desc = desc.replace(/\{@\w+\s*([^}]+)?\}/g, (match, content) => content ? content.split('|')[0] : "");
             
             const descDiv = document.createElement('div');
@@ -4314,7 +4314,7 @@ document.addEventListener('DOMContentLoaded', () => {
         uniqueClassFeats.sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
 
         uniqueClassFeats.forEach(f => {
-            let desc = processEntries(f.entries);
+            let desc = processEntries(f.entries || f.entry);
             const cleanedDesc = cleanText(desc);
             const title = f.level ? `Lvl ${f.level}: ${f.name}` : f.name;
             features.push({ title: title, desc: cleanedDesc, type: 'class' });

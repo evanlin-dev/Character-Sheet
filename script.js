@@ -170,6 +170,7 @@ let resourcesData = [];
 let pbScores = { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 };
 const pbCosts = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
 const maxPoints = 27;
+window.characterClasses = []; // Stores {name, subclass, level}
 
 window.isInitializing = true;
 
@@ -193,7 +194,7 @@ window.processEntries = function (entries) {
 
   if (entries.type === "list") {
     return (
-      "<ul>" +
+      "<ul style='padding-left: 20px; margin: 5px 0;'>" +
       (entries.items || [])
         .map((i) => `<li>${window.processEntries(i)}</li>`)
         .join("") +
@@ -233,6 +234,7 @@ window.processEntries = function (entries) {
   let text = "";
   if (entries.name) text += `<strong>${entries.name}.</strong> `;
   if (entries.entries) text += window.processEntries(entries.entries);
+  else if (entries.entry) text += window.processEntries(entries.entry);
   return text || entries.text || "";
 };
 
@@ -2496,6 +2498,7 @@ window.saveCharacter = function () {
     heroicInspiration: document.getElementById("heroicInspiration").checked,
     defenses: document.getElementById("defenses").value,
     resourcesData: resourcesData,
+    classes: window.characterClasses,
 
     weapons: Array.from(document.querySelectorAll(".weapon-item")).map(
       (item) => ({
@@ -3108,6 +3111,7 @@ document.addEventListener("DOMContentLoaded", () => {
       let currentXp =
         parseInt(document.getElementById("experience").value) || 0;
       let currentLevel = parseInt(document.getElementById("level").value) || 1;
+      const oldLevel = currentLevel;
       currentXp += toAdd;
       let checkedLevel = true;
       while (checkedLevel) {
@@ -3133,6 +3137,12 @@ document.addEventListener("DOMContentLoaded", () => {
       expModal.style.display = "none";
       updateModifiers();
       saveCharacter();
+
+      if (currentLevel > oldLevel) {
+        if (window.showLevelUpToast) window.showLevelUpToast(currentLevel);
+        localStorage.setItem('pendingLevelUp', 'true');
+        localStorage.setItem('previousLevel', oldLevel);
+      }
     };
 
     // Drag Listeners
@@ -3172,6 +3182,10 @@ document.addEventListener("DOMContentLoaded", () => {
       updateModifiers();
       updateSpellDC();
     });
+    // Sync class inputs to array on manual edit (single class mode)
+    document.getElementById("charClass").addEventListener("change", (e) => { if(window.characterClasses.length <= 1) { window.characterClasses[0] = window.characterClasses[0] || {}; window.characterClasses[0].name = e.target.value; window.characterClasses[0].level = parseInt(document.getElementById('level').value)||1; } });
+    document.getElementById("charSubclass").addEventListener("change", (e) => { if(window.characterClasses.length <= 1) { window.characterClasses[0] = window.characterClasses[0] || {}; window.characterClasses[0].subclass = e.target.value; } });
+
     document
       .getElementById("spellAbility")
       .addEventListener("change", updateSpellDC);
@@ -3240,6 +3254,16 @@ document.addEventListener("DOMContentLoaded", () => {
           data.activeConditions;
         renderConditionTags();
       }
+      
+      // Load Classes
+      if (data.classes && Array.isArray(data.classes) && data.classes.length > 0) {
+          window.characterClasses = data.classes;
+      } else {
+          window.characterClasses = [{ name: data.charClass || "", subclass: data.charSubclass || "", level: parseInt(data.level) || 1 }];
+      }
+      window.injectClassManagerButton();
+      window.updateClassDisplay();
+
       (data.classFeatures || []).forEach((f) =>
         addFeatureItem("classFeaturesContainer", f.title, f.desc),
       );
@@ -3341,6 +3365,10 @@ document.addEventListener("DOMContentLoaded", () => {
       addFeatureItem("actionsContainer");
       addFeatureItem("bonusActionsContainer");
       addFeatureItem("reactionsContainer");
+      
+      window.characterClasses = [{ name: "", subclass: "", level: 1 }];
+      window.injectClassManagerButton();
+      window.updateClassDisplay();
     }
 
     updateModifiers();
@@ -3350,6 +3378,12 @@ document.addEventListener("DOMContentLoaded", () => {
     calculateWeight();
     renderWeaponTags();
     resizeAllTextareas();
+
+    // Check for pending level up
+    if (localStorage.getItem('pendingLevelUp') === 'true') {
+        const lvl = parseInt(document.getElementById('level').value) || 1;
+        if (window.showLevelUpButton) window.showLevelUpButton(lvl);
+    }
   } catch (e) {
     console.error("Initialization error:", e);
   } finally {
@@ -3359,3 +3393,538 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 200);
   }
 });
+
+/* =========================================
+      17. LEVEL UP FEATURES
+      ========================================= */
+window.showLevelUpToast = function(level) {
+    if (!window.isDataAvailable) return;
+
+    let toast = document.getElementById('level-up-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'level-up-toast';
+        toast.className = 'toast-notification';
+        // Override default bottom positioning to top
+        toast.style.bottom = 'auto';
+        toast.style.top = '20px';
+        document.body.appendChild(toast);
+    }
+    
+    toast.innerHTML = `
+        <span><strong>Level Up!</strong> You are now level ${level}.</span>
+        <button class="toast-close" onclick="this.parentElement.classList.remove('show')">&times;</button>
+    `;
+    
+    toast.classList.remove('show');
+    void toast.offsetWidth; // Trigger reflow
+    toast.classList.add('show');
+
+    // Show the arrow button in the level box
+    if (window.showLevelUpButton) window.showLevelUpButton(level);
+};
+
+window.showLevelUpButton = function(level) {
+    if (!window.isDataAvailable) return;
+
+    const levelInput = document.getElementById('level');
+    if (!levelInput) return;
+    
+    let btn = document.getElementById('level-up-arrow-btn');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'level-up-arrow-btn';
+        btn.innerHTML = '▲'; 
+        btn.title = "View Level Up Features";
+        
+        // Style the button to sit inside the input field
+        btn.style.position = 'absolute';
+        btn.style.right = '5px'; 
+        btn.style.top = '50%';
+        btn.style.transform = 'translateY(-50%)';
+        
+        btn.style.background = 'var(--red)';
+        btn.style.color = 'white';
+        btn.style.border = '1px solid var(--gold)';
+        btn.style.borderRadius = '50%';
+        btn.style.width = '24px';
+        btn.style.height = '24px';
+        btn.style.cursor = 'pointer';
+        btn.style.fontSize = '12px';
+        btn.style.display = 'flex';
+        btn.style.alignItems = 'center';
+        btn.style.justifyContent = 'center';
+        btn.style.zIndex = '10';
+        btn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+        
+        if (levelInput.parentElement) {
+            levelInput.parentElement.style.position = 'relative'; // Ensure positioning context
+            levelInput.parentElement.appendChild(btn);
+        }
+    }
+    
+    btn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.openLevelUpModal(level);
+    };
+    
+    btn.style.display = 'flex';
+};
+
+window.openLevelUpModal = async function(level) {
+    if (!window.isDataAvailable) return;
+    let modal = document.getElementById('levelUpModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'levelUpModal';
+        modal.className = 'info-modal-overlay';
+        modal.innerHTML = `
+            <div class="info-modal-content" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
+                <button class="close-modal-btn" onclick="document.getElementById('levelUpModal').style.display='none'">&times;</button>
+                <h3 class="info-modal-title" style="text-align: center">Level ${level} Features</h3>
+                <div id="levelUpContent" style="overflow-y: auto; flex: 1; padding: 10px;">Loading...</div>
+                <div style="margin-top: 15px; text-align: center; border-top: 1px solid var(--gold); padding-top: 10px;">
+                    <button id="confirmLevelUpBtn" class="btn" style="width: 100%;">Confirm Level Up</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        document.getElementById('confirmLevelUpBtn').addEventListener('click', () => {
+            localStorage.removeItem('pendingLevelUp');
+            localStorage.removeItem('previousLevel');
+            const btn = document.getElementById('level-up-arrow-btn');
+            if (btn) btn.remove();
+            document.getElementById('levelUpModal').style.display = 'none';
+        });
+    } else {
+        modal.querySelector('.info-modal-title').textContent = `Level ${level} Features`;
+        document.getElementById('levelUpContent').innerHTML = 'Loading...';
+    }
+    
+    modal.style.display = 'flex';
+    
+    // Check for Multiclass / Level Assignment
+    const currentAssignedLevel = window.characterClasses.reduce((sum, c) => sum + c.level, 0);
+    const targetLevel = parseInt(level);
+    
+    if (targetLevel > currentAssignedLevel) {
+        const remainingLevels = targetLevel - currentAssignedLevel;
+        // We need to assign a level
+        const content = document.getElementById('levelUpContent');
+        content.innerHTML = `<div style="text-align:center; margin-bottom:15px;">You reached Level ${targetLevel}. Assign ${remainingLevels} level(s):</div>`;
+        
+        // Existing Classes
+        window.characterClasses.forEach((c, idx) => {
+            if (!c.name) return;
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-secondary';
+            btn.style.width = '100%';
+            btn.style.marginBottom = '10px';
+            btn.style.justifyContent = 'space-between';
+            const newLevel = c.level + remainingLevels;
+            btn.innerHTML = `<span>${c.name}</span> <span>Lvl ${c.level} ➝ ${newLevel}</span>`;
+            btn.onclick = () => {
+                // Apply level up
+                const oldLevel = c.level;
+                window.characterClasses[idx].level = newLevel;
+                window.updateClassDisplay();
+                window.saveCharacter();
+                // Show features for the new level
+                window.renderLevelUpFeatures(c.name, c.subclass, newLevel, true, idx, oldLevel + 1, remainingLevels);
+            };
+            content.appendChild(btn);
+        });
+        
+        // New Class
+        const newBtn = document.createElement('button');
+        newBtn.className = 'btn';
+        newBtn.style.width = '100%';
+        newBtn.innerHTML = '+ Add New Class';
+        newBtn.onclick = () => {
+            const name = prompt("Enter new class name:");
+            if (name) {
+                window.characterClasses.push({ name: name, subclass: "", level: 1 });
+                window.updateClassDisplay();
+                window.saveCharacter();
+                window.renderLevelUpFeatures(name, "", 1, true, window.characterClasses.length - 1);
+            }
+        };
+        content.appendChild(newBtn);
+        
+        return;
+    }
+
+    // If levels match, just show features for the primary or last class
+    // For simplicity, show the first class or allow selection if multiple
+    const c = window.characterClasses[0];
+    if (c) {
+        let minLevel = c.level;
+        if (localStorage.getItem('pendingLevelUp') === 'true' && window.characterClasses.length === 1) {
+            const prev = parseInt(localStorage.getItem('previousLevel'));
+            if (!isNaN(prev) && prev < c.level) {
+                minLevel = prev + 1;
+            }
+        }
+        window.renderLevelUpFeatures(c.name, c.subclass, c.level, false, -1, minLevel);
+    }
+};
+
+window.renderLevelUpFeatures = async function(charClass, charSubclass, level, showBackBtn = false, classIndex = -1, minLevel = null, levelsAdded = 1) {
+    const list = document.getElementById('levelUpContent');
+    
+    if (showBackBtn) {
+        list.innerHTML = '';
+        const backBtn = document.createElement('button');
+        backBtn.className = 'btn btn-secondary';
+        backBtn.style.marginBottom = '10px';
+        backBtn.style.padding = '4px 10px';
+        backBtn.style.fontSize = '0.9rem';
+        backBtn.innerHTML = '← Back';
+        backBtn.onclick = () => {
+            if (classIndex >= 0 && window.characterClasses[classIndex]) {
+                window.characterClasses[classIndex].level--;
+                window.characterClasses[classIndex].level -= levelsAdded;
+                if (window.characterClasses[classIndex].level <= 0) {
+                    window.characterClasses.splice(classIndex, 1);
+                }
+                window.updateClassDisplay();
+                window.saveCharacter();
+                const totalLevel = parseInt(document.getElementById('level').value) || 1;
+                window.openLevelUpModal(totalLevel);
+            }
+        };
+        list.appendChild(backBtn);
+        const loading = document.createElement('div');
+        loading.id = 'lvl-loading';
+        loading.style.textAlign = 'center';
+        loading.textContent = 'Loading features...';
+        list.appendChild(loading);
+    } else {
+        list.innerHTML = '<div style="text-align:center;">Loading features...</div>';
+    }
+
+    try {
+        const features = await fetchLevelUpFeatures(charClass, charSubclass, level, minLevel || level);
+        
+        if (showBackBtn) {
+            const loading = document.getElementById('lvl-loading');
+            if (loading) loading.remove();
+        } else {
+            list.innerHTML = '';
+        }
+        
+        if (features.length === 0) {
+            const msg = document.createElement('div');
+            msg.style.textAlign = 'center';
+            msg.style.color = 'var(--ink-light)';
+            msg.textContent = 'No features found for this level.';
+            list.appendChild(msg);
+            return;
+        }
+        
+        features.forEach(f => {
+            const div = document.createElement('div');
+            div.style.marginBottom = '15px';
+            div.style.border = '1px solid var(--gold)';
+            div.style.borderRadius = '4px';
+            div.style.padding = '10px';
+            div.style.background = 'white';
+            
+            let desc = window.processEntries(f.entries || f.entry);
+            desc = desc.replace(/\{@\w+\s*([^}]+)?\}/g, (m, c) => c ? c.split('|')[0] : "");
+            
+            div.innerHTML = `
+                <div style="font-weight:bold; color:var(--red-dark); border-bottom:1px solid var(--gold-dark); margin-bottom:5px; padding-bottom:2px;">
+                    <span style="color:var(--ink); margin-right:5px;">[Lvl ${f.level}]</span> ${f.name} <span style="font-size:0.8rem; color:var(--ink-light); font-weight:normal;">(${f.source})</span>
+                </div>
+                <div style="font-size:0.9rem; line-height:1.5; overflow-wrap: break-word; word-break: break-word;">${desc}</div>
+            `;
+            list.appendChild(div);
+        });
+    } catch (e) {
+        console.error(e);
+        if (showBackBtn) {
+            const loading = document.getElementById('lvl-loading');
+            if (loading) loading.remove();
+        } else {
+            list.innerHTML = '';
+        }
+        const err = document.createElement('div');
+        err.style.textAlign = 'center';
+        err.style.color = 'var(--red)';
+        err.textContent = 'Error loading data. Ensure data is uploaded.';
+        list.appendChild(err);
+    }
+};
+
+window.fetchLevelUpFeatures = async function(className, subclass, level, minLevel = null) {
+    const startLevel = minLevel || level;
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const data = await new Promise((resolve) => {
+        const req = store.get('currentData');
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+    });
+    console.log("fetchLevelUpFeatures - Raw Data:", data);
+    if (!data) return [];
+    const classFeatures = [];
+    const subclassFeatures = [];
+    const subclasses = [];
+    data.forEach(file => {
+        if (!file.name.toLowerCase().endsWith('.json')) return;
+        try {
+            const json = JSON.parse(file.content);
+            if (json.classFeature) classFeatures.push(...json.classFeature);
+            if (json.subclassFeature) subclassFeatures.push(...json.subclassFeature);
+            if (json.subclass) subclasses.push(...json.subclass);
+        } catch (e) {}
+    });
+    console.log("fetchLevelUpFeatures - Extracted:", { classFeatures, subclassFeatures, subclasses });
+    
+    // Filter for class features, prioritizing XPHB if available
+    const allClassFeaturesForName = classFeatures.filter(f => f.className.toLowerCase() === className.toLowerCase());
+    const hasXPHB = allClassFeaturesForName.some(f => f.source === 'XPHB');
+    const relevantClassFeatures = allClassFeaturesForName.filter(f => {
+        if (f.level < startLevel || f.level > level) return false;
+        if (hasXPHB && f.source === 'PHB') return false;
+        return true;
+    });
+
+    let scShortName = null;
+    if (subclass) {
+        const scCandidates = subclasses.filter(s => s.name.toLowerCase() === subclass.toLowerCase() && s.className.toLowerCase() === className.toLowerCase());
+        let scObj = scCandidates.find(s => s.source === 'XPHB');
+        if (!scObj) scObj = scCandidates.find(s => s.source === 'PHB');
+        if (!scObj) scObj = scCandidates[0];
+        if (scObj) scShortName = scObj.shortName;
+    }
+    let relevantSubclassFeatures = [];
+    if (scShortName) {
+        const allScFeatures = subclassFeatures.filter(f => f.className.toLowerCase() === className.toLowerCase() && f.subclassShortName.toLowerCase() === scShortName.toLowerCase() && f.level >= startLevel && f.level <= level);
+        const scHasXPHB = allScFeatures.some(f => f.source === 'XPHB');
+        relevantSubclassFeatures = allScFeatures.filter(f => {
+             if (scHasXPHB && f.source === 'PHB') return false;
+             return true;
+        });
+    }
+    const all = [...relevantClassFeatures, ...relevantSubclassFeatures];
+    console.log("fetchLevelUpFeatures - Final List:", all);
+    const uniqueMap = new Map();
+    all.forEach(f => {
+        if (!uniqueMap.has(f.name)) {
+            uniqueMap.set(f.name, f);
+        } else {
+            const existing = uniqueMap.get(f.name);
+            
+            const getScore = (feat) => {
+                let score = 0;
+                if (feat.source === 'XPHB') score += 100;
+                else if (feat.source === 'PHB') score += 50;
+                if (feat.entries || feat.entry) score += 10;
+                return score;
+            };
+
+            if (getScore(f) > getScore(existing)) {
+                uniqueMap.set(f.name, f);
+            }
+        }
+    });
+    return Array.from(uniqueMap.values()).sort((a,b) => a.level - b.level || a.name.localeCompare(b.name));
+};
+
+/* =========================================
+      18. CLASS MANAGER
+      ========================================= */
+window.injectClassManagerButton = function() {
+    const classInput = document.getElementById('charClass');
+    if (classInput && !document.getElementById('manage-classes-btn')) {
+    const btn = document.createElement('button');
+    btn.id = 'manage-classes-btn';
+    btn.innerHTML = '⚙️';
+    btn.title = "Manage Classes / Multiclass";
+    btn.className = "mini-btn";
+    btn.style.marginLeft = "5px";
+    btn.style.background = "var(--gold)";
+    btn.style.color = "var(--ink)";
+    btn.onclick = window.openClassManagerModal;
+    
+    if (classInput.parentNode) {
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.width = '100%';
+        wrapper.style.gap = '5px';
+        
+        classInput.parentNode.insertBefore(wrapper, classInput);
+        wrapper.appendChild(classInput);
+        
+        const tagContainer = document.createElement('div');
+        tagContainer.id = 'class-tag-container';
+        tagContainer.style.display = 'none';
+        tagContainer.style.flexWrap = 'wrap';
+        tagContainer.style.gap = '5px';
+        tagContainer.style.flex = '1';
+        wrapper.appendChild(tagContainer);
+        
+        wrapper.appendChild(btn);
+    }
+    }
+
+    const subclassInput = document.getElementById('charSubclass');
+    if (subclassInput && !document.getElementById('subclass-tag-container')) {
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.width = '100%';
+        wrapper.style.gap = '5px';
+        
+        subclassInput.parentNode.insertBefore(wrapper, subclassInput);
+        wrapper.appendChild(subclassInput);
+        
+        const tagContainer = document.createElement('div');
+        tagContainer.id = 'subclass-tag-container';
+        tagContainer.style.display = 'none';
+        tagContainer.style.flexWrap = 'wrap';
+        tagContainer.style.gap = '5px';
+        tagContainer.style.flex = '1';
+        wrapper.appendChild(tagContainer);
+    }
+};
+
+window.updateClassDisplay = function() {
+    const classInput = document.getElementById('charClass');
+    const subclassInput = document.getElementById('charSubclass');
+    const levelInput = document.getElementById('level');
+    const tagContainer = document.getElementById('class-tag-container');
+    const subclassTagContainer = document.getElementById('subclass-tag-container');
+    
+    if (!classInput || !subclassInput || !levelInput) return;
+    
+    if (window.characterClasses.length === 0) {
+        window.characterClasses.push({name: classInput.value, subclass: subclassInput.value, level: parseInt(levelInput.value) || 1});
+    }
+
+    const totalLevel = window.characterClasses.reduce((sum, c) => sum + c.level, 0);
+    
+    if (window.characterClasses.length > 1) {
+        if (tagContainer) {
+            classInput.style.display = 'none';
+            tagContainer.style.display = 'flex';
+            tagContainer.innerHTML = '';
+            
+            window.characterClasses.forEach(c => {
+                const tag = document.createElement('div');
+                tag.className = 'tag-item';
+                tag.style.background = 'var(--parchment-dark)';
+                tag.style.border = '1px solid var(--gold-dark)';
+                tag.style.padding = '4px 8px';
+                tag.style.borderRadius = '4px';
+                tag.style.fontSize = '0.9rem';
+                tag.style.whiteSpace = 'nowrap';
+                tag.style.color = 'var(--ink)';
+                tag.style.fontWeight = 'bold';
+                tag.textContent = `${c.name} ${c.level}`;
+                tagContainer.appendChild(tag);
+            });
+        }
+
+        if (subclassTagContainer) {
+            subclassInput.style.display = 'none';
+            subclassTagContainer.style.display = 'flex';
+            subclassTagContainer.innerHTML = '';
+            
+            window.characterClasses.forEach(c => {
+                if (c.subclass) {
+                    const tag = document.createElement('div');
+                    tag.className = 'tag-item';
+                    tag.style.background = 'var(--parchment-dark)';
+                    tag.style.border = '1px solid var(--gold-dark)';
+                    tag.style.padding = '4px 8px';
+                    tag.style.borderRadius = '4px';
+                    tag.style.fontSize = '0.9rem';
+                    tag.style.whiteSpace = 'nowrap';
+                    tag.style.color = 'var(--ink)';
+                    tag.style.fontWeight = 'bold';
+                    tag.textContent = c.subclass;
+                    subclassTagContainer.appendChild(tag);
+                }
+            });
+        }
+
+        const classStr = window.characterClasses.map(c => `${c.name} ${c.level}`).join(' / ');
+        classInput.value = classStr;
+        
+        const subclassStr = window.characterClasses.map(c => c.subclass).filter(s => s).join(' / ');
+        subclassInput.value = subclassStr;
+        
+        if (parseInt(levelInput.value) < totalLevel) levelInput.value = totalLevel;
+        
+        subclassInput.readOnly = true;
+    } else {
+        if (tagContainer) {
+            classInput.style.display = 'block';
+            tagContainer.style.display = 'none';
+        }
+        if (subclassTagContainer) {
+            subclassInput.style.display = 'block';
+            subclassTagContainer.style.display = 'none';
+        }
+        classInput.readOnly = false;
+        subclassInput.readOnly = false;
+        if (classInput.value !== window.characterClasses[0].name) classInput.value = window.characterClasses[0].name;
+        if (subclassInput.value !== window.characterClasses[0].subclass) subclassInput.value = window.characterClasses[0].subclass;
+    }
+};
+
+window.openClassManagerModal = function() {
+    let modal = document.getElementById('classManagerModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'classManagerModal';
+        modal.className = 'info-modal-overlay';
+        modal.innerHTML = `
+            <div class="info-modal-content" style="max-width: 500px;">
+                <button class="close-modal-btn" onclick="document.getElementById('classManagerModal').style.display='none'">&times;</button>
+                <h3 class="info-modal-title">Manage Classes</h3>
+                <div id="classListContainer" style="margin-bottom:15px;"></div>
+                <button class="btn" onclick="window.addClassEntry()" style="width:100%;">+ Add Class</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    window.renderClassManagerList();
+    modal.style.display = 'flex';
+};
+
+window.renderClassManagerList = function() {
+    const container = document.getElementById('classListContainer');
+    container.innerHTML = '';
+    window.characterClasses.forEach((c, idx) => {
+        const div = document.createElement('div');
+        div.style.border = '1px solid var(--gold)';
+        div.style.padding = '10px';
+        div.style.marginBottom = '10px';
+        div.style.borderRadius = '4px';
+        div.style.background = 'white';
+        div.innerHTML = `
+            <div style="display:flex; gap:10px; margin-bottom:5px;">
+                <input type="text" class="styled-input" value="${c.name}" placeholder="Class Name" onchange="window.characterClasses[${idx}].name = this.value; window.updateClassDisplay(); window.saveCharacter();">
+                <input type="number" class="styled-input" value="${c.level}" style="width:60px;" onchange="window.characterClasses[${idx}].level = parseInt(this.value)||1; window.updateClassDisplay(); window.saveCharacter();">
+                <button class="delete-feature-btn" onclick="window.characterClasses.splice(${idx}, 1); window.renderClassManagerList(); window.updateClassDisplay(); window.saveCharacter();">&times;</button>
+            </div>
+            <input type="text" class="styled-input" value="${c.subclass}" placeholder="Subclass" style="width:100%; font-size:0.9rem;" onchange="window.characterClasses[${idx}].subclass = this.value; window.updateClassDisplay(); window.saveCharacter();">
+        `;
+        container.appendChild(div);
+    });
+};
+
+window.addClassEntry = function() {
+    window.characterClasses.push({ name: "", subclass: "", level: 1 });
+    window.renderClassManagerList();
+    window.updateClassDisplay();
+    window.saveCharacter();
+};
