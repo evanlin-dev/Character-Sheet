@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             case "table":
                 if (entry.caption) result += `<strong>${entry.caption}</strong>`;
-                result += "<table class='currency-table' style='width:100%; font-size:0.8rem; margin-top:5px;'>";
+                result += "<div style='overflow-x:auto;'><table class='currency-table' style='width:100%; font-size:0.8rem; margin-top:5px;'>";
                 if (entry.colLabels) {
                     result += "<thead><tr>" + entry.colLabels.map(l => `<th>${processEntries(l, depth)}</th>`).join("") + "</tr></thead>";
                 }
@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         return `<td>${processEntries(cellContent, depth)}</td>`;
                     }).join("") + "</tr>").join("") + "</tbody>";
                 }
-                result += "</table>";
+                result += "</table></div>";
                 break;
 
             case "inset":
@@ -1456,7 +1456,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         table.appendChild(tbody);
         
-        container.appendChild(table);
+        const tableWrapper = document.createElement('div');
+        tableWrapper.style.overflowX = 'auto';
+        tableWrapper.appendChild(table);
+        container.appendChild(tableWrapper);
     }
 
     function renderSpellsForFeature(parentElement, className, charLevel, subclass, specificSpellLevel = null) {
@@ -3298,10 +3301,10 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = `
             <h3 class="section-title" style="margin-top:0;">Ability Scores</h3>
             <div style="margin-bottom: 15px;">
-                <div style="display:flex; gap:10px; margin-bottom:15px;">
-                    <button id="btn-method-standard" class="btn" style="flex:1; font-size:0.8rem;">Standard Array</button>
-                    <button id="btn-method-pointbuy" class="btn btn-secondary" style="flex:1; font-size:0.8rem;">Point Buy</button>
-                    <button id="btn-method-random" class="btn btn-secondary" style="flex:1; font-size:0.8rem;">Random</button>
+                <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
+                    <button id="btn-method-standard" class="btn" style="flex:1; min-width:120px; font-size:0.8rem;">Standard Array</button>
+                    <button id="btn-method-pointbuy" class="btn btn-secondary" style="flex:1; min-width:120px; font-size:0.8rem;">Point Buy</button>
+                    <button id="btn-method-random" class="btn btn-secondary" style="flex:1; min-width:120px; font-size:0.8rem;">Random</button>
                 </div>
                 <div id="ability-score-content" style="background:rgba(255,255,255,0.5); padding:15px; border-radius:4px; border:1px solid var(--gold);"></div>
             </div>

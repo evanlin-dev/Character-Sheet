@@ -91,7 +91,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .field:focus-within { border-color: var(--red); box-shadow: 0 4px 16px var(--shadow-heavy); transform: translateY(-2px); }
 .field-label { font-family: "Cinzel", serif; font-size: 0.75rem; font-weight: 600; color: var(--ink-light); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; display: block; }
 
-input, textarea, select { width: 100%; border: none; background: transparent; font-family: "Crimson Text", serif; font-size: 1.1rem; color: var(--ink); outline: none; padding: 4px 0; }
+input, textarea, select { width: 100%; border: none; background: transparent; font-family: "Crimson Text", serif; font-size: 1.1rem; color: var(--ink); outline: none; padding: 4px 0; min-height: 44px; }
 input[type="number"] { font-size: 1.3rem; font-weight: 600; text-align: center; }
 textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hidden; height: auto; }
 
@@ -749,3 +749,103 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
   border-radius: 4px; transition: all 0.2s; width: 100%; display: block;
 }
 .sidebar-btn:hover { background: var(--parchment-dark); border-color: var(--red); color: var(--red-dark); transform: translateX(5px); }
+
+/* =========================================
+   15. MOBILE RESPONSIVENESS
+   ========================================= */
+
+@media (max-width: 900px) {
+  .character-sheet { width: 100%; border-radius: 0; margin: 0; box-shadow: none; }
+  .grid-3, .grid-4 { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+  body { padding: 0; }
+  .character-sheet { padding: 12px; }
+  .header h1 { font-size: 2rem; }
+
+  /* Collapse Grids */
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  .stat-block { grid-template-columns: repeat(2, 1fr); }
+  .hp-death-grid { grid-template-columns: 1fr; }
+  .attunement-grid { grid-template-columns: 1fr; }
+
+  /* Inventory Mobile Layout */
+  .inventory-header { display: none; }
+  .inventory-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    grid-template-areas:
+      "name name name"
+      "qty weight equip"
+      "note delete drag";
+    gap: 10px;
+    padding: 12px;
+    border-bottom: 4px solid var(--parchment);
+  }
+
+  .inventory-item .name-field { grid-area: name; font-weight: bold; border-bottom: 1px dashed var(--gold); }
+  .inventory-item .qty-field { grid-area: qty; width: 100%; }
+  .inventory-item .weight-field { grid-area: weight; width: 100%; }
+  .inventory-item .equip-check { grid-area: equip; margin: 0; align-self: center; }
+  .inventory-item .note-btn { grid-area: note; justify-self: start; }
+  .inventory-item .delete-btn { grid-area: delete; justify-self: center; }
+  .inventory-item .drag-handle { grid-area: drag; justify-self: end; }
+
+  /* Spell List Mobile Layout */
+  .spell-list-header { display: none; }
+  .spell-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    grid-template-areas:
+      "name name name lvl"
+      "time time range range"
+      "prep ritual conc mat"
+      "info . . del";
+    gap: 10px;
+    padding: 12px;
+    align-items: center;
+  }
+
+  .spell-row .spell-name { grid-area: name; font-weight: bold; }
+  .spell-row .spell-lvl { grid-area: lvl; text-align: right; }
+  .spell-row .spell-time { grid-area: time; font-size: 0.9rem; }
+  .spell-row .spell-range { grid-area: range; font-size: 0.9rem; }
+  .spell-row .spell-prep { grid-area: prep; justify-self: center; }
+  .spell-row .spell-ritual { grid-area: ritual; justify-self: center; }
+  .spell-row .spell-conc { grid-area: conc; justify-self: center; }
+  .spell-row .spell-mat { grid-area: mat; justify-self: center; }
+  .spell-row .skill-info-btn { grid-area: info; }
+  .spell-row .delete-feature-btn { grid-area: del; justify-self: end; }
+
+  /* DM Screen Mobile */
+  .dice-rolls-buckets { grid-template-columns: repeat(4, 1fr) !important; }
+  .battle-container { grid-template-columns: 1fr; }
+  .session-header h2 { font-size: 1.4rem; }
+  
+  .shop-generator-section > div { flex-direction: column; align-items: stretch; }
+  .shop-generator-section > div > div { width: 100% !important; }
+  
+  /* Character Creator Mobile Overrides */
+  #sa-container { grid-template-columns: 1fr !important; }
+  #random-assign-container { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 480px) {
+  .stat-block { grid-template-columns: 1fr; }
+  .dice-rolls-buckets { grid-template-columns: repeat(3, 1fr) !important; }
+  
+  .tabs { flex-direction: column; }
+  .tab { width: 100%; border-radius: 6px; margin-bottom: 4px; }
+  
+  .sheet-actions { flex-direction: column; }
+  .sheet-actions .btn { width: 100%; }
+  
+  .inventory-item {
+      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-areas:
+        "name name name"
+        "qty weight equip"
+        "note delete drag";
+  }
+}

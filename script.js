@@ -147,14 +147,14 @@
            return "<ul>" + (entries.items || []).map(i => `<li>${window.processEntries(i)}</li>`).join("") + "</ul>";
        }
        if (entries.type === "table") {
-           let html = "<table class='currency-table' style='width:100%; font-size:0.8rem; margin-top:5px;'>";
+           let html = "<div style='overflow-x:auto;'><table class='currency-table' style='width:100%; font-size:0.8rem; margin-top:5px;'>";
            if (entries.colLabels) {
                html += "<thead><tr>" + entries.colLabels.map(l => `<th>${window.processEntries(l)}</th>`).join("") + "</tr></thead>";
            }
            if (entries.rows) {
                html += "<tbody>" + entries.rows.map(row => "<tr>" + row.map(cell => `<td>${window.processEntries(cell)}</td>`).join("") + "</tr>").join("") + "</tbody>";
            }
-           html += "</table>";
+           html += "</table></div>";
            return html;
        }
        

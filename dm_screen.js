@@ -138,8 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <h3 style="margin: 0;">Dice Rolls</h3>
                         <button class="btn btn-secondary stats-btn" style="padding: 2px 8px; font-size: 0.7rem;">Get Stats</button>
                     </div>
-                    <div class="dice-rolls-buckets" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 10px;"></div>
-                    <div class="add-roll">
+                    <div class="dice-rolls-buckets"
                         <select class="add-roll-player player-select styled-select"><option value="" disabled selected>Select Player</option></select>
                         <input type="number" class="add-roll-value" placeholder="Roll">
                         <button class="btn btn-secondary add-roll-btn">Add</button>
