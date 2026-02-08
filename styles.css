@@ -96,10 +96,21 @@ input[type="number"] { font-size: 1.3rem; font-weight: 600; text-align: center; 
 textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hidden; height: auto; }
 
 .styled-select {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
   background-color: white;
   border: 1px solid var(--gold);
-  border-radius: 4px;
-  padding: 4px;
+  padding: 8px;
+  font-family: "Crimson Text", serif;
+  font-size: 1rem;
+  color: var(--ink);
+  width: 100%;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d4a574' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+  padding-right: 30px;
 }
 
 /* =========================================
