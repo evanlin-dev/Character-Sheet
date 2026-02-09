@@ -174,16 +174,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const matches = allSpells.filter(s => {
-            if (criteria.level !== undefined && parseInt(criteria.level) !== s.level) return false;
+            if (criteria.level !== undefined) {
+                const levels = criteria.level.split(';').map(l => parseInt(l));
+                if (!levels.includes(s.level)) return false;
+            }
             if (criteria.class !== undefined) {
-                const targetClass = criteria.class;
+                const targetClasses = criteria.class.split(';').map(c => c.trim());
+                let hasClass = false;
                 if (s._normalizedClasses) {
-                    if (!s._normalizedClasses.has(targetClass)) return false;
+                    if (targetClasses.some(tc => s._normalizedClasses.has(tc))) hasClass = true;
                 } else {
-                    let hasClass = false;
                     const check = (c) => {
                         const cName = (typeof c === 'string' ? c : c.name).toLowerCase();
-                        return cName === targetClass || cName.includes(targetClass);
+                        return targetClasses.some(tc => cName === tc || cName.includes(tc));
                     };
                     if (s.classes) {
                         if (Array.isArray(s.classes)) {
@@ -193,14 +196,23 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (s.classes.fromClassListVariant && s.classes.fromClassListVariant.some(check)) hasClass = true;
                         }
                     }
-                    if (!hasClass) return false;
                 }
+                if (!hasClass) return false;
             }
             if (criteria.school !== undefined) {
                 const map = { 'a': 'abjuration', 'c': 'conjuration', 'd': 'divination', 'e': 'enchantment', 'v': 'evocation', 'i': 'illusion', 'n': 'necromancy', 't': 'transmutation' };
                 const sSchool = s.school ? (map[s.school.toLowerCase()] || s.school).toLowerCase() : "";
-                const targetSchool = (map[criteria.school] || criteria.school).toLowerCase();
-                if (sSchool !== targetSchool) return false;
+                const targetSchools = criteria.school.split(';').map(sc => (map[sc] || sc).toLowerCase());
+                if (!targetSchools.includes(sSchool)) return false;
+            }
+            if (criteria['spell attack'] !== undefined) {
+                if (!s.spellAttack) return false;
+                const requiredTypes = criteria['spell attack'].split(';');
+                const hasType = s.spellAttack.some(t => requiredTypes.includes(t.toLowerCase()));
+                if (!hasType) return false;
+            }
+            if (criteria['components & miscellaneous'] === 'ritual') {
+                if (!s.meta || !s.meta.ritual) return false;
             }
             return true;
         }).sort((a, b) => a.name.localeCompare(b.name));
@@ -2414,6 +2426,96 @@ document.addEventListener('DOMContentLoaded', () => {
             // Generic Option Picker for Feats with named additionalSpells (e.g. Divinely Favored, Magic Initiate)
             const hasNamedOptions = featObj && featObj.additionalSpells && featObj.additionalSpells.some(s => s.name);
             
+            const renderSpellChoices = (containerToAppend, spellEntries) => {
+                containerToAppend.innerHTML = '';
+                
+                const processChoice = (obj, label) => {
+                    if (!obj) return;
+
+                    // Handle Fixed Spells (Strings)
+                    if (typeof obj === 'string') {
+                        let name = obj.split('#')[0].split('|')[0];
+                        name = name.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase());
+                        const div = document.createElement('div');
+                        div.style.fontSize = "0.9rem";
+                        div.style.marginBottom = "4px";
+                        div.style.color = "var(--ink)";
+                        div.innerHTML = `<strong>${label}:</strong> ${name}`;
+                        containerToAppend.appendChild(div);
+                        return;
+                    }
+                    if (Array.isArray(obj)) {
+                        obj.forEach(item => processChoice(item, label));
+                        return;
+                    }
+                    if (typeof obj === 'object') {
+                        if (obj.choose) {
+                            const criteria = typeof obj.choose === 'string' ? obj.choose : (obj.choose.fromFilter || "");
+                            if (!criteria) return;
+                            const matches = getSpellsFromFilter(criteria);
+                            const count = obj.count || 1;
+                            
+                            const div = document.createElement('div');
+                            div.style.marginBottom = "8px";
+                            let displayLabel = label;
+                            if (criteria.includes("level=0")) displayLabel = "Cantrip";
+                            else if (criteria.includes("level=1")) displayLabel = "1st-level Spell";
+                            else if (criteria.includes("level=2")) displayLabel = "2nd-level Spell";
+                            else if (criteria.includes("ritual")) displayLabel = "Ritual Spell";
+                            
+                            div.innerHTML = `<div style="font-size:0.85rem; font-weight:bold; margin-bottom:4px;">Select ${count} ${displayLabel}${count > 1 ? 's' : ''}:</div>`;
+                            
+                            for(let i=0; i<count; i++) {
+                                const select = document.createElement('select');
+                                select.className = 'styled-select';
+                                select.style.width = '100%';
+                                select.style.marginBottom = '4px';
+                                select.innerHTML = `<option value="">-- Select --</option>` + 
+                                                   matches.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+                                
+                                const selectedMatch = matches.find(s => selectedSpells.has(s.name));
+                                if (selectedMatch) {
+                                    select.value = selectedMatch.name;
+                                    select.dataset.prev = selectedMatch.name;
+                                }
+
+                                select.addEventListener('change', () => {
+                                    const val = select.value;
+                                    const prev = select.dataset.prev;
+                                    if (prev) selectedSpells.delete(prev);
+                                    if (val) {
+                                        selectedSpells.add(val);
+                                        select.dataset.prev = val;
+                                    } else {
+                                        delete select.dataset.prev;
+                                    }
+                                    renderGrantedSpells();
+                                });
+                                div.appendChild(select);
+                            }
+                            containerToAppend.appendChild(div);
+                        } else {
+                            // Recurse object keys
+                            Object.entries(obj).forEach(([key, val]) => {
+                                // Check for level keys (e.g. "1", "5" in Ritual Caster)
+                                const lvl = parseInt(key);
+                                if (!isNaN(lvl) && selectedLevel < lvl) return;
+                                
+                                processChoice(val, label);
+                            });
+                        }
+                    }
+                };
+
+                if (Array.isArray(spellEntries)) {
+                    spellEntries.forEach(entry => {
+                        if (entry.known) processChoice(entry.known, "Known");
+                        if (entry.innate) processChoice(entry.innate, "Innate");
+                        if (entry.prepared) processChoice(entry.prepared, "Prepared");
+                    });
+                }
+            };
+
             if (hasNamedOptions && selectedFeatName) {
                 const optDiv = document.createElement('div');
                 optDiv.style.marginTop = "10px";
@@ -2467,73 +2569,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 optDiv.appendChild(spellChoiceDiv);
 
                 const renderOptionSpellChoices = (optionName) => {
-                    spellChoiceDiv.innerHTML = '';
                     if (!optionName) return;
                     const optionObj = featObj.additionalSpells.find(s => s.name === optionName);
                     if (!optionObj) return;
-
-                    const processChoice = (obj, label) => {
-                        if (!obj) return;
-                        if (Array.isArray(obj)) {
-                            obj.forEach(item => processChoice(item, label));
-                            return;
-                        }
-                        if (typeof obj === 'object') {
-                            if (obj.choose) {
-                                const criteria = typeof obj.choose === 'string' ? obj.choose : "";
-                                if (!criteria) return;
-                                const matches = getSpellsFromFilter(criteria);
-                                const count = obj.count || 1;
-                                
-                                const div = document.createElement('div');
-                                div.style.marginBottom = "8px";
-                                let displayLabel = label;
-                                if (criteria.includes("level=0")) displayLabel = "Cantrip";
-                                else if (criteria.includes("level=1")) displayLabel = "1st-level Spell";
-                                
-                                div.innerHTML = `<div style="font-size:0.85rem; font-weight:bold; margin-bottom:4px;">${displayLabel}</div>`;
-                                
-                                for(let i=0; i<count; i++) {
-                                    const select = document.createElement('select');
-                                    select.className = 'styled-select';
-                                    select.style.width = '100%';
-                                    select.style.marginBottom = '4px';
-                                    select.innerHTML = `<option value="">-- Select --</option>` + 
-                                                       matches.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
-                                    
-                                    const selectedMatch = matches.find(s => selectedSpells.has(s.name));
-                                    if (selectedMatch) {
-                                        select.value = selectedMatch.name;
-                                        select.dataset.prev = selectedMatch.name;
-                                    }
-
-                                    select.addEventListener('change', () => {
-                                        const val = select.value;
-                                        const prev = select.dataset.prev;
-                                        if (prev) selectedSpells.delete(prev);
-                                        if (val) {
-                                            selectedSpells.add(val);
-                                            select.dataset.prev = val;
-                                        } else {
-                                            delete select.dataset.prev;
-                                        }
-                                        renderGrantedSpells();
-                                    });
-                                    div.appendChild(select);
-                                }
-                                spellChoiceDiv.appendChild(div);
-                            } else {
-                                Object.values(obj).forEach(v => processChoice(v, label));
-                            }
-                        }
-                    };
-
-                    if (optionObj.known) processChoice(optionObj.known, "Spell");
-                    if (optionObj.innate) processChoice(optionObj.innate, "Spell");
+                    renderSpellChoices(spellChoiceDiv, [optionObj]);
                 };
 
                 optSelect.addEventListener('change', () => renderOptionSpellChoices(optSelect.value));
                 if (optSelect.value) renderOptionSpellChoices(optSelect.value);
+                }
+            } else if (featObj && featObj.additionalSpells && selectedFeatName) {
+                // Handle feats without named options (direct grants)
+                const spellChoiceDiv = document.createElement('div');
+                spellChoiceDiv.style.marginTop = "10px";
+                spellChoiceDiv.style.padding = "10px";
+                spellChoiceDiv.style.border = "1px solid var(--gold)";
+                spellChoiceDiv.style.background = "rgba(255,255,255,0.5)";
+                spellChoiceDiv.style.borderRadius = "4px";
+                
+                renderSpellChoices(spellChoiceDiv, featObj.additionalSpells);
+                if (spellChoiceDiv.hasChildNodes()) {
+                    container.appendChild(spellChoiceDiv);
                 }
             }
 
@@ -2915,7 +2971,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (feat.name === "Magic Initiate") {
                         // Skip
                     } else {
-                        selectedFeatures.push({ feature: feat, contextName: featName });
+                        selectedFeatures.push({ feature: feat, contextName: featName, isFeat: true });
                     }
                 }
             }
@@ -2968,7 +3024,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     else if (v.choose) {
                                         const criteria = formatChoose(v.choose);
                                         const matches = getSpellsFromFilter(v.choose);
-                                        if (matches.length > 0) {
+                                        if (matches.length > 0 && !item.isFeat) {
                                             const div = document.createElement('div');
                                             div.style.padding = "4px 0";
                                             div.style.borderBottom = "1px dashed var(--gold)";
@@ -3014,6 +3070,29 @@ document.addEventListener('DOMContentLoaded', () => {
                                             container.appendChild(div);
                                             hasContent = true;
                                         } else {
+                                            // For feats (handled elsewhere) or if no matches, show text/selected
+                                            if (item.isFeat && matches.length > 0) {
+                                                const selectedMatches = matches.filter(m => selectedSpells.has(m.name));
+                                                if (selectedMatches.length > 0) {
+                                                    selectedMatches.forEach(s => {
+                                                        const div = document.createElement('div');
+                                                        div.textContent = s.name;
+                                                        div.style.padding = "4px 0";
+                                                        div.style.borderBottom = "1px dashed var(--gold)";
+                                                        div.style.color = "var(--red-dark)";
+                                                        div.style.fontWeight = "bold";
+                                                        container.appendChild(div);
+                                                        hasContent = true;
+                                                    });
+                                                    // If we have selections, we don't show the "Choose..." text below
+                                                    // unless we want to show remaining count, but for now just showing selected is cleaner.
+                                                    // To prevent falling through to the criteria text block below, we can return or use a flag.
+                                                    // However, the block below checks !criteria.includes("Choose").
+                                                    // Let's just ensure we don't duplicate.
+                                                    return;
+                                                }
+                                            }
+
                                             if (!criteria.includes("Choose")) {
                                                 const div = document.createElement('div');
                                                 div.innerHTML = `Choose ${v.count || 1} from: ${criteria}`;
