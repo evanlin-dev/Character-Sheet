@@ -1523,6 +1523,89 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function getActiveFeatures() {
+        const features = [];
+        selectedOptionalFeatures.forEach(name => {
+            let featName = name;
+            let isFeat = false;
+            if (name.startsWith("ASI Level ")) {
+                featName = name.substring(name.indexOf(':') + 2);
+                isFeat = true;
+            } else if (name.startsWith("Mastery: ") || name.startsWith("Primal Knowledge")) {
+                return;
+            }
+            let candidates = allOptionalFeatures.filter(f => f.name === featName);
+            let feat = candidates.find(f => f.source === 'XPHB') || candidates.find(f => f.source === 'PHB') || candidates[0];
+            if (!feat) {
+                candidates = allFeats.filter(f => f.name === featName);
+                feat = candidates.find(f => f.source === 'XPHB') || candidates.find(f => f.source === 'PHB') || candidates[0];
+                if (feat) isFeat = true;
+            }
+            if (!feat && featName.includes(" (")) {
+                const baseName = featName.substring(0, featName.lastIndexOf(" ("));
+                candidates = allFeats.filter(f => f.name === baseName);
+                feat = candidates.find(f => f.source === 'XPHB') || candidates.find(f => f.source === 'PHB') || candidates[0];
+                if (feat) isFeat = true;
+            }
+            if (feat) features.push({ feature: feat, contextName: name, isFeat: isFeat });
+        });
+        if (selectedClass) {
+            const classFeats = allClassFeatures.filter(f => f.className === selectedClass && f.source === currentClassSource && !f.subclassShortName && f.level <= selectedLevel);
+            classFeats.forEach(f => features.push({ feature: f, contextName: f.name }));
+        }
+        if (selectedClass && selectedSubclass) {
+            const subFeats = allSubclassFeatures.filter(f => f.className === selectedClass && f.subclassShortName === selectedSubclass && f.source === selectedSubclassSource && f.level <= selectedLevel);
+            subFeats.forEach(f => features.push({ feature: f, contextName: f.name }));
+            const subclassObj = allSubclasses.find(s => s.className === selectedClass && s.shortName === selectedSubclass && s.source === selectedSubclassSource);
+            if (subclassObj) features.push({ feature: subclassObj, contextName: subclassObj.name });
+        }
+        if (selectedSpecies) {
+             const candidates = allSpecies.filter(r => r.name === selectedSpecies);
+             let race = candidates.find(r => r.source === 'XPHB') || candidates.find(r => r.source === 'PHB') || candidates[0];
+             if (race) features.push({ feature: race, contextName: race.name });
+        }
+        return features;
+    }
+
+    function getFeatureSpells(activeFeatures) {
+        const featureSpells = new Set();
+        activeFeatures.forEach(item => {
+            const feat = item.feature;
+            const contextName = item.contextName;
+            if (feat.additionalSpells) {
+                feat.additionalSpells.forEach(entry => {
+                    if (entry.name && !contextName.toLowerCase().includes(entry.name.toLowerCase())) return;
+                    const processEntry = (obj) => {
+                        if (!obj) return;
+                        Object.entries(obj).forEach(([key, val]) => {
+                            const lvl = parseInt(key);
+                            if (!isNaN(lvl) && selectedLevel < lvl) return;
+                            if (Array.isArray(val)) {
+                                val.forEach(v => {
+                                    if (typeof v === 'object' && v.choose) {
+                                        const criteria = typeof v.choose === 'string' ? v.choose : v.choose.fromFilter;
+                                        if (criteria) {
+                                            const matches = getSpellsFromFilter(criteria);
+                                            const count = v.count || 1;
+                                            const matchedSelected = matches.filter(m => selectedSpells.has(m.name));
+                                            for (let i = 0; i < Math.min(matchedSelected.length, count); i++) {
+                                                featureSpells.add(matchedSelected[i].name);
+                                            }
+                                        }
+                                    }
+                                });
+                            } else if (typeof val === 'object') processEntry(val);
+                        });
+                    };
+                    if (entry.innate) processEntry(entry.innate);
+                    if (entry.known) processEntry(entry.known);
+                    if (entry.prepared) processEntry(entry.prepared);
+                });
+            }
+        });
+        return featureSpells;
+    }
+
     function renderClassTable() {
         let container = document.getElementById('creator-class-table-dynamic');
         if (!container) {
@@ -1812,8 +1895,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Check limits
                         const currentSelected = Array.from(selectedSpells).map(name => allSpells.find(sp => sp.name === name)).filter(Boolean);
                         
+                        // Filter out feature spells from the count
+                        const activeFeats = getActiveFeatures();
+                        const featureSpells = getFeatureSpells(activeFeats);
+                        const countedSelected = currentSelected.filter(sp => !featureSpells.has(sp.name));
+                        
                         if (s.level === 0) {
-                            const cantripCount = currentSelected.filter(sp => sp.level === 0).length;
+                            const cantripCount = countedSelected.filter(sp => sp.level === 0).length;
                             if (cantripLimit !== Infinity && cantripCount >= cantripLimit) {
                                 alert(`You can only select ${cantripLimit} cantrips.`);
                                 return;
@@ -1821,7 +1909,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else if (specificSpellLevel === null) {
                             // Only enforce table limit for general spellcasting (not specific feature grants like Mystic Arcanum)
                             // Count only spells within the max spell level (e.g. Warlock 1-5)
-                            const relevantSpellCount = currentSelected.filter(sp => sp.level > 0 && sp.level <= maxSpellLevel).length;
+                            const relevantSpellCount = countedSelected.filter(sp => sp.level > 0 && sp.level <= maxSpellLevel).length;
                             if (spellLimit !== Infinity && relevantSpellCount >= spellLimit) {
                                 alert(`You can only select ${spellLimit} spells.`);
                                 return;
