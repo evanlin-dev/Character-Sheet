@@ -1117,6 +1117,34 @@ async function checkDataUploadStatus() {
       const btnSpells = document.getElementById("btn-search-spells-zip");
       const hasData = !!req.result;
 
+      // Inject Feat Search Button if missing
+      let btnFeats = document.getElementById("btn-search-feats-zip");
+      if (!btnFeats && hasData) {
+          const addBtn = document.querySelector("button[onclick*=\"addFeatureItem('featsContainer'\"]");
+          if (addBtn && addBtn.parentNode) {
+              const wrapper = document.createElement('div');
+              wrapper.style.display = "flex";
+              wrapper.style.gap = "5px";
+              wrapper.style.width = "100%";
+              addBtn.parentNode.insertBefore(wrapper, addBtn);
+              wrapper.appendChild(addBtn);
+
+              btnFeats = document.createElement('button');
+              btnFeats.id = "btn-search-feats-zip";
+              btnFeats.className = addBtn.className;
+              btnFeats.style.cssText = addBtn.style.cssText;
+              btnFeats.innerHTML = "Search Feats";
+              btnFeats.onclick = window.openFeatSearch;
+              
+              addBtn.style.flex = "1";
+              addBtn.style.width = "auto";
+              btnFeats.style.flex = "1";
+              btnFeats.style.width = "auto";
+              
+              wrapper.appendChild(btnFeats);
+          }
+      }
+
       console.log("DB Query Result:", hasData ? "Data Found" : "Empty");
 
       // Toggle Buttons
@@ -1124,10 +1152,12 @@ async function checkDataUploadStatus() {
         if (btnItems) btnItems.style.display = "inline-block";
         if (btnCantrips) btnCantrips.style.display = "inline-block";
         if (btnSpells) btnSpells.style.display = "inline-block";
+        if (btnFeats) btnFeats.style.display = "inline-block";
       } else {
         if (btnItems) btnItems.style.display = "none";
         if (btnCantrips) btnCantrips.style.display = "none";
         if (btnSpells) btnSpells.style.display = "none";
+        if (btnFeats) btnFeats.style.display = "none";
       }
 
       // Toggle Weapon Proficiency Input Mode
@@ -1801,6 +1831,183 @@ function renderSpellSearchPage() {
       const target = (spell.level === 0 && spellTargetContainer === 'spellList') ? 'cantripList' : spellTargetContainer;
       addSpellRow(target, spell.level, spellData);
       closeSpellSearch();
+    };
+    list.appendChild(div);
+  });
+}
+
+/* =========================================
+      FEAT SEARCH (IndexedDB)
+      ========================================= */
+let allFeatsCache = [];
+let currentFeatResults = [];
+let featSearchPage = 1;
+
+window.openFeatSearch = async function () {
+  // Create modal if not exists
+  let modal = document.getElementById("featSearchModal");
+  if (!modal) {
+      modal = document.createElement("div");
+      modal.id = "featSearchModal";
+      modal.className = "info-modal-overlay";
+      modal.innerHTML = `
+        <div class="info-modal-content" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
+            <button class="close-modal-btn" onclick="document.getElementById('featSearchModal').style.display='none'">&times;</button>
+            <h3 class="info-modal-title" style="text-align: center">Feat Search</h3>
+            <div style="margin-bottom: 10px; display: flex; gap: 10px;">
+                <input type="text" id="featSearchInput" placeholder="Search feats..." style="border: 1px solid var(--gold); padding: 8px; border-radius: 4px; flex: 1;" oninput="window.filterFeatSearch()">
+            </div>
+            <div id="featSearchList" class="checklist-grid" style="grid-template-columns: 1fr; flex: 1; overflow-y: auto; gap: 8px;"></div>
+            <div id="featSearchPagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 10px;">
+                <button class="btn btn-secondary" onclick="window.changeFeatSearchPage(-1)" style="padding: 5px 10px;">&lt;</button>
+                <span id="featSearchPageInfo" style="font-size: 0.9rem;">Page 1</span>
+                <button class="btn btn-secondary" onclick="window.changeFeatSearchPage(1)" style="padding: 5px 10px;">&gt;</button>
+            </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+  }
+
+  modal.style.display = "flex";
+  document.getElementById("featSearchInput").value = "";
+  const list = document.getElementById("featSearchList");
+  list.innerHTML = '<div style="padding:10px; color:#666; text-align:center;">Loading feats library...</div>';
+  document.getElementById("featSearchPagination").style.display = "none";
+
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+    const data = await new Promise((resolve, reject) => {
+      const req = store.get("currentData");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+
+    if (!data) {
+      list.innerHTML = '<div style="padding:10px; color:#666; text-align:center;">No data found.</div>';
+      return;
+    }
+
+    const parsedData = [];
+    data.forEach((file) => {
+      if (file.name.toLowerCase().endsWith(".json")) {
+        try { parsedData.push(JSON.parse(file.content)); } catch (e) {}
+      }
+    });
+
+    const results = [];
+    parsedData.forEach((json) => {
+        if (json.feat && Array.isArray(json.feat)) {
+            json.feat.forEach(f => {
+                if (f.name) results.push(f);
+            });
+        }
+    });
+
+    // Deduplicate
+    const uniqueResults = [];
+    const seen = new Set();
+    results.forEach(f => {
+        const key = f.name + (f.source || "");
+        if (!seen.has(key)) {
+            seen.add(key);
+            uniqueResults.push(f);
+        }
+    });
+    
+    // Sort
+    uniqueResults.sort((a, b) => a.name.localeCompare(b.name));
+
+    allFeatsCache = uniqueResults;
+    currentFeatResults = allFeatsCache;
+    featSearchPage = 1;
+
+    renderFeatSearchPage();
+    document.getElementById("featSearchInput").focus();
+  } catch (e) {
+    console.error(e);
+    list.innerHTML = '<div style="padding:10px; color:red; text-align:center;">Error loading database.</div>';
+  }
+};
+
+window.filterFeatSearch = function () {
+  const term = document.getElementById("featSearchInput").value.toLowerCase();
+  if (!term) {
+    currentFeatResults = allFeatsCache;
+  } else {
+    currentFeatResults = allFeatsCache.filter((item) =>
+      item.name.toLowerCase().includes(term)
+    );
+  }
+  featSearchPage = 1;
+  renderFeatSearchPage();
+};
+
+window.changeFeatSearchPage = function (delta) {
+  const maxPage = Math.ceil(currentFeatResults.length / ITEMS_PER_PAGE);
+  const newPage = featSearchPage + delta;
+  if (newPage >= 1 && newPage <= maxPage) {
+    featSearchPage = newPage;
+    renderFeatSearchPage();
+    document.getElementById("featSearchList").scrollTop = 0;
+  }
+};
+
+function renderFeatSearchPage() {
+  const list = document.getElementById("featSearchList");
+  const pagination = document.getElementById("featSearchPagination");
+  const pageInfo = document.getElementById("featSearchPageInfo");
+
+  if (currentFeatResults.length === 0) {
+    list.innerHTML = '<div style="padding:10px; color:#666; text-align:center;">No matching feats found.</div>';
+    pagination.style.display = "none";
+    return;
+  }
+
+  pagination.style.display = "flex";
+  const maxPage = Math.ceil(currentFeatResults.length / ITEMS_PER_PAGE);
+  pageInfo.textContent = `Page ${featSearchPage} of ${maxPage}`;
+
+  const startIndex = (featSearchPage - 1) * ITEMS_PER_PAGE;
+  const itemsToShow = currentFeatResults.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  list.innerHTML = "";
+
+  itemsToShow.forEach((feat) => {
+    const div = document.createElement("div");
+    div.className = "checklist-item";
+    div.style.flexDirection = "column";
+    div.style.alignItems = "flex-start";
+    div.style.cursor = "pointer";
+
+    let desc = window.processEntries(feat.entries);
+    let cleanDesc = window.cleanText(desc);
+    let previewDesc = cleanDesc.replace(/<[^>]*>/g, "");
+    if (previewDesc.length > 80) previewDesc = previewDesc.substring(0, 80) + "...";
+
+    let prereq = "";
+    if (feat.prerequisite) {
+        prereq = "Prereq: " + feat.prerequisite.map(p => {
+            if (p.level) return "Lvl " + (p.level.level || p.level);
+            if (p.ability) return "Ability";
+            if (p.race) return "Race";
+            return "Other";
+        }).join(", ");
+    }
+
+    div.innerHTML = `
+       <div style="font-weight:bold; width:100%; display:flex; justify-content:space-between;">
+           <span>${feat.name}</span>
+           <span style="font-size:0.8rem; color:var(--ink-light);">${feat.source || ""}</span>
+       </div>
+       ${prereq ? `<div style="font-size:0.75rem; color:var(--red); font-style:italic;">${prereq}</div>` : ""}
+       <div style="font-size:0.8rem; color:var(--ink-light); margin-top:4px;">${previewDesc}</div>
+    `;
+    
+    div.onclick = () => {
+        window.addFeatureItem("featsContainer", feat.name, cleanDesc);
+        document.getElementById("featSearchModal").style.display = "none";
     };
     list.appendChild(div);
   });

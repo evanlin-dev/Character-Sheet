@@ -37,6 +37,9 @@ body.theme-wizard { --ink: #0e1826; --ink-light: #2c4463; --gold: #bdc3c7; --gol
 /* =========================================
    2. RESET & BASE STYLES
    ========================================= */
+html {
+  overscroll-behavior: none;
+}
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 body {
   font-family: "Crimson Text", serif;
@@ -46,6 +49,7 @@ body {
   padding: 16px;
   touch-action: pan-y;
   overflow-x: hidden;
+  overscroll-behavior: none;
 }
 h1, h2, h3 { font-family: "Cinzel", serif; }
 input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
