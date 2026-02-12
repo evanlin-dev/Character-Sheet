@@ -4614,6 +4614,52 @@ document.addEventListener('DOMContentLoaded', () => {
         // Inventory & Gold Logic
         const inventory = [];
         let cp = 0, sp = 0, ep = 0, gp = 0, pp = 0;
+        
+        // Gather Languages & Defenses
+        const languages = new Set();
+        const defenses = new Set();
+        
+        const processRaceTraits = (obj) => {
+            if (!obj) return;
+            if (obj.languageProficiencies) {
+                obj.languageProficiencies.forEach(lp => {
+                    Object.keys(lp).forEach(k => {
+                        if (k === 'anyStandard') languages.add(`Any ${lp[k]} Standard`);
+                        else if (k === 'anyExotic') languages.add(`Any ${lp[k]} Exotic`);
+                        else if (k === 'any') languages.add(`Any ${lp[k]} Language`);
+                        else if (k === 'other') languages.add(`Other`);
+                        else if (lp[k] === true) languages.add(k.charAt(0).toUpperCase() + k.slice(1));
+                    });
+                });
+            }
+            if (obj.resist) {
+                obj.resist.forEach(r => {
+                    if (typeof r === 'string') defenses.add(`Resist: ${r}`);
+                    else if (typeof r === 'object' && r.choose) defenses.add(`Resist: Choose ${r.choose.count||1} from ${r.choose.from.join(', ')}`);
+                });
+            }
+            if (obj.immune) {
+                obj.immune.forEach(i => {
+                    if (typeof i === 'string') defenses.add(`Immune: ${i}`);
+                    else if (typeof i === 'object' && i.choose) defenses.add(`Immune: Choose ${i.choose.count||1} from ${i.choose.from.join(', ')}`);
+                });
+            }
+            if (obj.conditionImmune) {
+                obj.conditionImmune.forEach(c => {
+                    if (typeof c === 'string') defenses.add(`Immune Condition: ${c}`);
+                    else if (typeof c === 'object' && c.choose) defenses.add(`Immune Condition: Choose ${c.choose.count||1} from ${c.choose.from.join(', ')}`);
+                });
+            }
+        };
+
+        const speciesCandidates = allSpecies.filter(r => r.name === selectedSpecies);
+        let raceObj = speciesCandidates.find(r => r.source === 'XPHB') || speciesCandidates.find(r => r.source === 'PHB') || speciesCandidates[0];
+        if (raceObj && raceObj._copy && !raceObj.entries) {
+             const orig = allSpecies.find(r => r.name === raceObj._copy.name);
+             if (orig) raceObj = { ...orig, ...raceObj };
+        }
+        processRaceTraits(raceObj);
+        if (selectedSubrace) processRaceTraits(selectedSubrace);
 
         // Helper to add items from string list
         const addItemsFromList = (listStr, sourceLabel) => {
@@ -4891,8 +4937,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Species Features
-        const speciesCandidates = allSpecies.filter(r => r.name === selectedSpecies);
-        let race = speciesCandidates.find(r => r.source === 'XPHB') || speciesCandidates[0];
+        const speciesFeatureCandidates = allSpecies.filter(r => r.name === selectedSpecies);
+        let race = speciesFeatureCandidates.find(r => r.source === 'XPHB') || speciesFeatureCandidates[0];
         if (race && race._copy && !race.entries) {
             const orig = allSpecies.find(r => r.name === race._copy.name);
             if (orig) race = { ...orig, ...race, entries: orig.entries };
@@ -5252,6 +5298,8 @@ document.addEventListener('DOMContentLoaded', () => {
             armorLight, armorMedium, armorHeavy, armorShield,
             weaponProfs: weaponProfs.join(", "),
             toolProfs: toolProfs.join(", "),
+            languages: Array.from(languages).join(", "),
+            defenses: Array.from(defenses).join(", "),
             spellAbility,
             spellSlotsData,
             cantripsList,

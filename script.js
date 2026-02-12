@@ -1111,6 +1111,7 @@ async function checkDataUploadStatus() {
         loadWeaponsFromData(parsedData);
         loadActionsFromData(parsedData);
         loadTablesFromData(parsedData);
+        loadLanguagesFromData(parsedData);
       }
       const btnItems = document.getElementById("btn-search-items-zip");
       const btnCantrips = document.getElementById("btn-search-cantrips-zip");
@@ -1144,6 +1145,27 @@ async function checkDataUploadStatus() {
               wrapper.appendChild(btnFeats);
           }
       }
+      
+      // Inject Language Search Button if missing
+      let btnLangs = document.getElementById("btn-search-langs-zip");
+      const langInput = document.getElementById("languages");
+      if (!btnLangs && hasData && langInput) {
+          const parent = langInput.parentElement;
+          if (parent) {
+              const label = parent.querySelector('.field-label');
+              if (label) {
+                  btnLangs = document.createElement('button');
+                  btnLangs.id = "btn-search-langs-zip";
+                  btnLangs.className = "skill-info-btn";
+                  btnLangs.style.marginLeft = "8px";
+                  btnLangs.style.verticalAlign = "middle";
+                  btnLangs.innerHTML = "🔍";
+                  btnLangs.title = "Search Languages";
+                  btnLangs.onclick = window.openLanguageSearch;
+                  label.appendChild(btnLangs);
+              }
+          }
+      }
 
       console.log("DB Query Result:", hasData ? "Data Found" : "Empty");
 
@@ -1153,11 +1175,13 @@ async function checkDataUploadStatus() {
         if (btnCantrips) btnCantrips.style.display = "inline-block";
         if (btnSpells) btnSpells.style.display = "inline-block";
         if (btnFeats) btnFeats.style.display = "inline-block";
+        if (btnLangs) btnLangs.style.display = "inline-block";
       } else {
         if (btnItems) btnItems.style.display = "none";
         if (btnCantrips) btnCantrips.style.display = "none";
         if (btnSpells) btnSpells.style.display = "none";
         if (btnFeats) btnFeats.style.display = "none";
+        if (btnLangs) btnLangs.style.display = "none";
       }
 
       // Toggle Weapon Proficiency Input Mode
@@ -1835,6 +1859,91 @@ function renderSpellSearchPage() {
     list.appendChild(div);
   });
 }
+
+/* =========================================
+      LANGUAGE SEARCH (IndexedDB)
+      ========================================= */
+let allLanguagesCache = [];
+
+function loadLanguagesFromData(parsedData) {
+  if (!parsedData) return;
+  const langs = [];
+  parsedData.forEach((json) => {
+    if (json.language && Array.isArray(json.language)) {
+      json.language.forEach((l) => {
+        if (l.name) langs.push(l);
+      });
+    }
+  });
+  const unique = new Map();
+  langs.forEach(l => {
+      if (!unique.has(l.name)) unique.set(l.name, l);
+      else {
+          const existing = unique.get(l.name);
+          if (l.source === 'XPHB' || (l.source === 'PHB' && existing.source !== 'XPHB')) {
+              unique.set(l.name, l);
+          }
+      }
+  });
+  allLanguagesCache = Array.from(unique.values()).sort((a,b) => a.name.localeCompare(b.name));
+}
+
+window.openLanguageSearch = function() {
+    let modal = document.getElementById("languageSearchModal");
+    if (!modal) {
+        modal = document.createElement("div");
+        modal.id = "languageSearchModal";
+        modal.className = "info-modal-overlay";
+        modal.innerHTML = `
+            <div class="info-modal-content" style="max-width: 500px; max-height: 80vh; display: flex; flex-direction: column;">
+                <button class="close-modal-btn" onclick="document.getElementById('languageSearchModal').style.display='none'">&times;</button>
+                <h3 class="info-modal-title" style="text-align: center">Languages</h3>
+                <input type="text" id="langSearchInput" placeholder="Search..." style="margin-bottom: 10px; padding: 8px; border: 1px solid var(--gold); border-radius: 4px;">
+                <div id="languageList" class="checklist-grid" style="grid-template-columns: 1fr; flex: 1; overflow-y: auto; gap: 8px;"></div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        document.getElementById('langSearchInput').addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('#languageList .checklist-item').forEach(item => {
+                item.style.display = item.textContent.toLowerCase().includes(term) ? 'flex' : 'none';
+            });
+        });
+    }
+    
+    const list = document.getElementById("languageList");
+    list.innerHTML = "";
+    
+    if (allLanguagesCache.length === 0) {
+        list.innerHTML = "<div style='text-align:center; color:gray;'>No languages found.</div>";
+    } else {
+        allLanguagesCache.forEach(l => {
+            const div = document.createElement("div");
+            div.className = "checklist-item";
+            div.style.justifyContent = "space-between";
+            div.style.cursor = "pointer";
+            
+            let type = l.type || "";
+            if (type) type = type.charAt(0).toUpperCase() + type.slice(1);
+            
+            div.innerHTML = `<span><strong>${l.name}</strong> ${type ? `(${type})` : ""}</span><span style="font-size:0.8rem; color:gray;">${l.script || ""}</span>`;
+            div.onclick = () => {
+                const langInput = document.getElementById("languages");
+                if (langInput) {
+                    const current = langInput.value.trim();
+                    langInput.value = current ? `${current}, ${l.name}` : l.name;
+                    window.saveCharacter();
+                    document.getElementById("languageSearchModal").style.display = "none";
+                }
+            };
+            list.appendChild(div);
+        });
+    }
+    
+    modal.style.display = "flex";
+    document.getElementById('langSearchInput').focus();
+};
 
 /* =========================================
       FEAT SEARCH (IndexedDB)
@@ -3630,7 +3739,8 @@ document.addEventListener("DOMContentLoaded", () => {
         '#alignModal',
         '#themeModal',
         '#lastSavedModal',
-        '#expModal'
+        '#expModal',
+        '#languageSearchModal'
     ];
 
     const checkModals = () => {
