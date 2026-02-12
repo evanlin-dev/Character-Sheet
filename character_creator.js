@@ -2993,6 +2993,58 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.style.display = 'flex';
     }
 
+    // Helper to find table spells (e.g. Tiefling Legacies)
+    const getTableSpells = (feat, optionName) => {
+        if (!feat.entries || !optionName) return [];
+
+        const choiceFeatures = [
+            { name: "Fiendish Legacy", type: "table", nameCol: 0 },
+            { name: "Elven Lineage", type: "table", nameCol: 0 },
+            { name: "Draconic Ancestry", type: "table", nameCol: 0 },
+            { name: "Gnomish Lineage", type: "table", nameCol: 0 },
+            { name: "Giant Ancestry", type: "table", nameCol: 0 }
+        ];
+
+        const findTable = (entries) => {
+            if (!entries) return null;
+            for (const entry of entries) {
+                if (entry.name && choiceFeatures.some(cf => entry.name === cf.name || entry.name.startsWith(cf.name))) {
+                    const cf = choiceFeatures.find(c => entry.name === c.name || entry.name.startsWith(c.name));
+                    if (cf.type === 'table') {
+                        const table = entry.entries.find(e => e.type === 'table');
+                        if (table && table.rows) return { table: table, col: cf.nameCol };
+                    }
+                }
+                if (entry.entries) {
+                    const found = findTable(entry.entries);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+
+        const tableData = findTable(feat.entries);
+        if (tableData) {
+            const row = tableData.table.rows.find(r => {
+                const cell = r[tableData.col];
+                let cellText = typeof cell === 'string' ? cell : (cell.value || "");
+                cellText = cellText.replace(/{@\w+\s*([^}]+)?}/g, "$1");
+                return cellText.includes(optionName);
+            });
+
+            if (row) {
+                const spells = new Set();
+                const rowStr = JSON.stringify(row);
+                const matches = rowStr.matchAll(/{@spell ([^}|]+)/g);
+                for (const m of matches) {
+                    spells.add(m[1]);
+                }
+                return Array.from(spells);
+            }
+        }
+        return [];
+    };
+
     function renderGrantedSpells() {
         const container = document.getElementById('creator-granted-spells');
         const wrapper = document.getElementById('creator-granted-spells-container');
@@ -3062,6 +3114,10 @@ document.addEventListener('DOMContentLoaded', () => {
              let race = candidates.find(r => r.source === 'XPHB') || candidates.find(r => r.source === 'PHB') || candidates[0];
              if (race) selectedFeatures.push({ feature: race, contextName: race.name });
         }
+        // Add Subrace Features
+        if (selectedSubrace) {
+            selectedFeatures.push({ feature: selectedSubrace, contextName: selectedSubrace.name });
+        }
 
         // Add Feats (from ASI selections)
         selectedOptionalFeatures.forEach(name => {
@@ -3129,9 +3185,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (entry.name) {
                         const entryName = entry.name.toLowerCase();
                         const ctx = contextName.toLowerCase();
-                        // Check if the context name contains the entry name (e.g. "Divinely Favored (Evil)" contains "evil")
-                        if (!ctx.includes(entryName)) {
-                            return; // Skip this entry
+                        
+                        let match = false;
+                        if (ctx.includes(entryName)) match = true;
+                        if (selectedSpeciesOption && selectedSpeciesOption.toLowerCase() === entryName) match = true;
+                        
+                        if (!match) {
+                            return;
                         }
                     }
 
@@ -4027,6 +4087,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         };
                         optDescDiv.innerHTML = `<strong>${opt.name}:</strong> ${opt.desc}`;
                     }
+                    renderClassFeatures();
                 });
 
                 choiceDiv.appendChild(select);
@@ -5174,10 +5235,39 @@ document.addEventListener('DOMContentLoaded', () => {
              let race = candidates.find(r => r.source === 'XPHB') || candidates.find(r => r.source === 'PHB') || candidates[0];
              if (race) featuresForSpells.push(race);
         }
+        // Subrace
+        if (selectedSubrace) {
+            featuresForSpells.push(selectedSubrace);
+        }
 
         featuresForSpells.forEach(feat => {
+            // Check for table-based spells (e.g. Tiefling Legacies)
+            if (selectedSpeciesOption && (feat.name === selectedSpecies || (feat._copy && feat._copy.name === selectedSpecies))) {
+                const tableSpells = getTableSpells(feat, selectedSpeciesOption);
+                tableSpells.forEach(sName => {
+                    let name = sName.split('#')[0].split('|')[0];
+                    name = name.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase());
+                    finalSpellsSet.add(name);
+                });
+            }
+
             if (feat.additionalSpells) {
                 feat.additionalSpells.forEach(entry => {
+                    // Filter named entries (e.g. Tiefling Legacies)
+                    if (entry.name) {
+                        const entryName = entry.name.toLowerCase();
+                        let isMatch = false;
+                        if (selectedSpeciesOption && selectedSpeciesOption.toLowerCase() === entryName) isMatch = true;
+                        
+                        // Also check optional features context
+                        if (!isMatch) {
+                            for (const sel of selectedOptionalFeatures) {
+                                if (sel.toLowerCase().includes(entryName)) { isMatch = true; break; }
+                            }
+                        }
+                        if (!isMatch) return;
+                    }
+
                     const extract = (obj) => {
                         if (!obj) return;
                         Object.entries(obj).forEach(([key, val]) => {
