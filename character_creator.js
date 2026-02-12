@@ -4663,6 +4663,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Initialize Proficiencies & Details
         const skillProficiency = {};
+        const saveProficiency = {};
         let toolProfs = [];
         let weaponProfs = [];
         let armorLight = false;
@@ -5083,6 +5084,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // (Variables initialized at top of function)
 
         if (clsObj) {
+            // Saves
+            if (clsObj.proficiency) {
+                clsObj.proficiency.forEach(p => {
+                    saveProficiency[p.toLowerCase()] = true;
+                });
+            }
+
             // Proficiencies
             if (clsObj.startingProficiencies) {
                 if (clsObj.startingProficiencies.armor) {
@@ -5382,6 +5390,7 @@ document.addEventListener('DOMContentLoaded', () => {
             reactions: reactions,
             
             skillProficiency,
+            saveProficiency,
             // New Fields
             inventory,
             cp, sp, ep, gp, pp,
