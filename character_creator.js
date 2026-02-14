@@ -1410,6 +1410,9 @@ document.addEventListener('DOMContentLoaded', () => {
              // Clean tags
              const clean = (str) => str.replace(/\{@\w+\s*([^}]+)?\}/g, (m, c) => c ? c.split('|')[0] : "");
              
+             // Check for multiple choice lines (e.g. Mystic)
+             const choiceLines = equipItems.filter(i => typeof i === 'string' && /\(a\)/.test(i) && /\(b\)/.test(i));
+
              // Check for A/B split
              const fullText = equipItems.join(' ');
              const splitRegex = /(?:choose|option).*?\(a\)\s*(.*?)(?:;?\s*(?:or|and)?\s*\(b\)\s*)(.*)/i;
@@ -1417,9 +1420,45 @@ document.addEventListener('DOMContentLoaded', () => {
              
              html += `<div style="margin-bottom:15px;">`;
              html += `<h4 style="margin:10px 0 8px 0; color:var(--red-dark); font-family:'Cinzel',serif;">Starting Equipment</h4>`;
-             html += `<div class="equip-selection-container d-flex flex-wrap" style="gap:15px;">`;
              
-             if (match) {
+             if (choiceLines.length > 0) {
+                 // Complex choice mode (dropdowns)
+                 html += `<div class="equip-selection-container" style="display:flex; flex-direction:column; gap:10px;">`;
+                 html += `<div style="font-style:italic; font-size:0.9rem; margin-bottom:5px;">Select your equipment:</div>`;
+                 
+                 equipItems.forEach((itemStr, idx) => {
+                     const cleanItem = clean(itemStr);
+                     if (/\(a\)/.test(cleanItem) && /\(b\)/.test(cleanItem)) {
+                         const parts = cleanItem.split(/\s*(?:or\s*)?\(([a-z])\)\s*/).filter(p => p.trim().length > 0);
+                         const options = [];
+                         for (let i = 0; i < parts.length; i += 2) {
+                             if (parts[i+1]) {
+                                 options.push({ letter: parts[i], text: parts[i+1].trim() });
+                             }
+                         }
+                         
+                         if (options.length >= 2) {
+                             html += `<div style="background:white; padding:8px; border:1px solid var(--gold); border-radius:4px;">`;
+                             html += `<select class="styled-select class-equip-dropdown" data-idx="${idx}" style="width:100%;">`;
+                             options.forEach(opt => {
+                                 html += `<option value="${opt.text.replace(/"/g, '&quot;')}">${opt.text}</option>`;
+                             });
+                             html += `</select>`;
+                             html += `</div>`;
+                         } else {
+                             html += `<div style="padding:5px;">${cleanItem}</div>`;
+                             html += `<input type="hidden" class="class-equip-fixed" value="${cleanItem.replace(/"/g, '&quot;')}">`;
+                         }
+                     } else {
+                         html += `<div style="padding:5px; font-weight:bold; color:var(--ink);">${cleanItem}</div>`;
+                         html += `<input type="hidden" class="class-equip-fixed" value="${cleanItem.replace(/"/g, '&quot;')}">`;
+                     }
+                 });
+                 html += `<input type="radio" name="class_equip_choice" value="custom_list" checked style="display:none;">`;
+                 html += `</div>`;
+             } else {
+                 html += `<div class="equip-selection-container d-flex flex-wrap" style="gap:15px;">`;
+                 if (match) {
                  const optA = clean(match[1]);
                  const optB = clean(match[2]);
 
@@ -1468,9 +1507,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="font-size:0.9rem; color:var(--ink); line-height:1.4; flex-grow:1;">${equipListHtml}</div>
                  </label>`;
              }
+             html += `</div>`;
+             }
 
-             
-             html += `</div></div>`;
+             html += `</div>`;
         }
 
         // Multiclassing
@@ -4808,6 +4848,13 @@ document.addEventListener('DOMContentLoaded', () => {
              const val = document.getElementById('equip-opt-b-val')?.value;
              console.log("[Create] Class Equip B Value:", val);
              addItemsFromList(val, "Class Equipment (Option B)");
+        } else if (classEquipChoice === 'custom_list') {
+             document.querySelectorAll('.class-equip-dropdown').forEach(sel => {
+                 if (sel.value) addItemsFromList(sel.value, "Class Equipment");
+             });
+             document.querySelectorAll('.class-equip-fixed').forEach(inp => {
+                 if (inp.value) addItemsFromList(inp.value, "Class Equipment");
+             });
         } else {
              console.log("[Create] Class Equip Default");
              if (clsObj && clsObj.startingEquipment) {
