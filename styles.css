@@ -1220,3 +1220,115 @@ body.dm-screen-page .character-sheet {
 .add-character input, .add-roll input { flex-grow: 1; border: 1px solid var(--gold); padding: 8px; font-family: "Crimson Text", serif; font-size: 1rem; background: white; }
 
 .session-content { display: flex; flex-direction: column; gap: 20px; }
+
+/* =========================================
+   20. CHARACTER CREATOR IMPROVEMENTS
+   ========================================= */
+.creator-class-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.creator-class-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 15px 10px;
+  border: 2px solid var(--gold);
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  user-select: none;
+  min-height: 60px;
+}
+
+.creator-class-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border-color: var(--gold-dark);
+}
+
+.creator-class-card.selected {
+  background: var(--red);
+  color: white;
+  border-color: var(--red-dark);
+  box-shadow: 0 4px 12px rgba(139, 46, 46, 0.3);
+}
+
+.creator-class-name { font-family: "Cinzel", serif; font-weight: 700; font-size: 1rem; }
+
+.ability-total-badge {
+  display: inline-block;
+  background: var(--ink);
+  color: var(--parchment);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  margin-left: 8px;
+  font-weight: bold;
+  vertical-align: middle;
+}
+
+.equip-option-box { transition: all 0.2s ease; }
+.equip-option-box:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+
+/* =========================================
+   20. CHARACTER CREATOR IMPROVEMENTS
+   ========================================= */
+.creator-class-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.creator-class-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border: 2px solid var(--gold);
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  user-select: none;
+  min-height: 40px;
+}
+
+.creator-class-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border-color: var(--gold-dark);
+}
+
+.creator-class-card.selected {
+  background: var(--red);
+  color: white;
+  border-color: var(--red-dark);
+  box-shadow: 0 4px 12px rgba(139, 46, 46, 0.3);
+}
+
+.creator-class-name { font-family: "Cinzel", serif; font-weight: 700; font-size: 0.9rem; }
+
+.ability-total-badge {
+  display: inline-block;
+  background: var(--ink);
+  color: var(--parchment);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  margin-left: 8px;
+  font-weight: bold;
+  vertical-align: middle;
+}
+
+.equip-option-box { transition: all 0.2s ease; }
+.equip-option-box:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }

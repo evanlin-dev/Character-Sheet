@@ -543,6 +543,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     } catch (e) {}
                 });
+                renderClassList();
                 console.log("All Optional Features:", allOptionalFeatures);
             }
         } catch (e) { console.error("Error loading DB:", e); }
@@ -558,58 +559,76 @@ document.addEventListener('DOMContentLoaded', () => {
         levelSelect.appendChild(opt);
     }
 
-    const classes = [
-        "Artificer", "Barbarian", "Bard", "Cleric", "Druid", "Fighter", 
-        "Monk", "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard"
-    ];
-
-    // Populate Classes
-    classes.forEach(c => {
-        const div = document.createElement('div');
-        div.className = 'checklist-item';
-        div.textContent = c;
-        div.style.justifyContent = 'center';
-        div.style.fontWeight = 'bold';
+    function renderClassList() {
+        classList.innerHTML = '';
+        classList.className = 'creator-class-grid';
         
-        div.onclick = () => {
-            document.querySelectorAll('.checklist-item').forEach(item => {
-                item.style.background = 'white';
-                item.style.color = 'var(--ink)';
-                item.style.borderColor = 'var(--gold)';
-            });
-            console.log("Selected Class:", c);
-            selectedClass = c;
-            div.style.background = 'var(--red)';
-            div.style.color = 'white';
-            div.style.borderColor = 'var(--red-dark)';
+        if (allClasses.length === 0) {
+            classList.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:var(--ink-light);">Loading classes... (Please upload data)</div>';
+            return;
+        }
+
+        const validClasses = allClasses.filter(c => !c.isSidekick && (!c.name || !c.name.toLowerCase().includes('sidekick')));
+        const uniqueClasses = [...new Set(validClasses.map(c => c.name))].sort();
+        
+        uniqueClasses.forEach(c => {
+            const div = document.createElement('div');
+            div.className = 'creator-class-card';
             
-            // Determine Source (Prefer XPHB, then PHB)
-            const sources = allClasses.filter(cls => cls.name === c).map(cls => cls.source);
-            if (sources.length === 0) {
-                const featureSources = new Set(allClassFeatures.filter(f => f.className === c).map(f => f.source));
-                sources.push(...featureSources);
+            // Get metadata from data
+            const clsObj = validClasses.find(cl => cl.name === c && cl.source === 'XPHB') || 
+                           validClasses.find(cl => cl.name === c && cl.source === 'PHB') || 
+                           validClasses.find(cl => cl.name === c);
+            
+            let metaHtml = "";
+            if (clsObj) {
+                metaHtml += `<div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; line-height:1.1;">`;
+                if (clsObj.hd) {
+                    const hd = clsObj.hd.faces || clsObj.hd;
+                    metaHtml += `<div style="font-size:0.75rem; color:var(--ink-light);">HD: d${hd}</div>`;
+                }
+                if (clsObj.source) {
+                    metaHtml += `<div style="font-size:0.65rem; color:var(--gold-dark); font-style:italic;">${clsObj.source}</div>`;
+                }
+                metaHtml += `</div>`;
             }
-            if (sources.includes('XPHB')) currentClassSource = 'XPHB';
-            else if (sources.includes('PHB')) currentClassSource = 'PHB';
-            else currentClassSource = sources[0] || 'PHB';
 
-            // Reset Level/Subclass on class change
-            selectedLevel = 1;
-            levelSelect.value = 1;
-            selectedSubclass = null;
-            selectedSubclassSource = null;
-            selectedOptionalFeatures.clear();
-            selectedSpells.clear();
-            updateSubclassOptions(c);
-            updateUIState();
-            renderClassPreview();
-            renderCoreTraits();
-            renderClassTable();
-            renderClassFeatures();
-        };
-        
-        classList.appendChild(div);
-    });
+            div.innerHTML = `<span class="creator-class-name">${c}</span>${metaHtml}`;
+            
+            div.onclick = () => {
+                document.querySelectorAll('.creator-class-card').forEach(item => item.classList.remove('selected'));
+                console.log("Selected Class:", c);
+                selectedClass = c;
+                div.classList.add('selected');
+                
+                // Determine Source (Prefer XPHB, then PHB)
+                const sources = validClasses.filter(cls => cls.name === c).map(cls => cls.source);
+                if (sources.length === 0) {
+                    const featureSources = new Set(allClassFeatures.filter(f => f.className === c).map(f => f.source));
+                    sources.push(...featureSources);
+                }
+                if (sources.includes('XPHB')) currentClassSource = 'XPHB';
+                else if (sources.includes('PHB')) currentClassSource = 'PHB';
+                else currentClassSource = sources[0] || 'PHB';
+
+                // Reset Level/Subclass on class change
+                selectedLevel = 1;
+                levelSelect.value = 1;
+                selectedSubclass = null;
+                selectedSubclassSource = null;
+                selectedOptionalFeatures.clear();
+                selectedSpells.clear();
+                updateSubclassOptions(c);
+                updateUIState();
+                renderClassPreview();
+                renderCoreTraits();
+                renderClassTable();
+                renderClassFeatures();
+            };
+            
+            classList.appendChild(div);
+        });
+    }
 
     // Level Change
     levelSelect.addEventListener('change', () => {
@@ -4081,13 +4100,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const text = bonus > 0 ? `(+${bonus})` : "";
             
             const saSpan = document.getElementById(`bonus-sa-${ab}`);
-            if (saSpan) saSpan.textContent = text;
+            if (saSpan) {
+                saSpan.textContent = text;
+                const sel = document.querySelector(`.sa-select[data-ability="${ab}"]`);
+                const base = sel && sel.value ? parseInt(sel.value) : 0;
+                const totalEl = document.getElementById(`total-sa-${ab}`);
+                if (totalEl) totalEl.textContent = base ? (base + bonus) : "-";
+            }
 
             const pbSpan = document.getElementById(`bonus-pb-${ab}`);
-            if (pbSpan) pbSpan.textContent = text;
+            if (pbSpan) {
+                pbSpan.textContent = text;
+                const valEl = document.getElementById(`pb-val-${ab}`);
+                const base = valEl ? parseInt(valEl.textContent) : 8;
+                const totalEl = document.getElementById(`total-pb-${ab}`);
+                if (totalEl) totalEl.textContent = base + bonus;
+            }
 
             const rndSpan = document.getElementById(`bonus-rnd-${ab}`);
-            if (rndSpan) rndSpan.textContent = text;
+            if (rndSpan) {
+                rndSpan.textContent = text;
+                const sel = document.querySelector(`.random-select[data-ability="${ab}"]`);
+                const base = sel && sel.value ? parseInt(sel.value) : 0;
+                const totalEl = document.getElementById(`total-rnd-${ab}`);
+                if (totalEl) totalEl.textContent = base ? (base + bonus) : "-";
+            }
         });
     }
 
@@ -4152,7 +4189,7 @@ document.addEventListener('DOMContentLoaded', () => {
         abilities.forEach(ab => {
             const div = document.createElement('div');
             div.innerHTML = `
-                <label style="font-weight:bold; font-size:0.9rem;">${ab} <span id="bonus-sa-${ab}" style="color:var(--red); font-size:0.8rem; margin-left:4px;"></span></label>
+                <label style="font-weight:bold; font-size:0.9rem;">${ab} <span id="bonus-sa-${ab}" style="color:var(--red); font-size:0.8rem; margin-left:4px;"></span> <span id="total-sa-${ab}" class="ability-total-badge" title="Total Score">-</span></label>
                 <select class="styled-select sa-select" data-ability="${ab}" style="width:100%;">
                     <option value="" selected>--</option>
                     ${standardValues.map(v => `<option value="${v}">${v}</option>`).join('')}
@@ -4222,10 +4259,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 row.style.borderRadius = '4px';
 
                 row.innerHTML = `
-                    <span style="font-weight:bold; width:100px;">${ab} <span id="bonus-pb-${ab}" style="color:var(--red); font-size:0.8rem; margin-left:4px;"></span></span>
+                    <span style="font-weight:bold; width:100px;">${ab} <span id="bonus-pb-${ab}" style="color:var(--red); font-size:0.8rem; margin-left:4px;"></span> <span id="total-pb-${ab}" class="ability-total-badge" title="Total Score">${scores[ab]}</span></span>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <button class="btn-dec" style="width:24px; height:24px; cursor:pointer;">-</button>
-                        <span style="font-weight:bold; font-size:1.1rem; width:20px; text-align:center;">${score}</span>
+                        <span id="pb-val-${ab}" style="font-weight:bold; font-size:1.1rem; width:20px; text-align:center;">${score}</span>
                         <button class="btn-inc" style="width:24px; height:24px; cursor:pointer;">+</button>
                     </div>
                     <span style="color:var(--ink-light); font-size:0.8rem; width:50px; text-align:right;">(${cost} pts)</span>
@@ -4283,7 +4320,7 @@ document.addEventListener('DOMContentLoaded', () => {
             abilities.forEach(ab => {
                 const div = document.createElement('div');
                 div.innerHTML = `
-                    <label style="font-weight:bold; font-size:0.9rem;">${ab} <span id="bonus-rnd-${ab}" style="color:var(--red); font-size:0.8rem; margin-left:4px;"></span></label>
+                    <label style="font-weight:bold; font-size:0.9rem;">${ab} <span id="bonus-rnd-${ab}" style="color:var(--red); font-size:0.8rem; margin-left:4px;"></span> <span id="total-rnd-${ab}" class="ability-total-badge" title="Total Score">-</span></label>
                     <select class="styled-select random-select" data-ability="${ab}" style="width:100%;">
                         <option value="" selected>--</option>
                         ${rolls.map((v, i) => `<option value="${v}" data-index="${i}">${v}</option>`).join('')}
