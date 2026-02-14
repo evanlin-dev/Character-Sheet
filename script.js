@@ -879,8 +879,13 @@ window.openNoteEditor = function (
   header.innerText = itemName || "Item Notes";
   const displayDiv = document.createElement("div");
   displayDiv.className = "note-display";
-  displayDiv.innerHTML =
-    inputElement.value || "<em style='color:#999'>No notes...</em>";
+
+  const formatText = (text) => {
+      if (!text) return "<em style='color:#999'>No notes...</em>";
+      return text.replace(/\n/g, "<br>").replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+  };
+
+  displayDiv.innerHTML = formatText(inputElement.value);
   const textArea = document.createElement("textarea");
   textArea.className = "note-textarea";
   textArea.value = inputElement.value;
@@ -907,8 +912,7 @@ window.openNoteEditor = function (
       editBtn.innerText = "View Rendered";
       textArea.focus();
     } else {
-      displayDiv.innerHTML =
-        textArea.value || "<em style='color:#999'>No notes...</em>";
+      displayDiv.innerHTML = formatText(textArea.value);
       displayDiv.style.display = "block";
       textArea.style.display = "none";
       editBtn.innerText = "Edit Text";
@@ -2488,6 +2492,14 @@ window.removeSpellLevel = function (index) {
     saveCharacter();
   }
 };
+
+window.openSpellNoteEditor = function(btn) {
+    const row = btn.closest(".spell-row");
+    const nameInput = row.querySelector(".spell-name");
+    const descInput = row.querySelector(".spell-desc");
+    window.openNoteEditor(nameInput.value, descInput, btn);
+};
+
 window.addSpellRow = function (containerId, defaultLevel = 1, data = null) {
   const container = document.getElementById(containerId);
   const row = document.createElement("div");
@@ -2501,7 +2513,12 @@ window.addSpellRow = function (containerId, defaultLevel = 1, data = null) {
   const rChecked = data && data.ritual ? "checked" : "";
   const cChecked = data && data.concentration ? "checked" : "";
   const mChecked = data && data.material ? "checked" : "";
-  row.innerHTML = `<div class="drag-handle">☰</div><div class="spell-col-prep" style="${prepVisibility}"><span class="mobile-label">Prep</span><input type="checkbox" class="spell-check spell-prep" title="Prepared" ${isPrep ? "checked" : ""}></div><input type="number" class="spell-input spell-lvl" value="${lvl}" placeholder="Lvl" style="text-align:center;"><input type="text" class="spell-input spell-name" value="${data ? data.name : ""}" placeholder="Spell Name"><input type="text" class="spell-input spell-time" value="${data ? data.time : ""}" placeholder="1 Act"><input type="text" class="spell-input spell-range" value="${data ? data.range : ""}" placeholder="60 ft"><div class="spell-col-ritual"><span class="mobile-label">Ritual</span><input type="checkbox" class="spell-check spell-ritual" title="Ritual" ${rChecked}></div><div class="spell-col-conc"><span class="mobile-label">Conc</span><input type="checkbox" class="spell-check spell-conc" title="Concentration" ${cChecked}></div><div class="spell-col-mat"><span class="mobile-label">Mat</span><input type="checkbox" class="spell-check spell-mat" title="Material" ${mChecked}></div><input type="hidden" class="spell-desc" value="${data && data.description ? data.description.replace(/"/g, "&quot;") : ""}"><span class="skill-info-btn" onclick="showSpellInfo(this)" style="cursor:pointer; font-size:0.8rem;">?</span><button class="delete-feature-btn" onclick="this.parentElement.remove(); saveCharacter()">×</button>`;
+  
+  const descVal = data && data.description ? data.description.replace(/"/g, "&quot;") : "";
+  const hasNotes = descVal && descVal.length > 0;
+  const noteBtnClass = hasNotes ? "note-btn has-notes" : "note-btn";
+
+  row.innerHTML = `<div class="drag-handle">☰</div><div class="spell-col-prep" style="${prepVisibility}"><span class="mobile-label">Prep</span><input type="checkbox" class="spell-check spell-prep" title="Prepared" ${isPrep ? "checked" : ""}></div><input type="number" class="spell-input spell-lvl" value="${lvl}" placeholder="Lvl" style="text-align:center;"><input type="text" class="spell-input spell-name" value="${data ? data.name : ""}" placeholder="Spell Name"><input type="text" class="spell-input spell-time" value="${data ? data.time : ""}" placeholder="1 Act"><input type="text" class="spell-input spell-range" value="${data ? data.range : ""}" placeholder="60 ft"><div class="spell-col-ritual"><span class="mobile-label">Ritual</span><input type="checkbox" class="spell-check spell-ritual" title="Ritual" ${rChecked}></div><div class="spell-col-conc"><span class="mobile-label">Conc</span><input type="checkbox" class="spell-check spell-conc" title="Concentration" ${cChecked}></div><div class="spell-col-mat"><span class="mobile-label">Mat</span><input type="checkbox" class="spell-check spell-mat" title="Material" ${mChecked}></div><input type="hidden" class="spell-desc" value="${descVal}"><button class="${noteBtnClass}" onclick="openSpellNoteEditor(this)" title="Edit Description">📝</button><button class="delete-feature-btn" onclick="this.parentElement.remove(); saveCharacter()">×</button>`;
 
   const prepBox = row.querySelector(".spell-prep");
   if (!isCantrip) {
@@ -2529,7 +2546,7 @@ window.showSpellInfo = function (btn) {
   document.getElementById("infoModalTitle").textContent =
     name || "Spell Description";
   document.getElementById("infoModalText").innerHTML = desc
-    ? desc.replace(/\n/g, "<br>")
+    ? desc.replace(/\n/g, "<br>").replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
     : "No description available.";
   document.getElementById("infoModal").style.display = "flex";
 };
