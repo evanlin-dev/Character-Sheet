@@ -792,13 +792,9 @@ document.addEventListener('DOMContentLoaded', () => {
         uniqueFeatures.forEach(f => {
             const div = document.createElement('div');
             div.className = 'feature-wrapper';
+            div.className = 'feature-wrapper mb-2 border rounded bg-white overflow-hidden';
             const featureKey = `${f.name}-${f.level}`;
             div.dataset.key = featureKey;
-            div.style.marginBottom = '10px';
-            div.style.border = '1px solid var(--gold)';
-            div.style.borderRadius = '4px';
-            div.style.backgroundColor = 'white';
-            div.style.overflow = 'hidden';
 
             if (f.isSubclassFeature) {
                 div.style.backgroundColor = "rgba(212, 165, 116, 0.1)";
@@ -812,10 +808,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Header
             const header = document.createElement('div');
-            header.style.padding = '10px';
-            header.style.display = 'flex';
-            header.style.justifyContent = 'space-between';
-            header.style.alignItems = 'center';
+            header.className = 'd-flex justify-content-between align-items-center p-2';
             header.style.cursor = 'pointer';
             header.style.background = f.isSubclassFeature ? "rgba(212, 165, 116, 0.2)" : "rgba(0,0,0,0.02)";
             header.style.transition = "background 0.2s";
@@ -825,22 +818,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
             header.innerHTML = `
                 <div>
-                    <span style="font-weight:bold; color:var(--red-dark); margin-right:5px;">Lvl ${f.level}</span> 
-                    <span style="font-weight:bold;">${f.name}</span>${subLabel}
+                    <span class="font-bold text-red-dark" style="margin-right:5px;">Lvl ${f.level}</span> 
+                    <span class="font-bold">${f.name}</span>${subLabel}
                 </div>
-                <span class="toggle-icon" style="font-size:0.8rem; color:var(--ink-light);">▼</span>
+                <span class="toggle-icon text-small text-ink-light">▼</span>
             `;
 
             // Content Container
             const contentDiv = document.createElement('div');
             contentDiv.className = 'feature-content';
+            contentDiv.className = 'feature-content p-2 border-top text-small text-ink';
             const isOpen = openKeys.has(featureKey);
             contentDiv.style.display = isOpen ? 'block' : 'none';
-            contentDiv.style.padding = '10px';
-            contentDiv.style.borderTop = '1px solid var(--gold)';
-            contentDiv.style.fontSize = '0.9rem';
-            contentDiv.style.lineHeight = '1.5';
-            contentDiv.style.color = 'var(--ink)';
             
             contentDiv.innerHTML = `<div style="margin-bottom:10px;">${desc}</div>`;
 
@@ -955,18 +944,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Render Parent Feat Description if we have a version selected
                     if (parentFeat) {
                         const parentDiv = document.createElement('div');
-                        parentDiv.style.marginTop = "10px";
-                        parentDiv.style.padding = "10px";
+                        parentDiv.className = "mt-2 p-2 border rounded";
                         parentDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
-                        parentDiv.style.border = "1px solid var(--gold)";
-                        parentDiv.style.borderRadius = "4px";
                         
                         let parentDesc = processEntries(parentFeat.entries);
                         parentDesc = formatDescription(parentDesc);
 
                         parentDiv.innerHTML = `
-                            <div style="font-weight:bold; color:var(--red-dark); border-bottom:1px solid var(--gold-dark); padding-bottom:4px; margin-bottom:6px;">Feat: ${parentFeat.name}</div>
-                            <div style="font-size:0.85rem; color:var(--ink); line-height:1.4;">${parentDesc}</div>
+                            <div class="font-bold text-red-dark border-bottom pb-1 mb-1">Feat: ${parentFeat.name}</div>
+                            <div class="text-small text-ink" style="line-height:1.4;">${parentDesc}</div>
                         `;
                         targetParent.appendChild(parentDiv);
                     }
@@ -980,11 +966,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (feat) {
                         const featDiv = document.createElement('div');
-                        featDiv.style.marginTop = "10px";
-                        featDiv.style.padding = "10px";
+                        featDiv.className = "mt-2 p-2 border rounded";
                         featDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
-                        featDiv.style.border = "1px solid var(--gold)";
-                        featDiv.style.borderRadius = "4px";
                         
                         let featDesc = processEntries(feat.entries);
                         featDesc = formatDescription(featDesc);
@@ -1012,9 +995,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
 
                         featDiv.innerHTML = `
-                            <div style="font-weight:bold; color:var(--red-dark); border-bottom:1px solid var(--gold-dark); padding-bottom:4px; margin-bottom:6px;">${parentFeat ? 'Version: ' : 'Feat: '}${selectedFeatName.includes('Magic Initiate') ? selectedFeatName : feat.name} <span style="color:var(--ink-light); font-weight:normal; font-size:0.8rem;">[${feat.source}]</span></div>
+                            <div class="font-bold text-red-dark border-bottom pb-1 mb-1">${parentFeat ? 'Version: ' : 'Feat: '}${selectedFeatName.includes('Magic Initiate') ? selectedFeatName : feat.name} <span class="text-ink-light font-normal text-small">[${feat.source}]</span></div>
                             ${prereqDisplay}
-                            <div style="font-size:0.85rem; color:var(--ink); line-height:1.4;">${featDesc}</div>
+                            <div class="text-small text-ink" style="line-height:1.4;">${featDesc}</div>
                         `;
                         targetParent.appendChild(featDiv);
                     }
@@ -1066,36 +1049,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Render Parent Feat Description if we have a version selected
                     if (parentFeat) {
                         const parentDiv = document.createElement('div');
-                        parentDiv.style.marginTop = "10px";
-                        parentDiv.style.padding = "10px";
+                        parentDiv.className = "mt-2 p-2 border rounded";
                         parentDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
-                        parentDiv.style.border = "1px solid var(--gold)";
-                        parentDiv.style.borderRadius = "4px";
                         
                         let parentDesc = processEntries(parentFeat.entries);
                         parentDesc = formatDescription(parentDesc);
 
                         parentDiv.innerHTML = `
-                            <div style="font-weight:bold; color:var(--red-dark); border-bottom:1px solid var(--gold-dark); padding-bottom:4px; margin-bottom:6px;">Feat: ${parentFeat.name}</div>
-                            <div style="font-size:0.85rem; color:var(--ink); line-height:1.4;">${parentDesc}</div>
+                            <div class="font-bold text-red-dark border-bottom pb-1 mb-1">Feat: ${parentFeat.name}</div>
+                            <div class="text-small text-ink" style="line-height:1.4;">${parentDesc}</div>
                         `;
                         targetParent.appendChild(parentDiv);
                     }
 
                     if (feat) {
                         const featDiv = document.createElement('div');
-                        featDiv.style.marginTop = "10px";
-                        featDiv.style.padding = "10px";
+                        featDiv.className = "mt-2 p-2 border rounded";
                         featDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
-                        featDiv.style.border = "1px solid var(--gold)";
-                        featDiv.style.borderRadius = "4px";
                         
                         let featDesc = processEntries(feat.entries);
                         featDesc = formatDescription(featDesc);
 
                         featDiv.innerHTML = `
-                            <div style="font-weight:bold; color:var(--red-dark); border-bottom:1px solid var(--gold-dark); padding-bottom:4px; margin-bottom:6px;">${parentFeat ? 'Version: ' : 'Feat: '}${feat.name}</div>
-                            <div style="font-size:0.85rem; color:var(--ink); line-height:1.4;">${featDesc}</div>
+                            <div class="font-bold text-red-dark border-bottom pb-1 mb-1">${parentFeat ? 'Version: ' : 'Feat: '}${feat.name}</div>
+                            <div class="text-small text-ink" style="line-height:1.4;">${featDesc}</div>
                         `;
                         targetParent.appendChild(featDiv);
                     }
@@ -1115,11 +1092,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     if (skillOptions.length > 0) {
                         const pkDiv = document.createElement('div');
-                        pkDiv.style.marginTop = "10px";
-                        pkDiv.style.padding = "10px";
+                        pkDiv.className = "mt-2 p-2 border rounded";
                         pkDiv.style.background = "rgba(255,255,255,0.5)";
-                        pkDiv.style.border = "1px solid var(--gold)";
-                        pkDiv.style.borderRadius = "4px";
                         
                         pkDiv.innerHTML = `<strong>Primal Knowledge:</strong> Choose one additional skill proficiency from the Barbarian list.`;
                         
@@ -1193,18 +1167,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (feat) {
                         const featDiv = document.createElement('div');
-                        featDiv.style.marginTop = "10px";
-                        featDiv.style.padding = "10px";
+                        featDiv.className = "mt-2 p-2 border rounded";
                         featDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
-                        featDiv.style.border = "1px solid var(--gold)";
-                        featDiv.style.borderRadius = "4px";
                         
                         let featDesc = processEntries(feat.entries);
                         featDesc = formatDescription(featDesc);
 
                         featDiv.innerHTML = `
-                            <div style="font-weight:bold; color:var(--red-dark); border-bottom:1px solid var(--gold-dark); padding-bottom:4px; margin-bottom:6px;">Feat: ${feat.name}</div>
-                            <div style="font-size:0.85rem; color:var(--ink); line-height:1.4;">${featDesc}</div>
+                            <div class="font-bold text-red-dark border-bottom pb-1 mb-1">Feat: ${feat.name}</div>
+                            <div class="text-small text-ink" style="line-height:1.4;">${featDesc}</div>
                         `;
                         targetParent.appendChild(featDiv);
                     }
@@ -1256,14 +1227,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const uniqueId = `preview-${f.name.replace(/[^a-zA-Z0-9]/g, '')}-${f.level}-${Math.random().toString(36).substr(2, 5)}`;
 
             div.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <span style="font-weight:bold; color:var(--red-dark); margin-right:5px;">Lvl ${f.level}</span> 
-                        <span style="font-weight:bold;">${f.name}</span>
+                        <span class="font-bold text-red-dark" style="margin-right:5px;">Lvl ${f.level}</span> 
+                        <span class="font-bold">${f.name}</span>
                     </div>
-                    <span class="toggle-icon" style="font-size:0.8rem; color:var(--ink-light);">▼</span>
+                    <span class="toggle-icon text-small text-ink-light">▼</span>
                 </div>
-                <div id="${uniqueId}" style="display:none; margin-top:8px; font-size:0.9rem; color:var(--ink); line-height:1.4; padding: 8px; background: rgba(255,255,255,0.5); border-radius: 4px;">
+                <div id="${uniqueId}" class="mt-2 text-small text-ink p-2 rounded" style="display:none; line-height:1.4; background: rgba(255,255,255,0.5);">
                     ${desc || "No description available."}
                 </div>
             `;
@@ -1425,7 +1396,7 @@ document.addEventListener('DOMContentLoaded', () => {
              
              html += `<div style="margin-bottom:15px;">`;
              html += `<h4 style="margin:10px 0 8px 0; color:var(--red-dark); font-family:'Cinzel',serif;">Starting Equipment</h4>`;
-             html += `<div class="equip-selection-container" style="display:flex; gap:15px; flex-wrap:wrap;">`;
+             html += `<div class="equip-selection-container d-flex flex-wrap" style="gap:15px;">`;
              
              if (match) {
                  const optA = clean(match[1]);
@@ -1433,9 +1404,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                  // Option A
                  html += `
-                 <label class="equip-option-box selected" style="flex:1; min-width:250px; border:2px solid var(--red); background:var(--parchment); padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative; display:flex; flex-direction:column;">
+                 <label class="equip-option-box selected d-flex flex-column" style="flex:1; min-width:250px; border:2px solid var(--red); background:var(--parchment); padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
                     <input type="radio" name="class_equip_choice" value="equipment_a" checked style="display:none;" onchange="window.updateEquipSelection(this)">
-                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--gold); padding-bottom:8px; margin-bottom:8px;">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
                         <span style="font-weight:bold; color:var(--red-dark); font-size:1.05rem;">Option A</span>
                         <span class="check-indicator" style="color:var(--red); font-weight:bold; font-size:1.2rem;">✓</span>
                     </div>
@@ -1445,9 +1416,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                  // Option B
                  html += `
-                 <label class="equip-option-box" style="flex:1; min-width:250px; border:1px solid var(--gold); background:white; padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative; display:flex; flex-direction:column;">
+                 <label class="equip-option-box d-flex flex-column" style="flex:1; min-width:250px; border:1px solid var(--gold); background:white; padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
                     <input type="radio" name="class_equip_choice" value="equipment_b" style="display:none;" onchange="window.updateEquipSelection(this)">
-                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--gold); padding-bottom:8px; margin-bottom:8px;">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
                         <span style="font-weight:bold; color:var(--red-dark); font-size:1.05rem;">Option B</span>
                         <span class="check-indicator" style="display:none; color:var(--red); font-weight:bold; font-size:1.2rem;">✓</span>
                     </div>
@@ -1467,9 +1438,9 @@ document.addEventListener('DOMContentLoaded', () => {
                  }
 
                  html += `
-                 <label class="equip-option-box selected" style="flex:1; min-width:250px; border:2px solid var(--red); background:var(--parchment); padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative; display:flex; flex-direction:column;">
+                 <label class="equip-option-box selected d-flex flex-column" style="flex:1; min-width:250px; border:2px solid var(--red); background:var(--parchment); padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
                     <input type="radio" name="class_equip_choice" value="equipment" checked style="display:none;" onchange="window.updateEquipSelection(this)">
-                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--gold); padding-bottom:8px; margin-bottom:8px;">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
                         <span style="font-weight:bold; color:var(--red-dark); font-size:1.05rem;">Standard Equipment</span>
                         <span class="check-indicator" style="color:var(--red); font-weight:bold; font-size:1.2rem;">✓</span>
                     </div>
@@ -1834,11 +1805,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const container = document.createElement('div');
-        container.style.marginTop = "10px";
-        container.style.padding = "10px";
+        container.className = "mt-2 p-2 border rounded";
         container.style.background = "rgba(255,255,255,0.5)";
-        container.style.border = "1px solid var(--gold)";
-        container.style.borderRadius = "4px";
 
         const title = document.createElement('div');
         title.textContent = specificSpellLevel !== null ? `Available Spells (Level ${specificSpellLevel})` : "Available Spells";
@@ -2033,11 +2001,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (available.length === 0) return;
 
         const container = document.createElement('div');
-        container.style.marginTop = "10px";
-        container.style.padding = "10px";
+        container.className = "mt-2 p-2 border rounded";
         container.style.background = "rgba(255,255,255,0.5)";
-        container.style.border = "1px solid var(--gold)";
-        container.style.borderRadius = "4px";
 
         const title = document.createElement('div');
         title.textContent = "Available Options";
@@ -2049,9 +2014,7 @@ document.addEventListener('DOMContentLoaded', () => {
         container.appendChild(title);
 
         const list = document.createElement('div');
-        list.style.display = "flex";
-        list.style.flexDirection = "column";
-        list.style.gap = "4px";
+        list.className = "d-flex flex-column gap-1";
 
         available.forEach(opt => {
             const div = document.createElement('div');
@@ -2227,11 +2190,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const sortedWeapons = Array.from(validWeapons).sort();
 
         const container = document.createElement('div');
-        container.style.marginTop = "10px";
-        container.style.padding = "10px";
+        container.className = "mt-2 p-2 border rounded";
         container.style.background = "rgba(255,255,255,0.5)";
-        container.style.border = "1px solid var(--gold)";
-        container.style.borderRadius = "4px";
 
         container.innerHTML = `<div style="font-weight:bold; margin-bottom:8px; border-bottom:1px solid var(--gold-dark);">Choose ${count} Weapon Masteries:</div>`;
         
@@ -2289,11 +2249,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderFeatSelection(parentElement, feature, className, charLevel) {
         const container = document.createElement('div');
-        container.style.marginTop = "10px";
-        container.style.padding = "10px";
+        container.className = "mt-2 p-2 border rounded";
         container.style.background = "rgba(255,255,255,0.5)";
-        container.style.border = "1px solid var(--gold)";
-        container.style.borderRadius = "4px";
 
         container.innerHTML = `<div style="font-weight:bold; margin-bottom:8px; border-bottom:1px solid var(--gold-dark);">Select a Feat (Level ${charLevel}):</div>`;
 
@@ -2660,11 +2617,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (hasNamedOptions && selectedFeatName) {
                 const optDiv = document.createElement('div');
-                optDiv.style.marginTop = "10px";
-                optDiv.style.padding = "10px";
-                optDiv.style.border = "1px solid var(--gold)";
+                optDiv.className = "mt-2 p-2 border rounded";
                 optDiv.style.background = "rgba(255,255,255,0.5)";
-                optDiv.style.borderRadius = "4px";
 
                 const options = [...new Set(featObj.additionalSpells.map(s => s.name).filter(n => n))].sort();
                 
@@ -2723,11 +2677,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (featObj && featObj.additionalSpells && selectedFeatName) {
                 // Handle feats without named options (direct grants)
                 const spellChoiceDiv = document.createElement('div');
-                spellChoiceDiv.style.marginTop = "10px";
-                spellChoiceDiv.style.padding = "10px";
-                spellChoiceDiv.style.border = "1px solid var(--gold)";
+                spellChoiceDiv.className = "mt-2 p-2 border rounded";
                 spellChoiceDiv.style.background = "rgba(255,255,255,0.5)";
-                spellChoiceDiv.style.borderRadius = "4px";
                 
                 renderSpellChoices(spellChoiceDiv, featObj.additionalSpells);
                 if (spellChoiceDiv.hasChildNodes()) {
@@ -2746,11 +2697,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (currentMIClass) {
                     const miDiv = document.createElement('div');
-                    miDiv.style.marginTop = "10px";
-                    miDiv.style.padding = "10px";
-                    miDiv.style.border = "1px solid var(--gold)";
+                    miDiv.className = "mt-2 p-2 border rounded";
                     miDiv.style.background = "rgba(255,255,255,0.5)";
-                    miDiv.style.borderRadius = "4px";
                     
                     renderMagicInitiateSpells(miDiv, currentMIClass);
                     container.appendChild(miDiv);
@@ -2981,8 +2929,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 desc = formatDescription(desc);
                 
                 div.innerHTML = `
-                    <div style="font-weight:bold; color:var(--red-dark); cursor:pointer; display:flex; justify-content:space-between;" onclick="const d = this.nextElementSibling; d.style.display = d.style.display === 'none' ? 'block' : 'none';">
-                        <span>${f.name}</span> <span style="font-size:0.8rem; color:var(--ink-light);">▼</span>
+                    <div class="font-bold text-red-dark cursor-pointer d-flex justify-content-between" onclick="const d = this.nextElementSibling; d.style.display = d.style.display === 'none' ? 'block' : 'none';">
+                        <span>${f.name}</span> <span class="text-small text-ink-light">▼</span>
                     </div>
                     <div style="display:none; margin-top:5px; font-size:0.9rem; line-height:1.4; color:var(--ink);">${desc}</div>
                 `;

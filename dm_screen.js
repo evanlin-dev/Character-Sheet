@@ -79,17 +79,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const createPlayerElement = (name) => {
         if (name) {
             const div = document.createElement('div');
-            div.style.display = "flex";
-            div.style.justifyContent = "space-between";
-            div.style.alignItems = "center";
-            div.style.padding = "8px 12px";
-            div.style.marginBottom = "8px";
-            div.style.backgroundColor = "white";
-            div.style.border = "1px solid var(--gold)";
-            div.style.borderRadius = "4px";
-            div.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
+            div.className = "d-flex justify-content-between align-items-center p-2 mb-2 bg-white border rounded shadow-sm";
             div.innerHTML = `
-                <span style="font-weight: 600; color: var(--ink); font-family: 'Cinzel', serif;">${name}</span>
+                <span class="font-bold text-ink" style="font-family: 'Cinzel', serif;">${name}</span>
                 <button class="delete-feature-btn" title="Remove Player">&times;</button>
             `;
             div.querySelector('.delete-feature-btn').addEventListener('click', () => {
@@ -125,21 +117,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const session = document.createElement('div');
         session.classList.add('session');
         session.innerHTML = `
-            <div class="session-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--gold); padding-bottom: 5px; margin-bottom: 10px;">
-                <h2 style="margin: 0; cursor: pointer;" title="Click to rename">${title}</h2>
-                <div style="display: flex; gap: 5px;">
+            <div class="session-header d-flex justify-content-between align-items-center border-bottom mb-2 pb-1">
+                <h2 class="m-0 cursor-pointer" title="Click to rename">${title}</h2>
+                <div class="d-flex gap-1">
                     <button class="btn btn-secondary collapse-session-btn" style="padding: 4px 8px; font-size: 0.8rem; height: auto; min-width: 30px;">-</button>
                     <button class="btn btn-danger delete-session-btn" style="padding: 4px 8px; font-size: 0.8rem; height: auto;">&times;</button>
                 </div>
             </div>
             <div class="session-content">
                 <div class="dice-log">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                        <h3 style="margin: 0;">Dice Rolls</h3>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <h3 class="m-0">Dice Rolls</h3>
                         <button class="btn btn-secondary stats-btn" style="padding: 2px 8px; font-size: 0.7rem;">Get Stats</button>
                     </div>
                     <div class="dice-rolls-buckets"></div>
-                    <div style="display: flex; gap: 5px;">
+                    <div class="d-flex gap-1">
                         <select class="add-roll-player player-select styled-select"><option value="" disabled selected>Select Player</option></select>
                         <input type="number" class="add-roll-value" placeholder="Roll">
                         <button class="btn btn-secondary add-roll-btn">Add</button>
@@ -147,25 +139,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="battle-container">
                     <div class="monsters-section" style="margin-bottom: 20px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                            <h3 style="margin: 0;">Monsters List</h3>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <h3 class="m-0">Monsters List</h3>
                             <button class="btn btn-secondary clear-monsters-btn" style="padding: 2px 8px; font-size: 0.7rem;">Clear</button>
                         </div>
                         <div class="monsters-list" style="margin-bottom: 10px;"></div>
-                        <div class="add-monster" style="display: flex; gap: 5px;">
-                            <input type="text" class="add-monster-input styled-select" placeholder="Monster Name" style="flex-grow: 1;">
+                        <div class="add-monster d-flex gap-1">
+                            <input type="text" class="add-monster-input styled-select flex-grow-1" placeholder="Monster Name">
                             <button class="btn btn-secondary add-monster-btn">Add</button>
                         </div>
                         <datalist id="monster-datalist-${uniqueID}"></datalist>
                     </div>
                     <div class="initiative-tracker">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                            <h3 style="margin: 0;">Initiative Tracker</h3>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <h3 class="m-0">Initiative Tracker</h3>
                             <button class="btn btn-secondary clear-init-btn" style="padding: 2px 8px; font-size: 0.7rem;">Clear</button>
                         </div>
                         <div class="initiative-list"></div>
-                        <div class="add-character" style="display: flex; gap: 5px;">
-                            <div style="flex-grow: 1; display: flex; gap: 5px;">
+                        <div class="add-character d-flex gap-1">
+                            <div class="flex-grow-1 d-flex gap-1">
                                 <select class="add-char-name-select player-select styled-select" style="width: 100%;"><option value="" disabled selected>Select Player</option></select>
                                 <select class="add-char-name-input styled-select" style="display: none; width: 100%;"><option value="" disabled selected>Select Monster</option></select>
                                 <button class="btn btn-secondary toggle-init-input-btn" style="padding: 0 8px; min-width: 30px;" title="Switch to Monsters">M</button>
@@ -175,9 +167,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     <div class="battle-log">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                            <h3 style="margin: 0;">Battle Log</h3>
-                            <div style="display: flex; gap: 5px;">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <h3 class="m-0">Battle Log</h3>
+                            <div class="d-flex gap-1">
                                 <button class="btn btn-secondary mvp-btn" style="padding: 2px 8px; font-size: 0.7rem;">MVP Tracker</button>
                                 <button class="btn btn-secondary clear-log-btn" style="padding: 2px 8px; font-size: 0.7rem;">Clear Log</button>
                             </div>
@@ -235,14 +227,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const bucketsContainer = session.querySelector('.dice-rolls-buckets');
         for (let i = 20; i >= 1; i--) {
             const bucket = document.createElement('div');
-            bucket.style.border = "1px solid var(--gold)";
-            bucket.style.borderRadius = "4px";
-            bucket.style.padding = "4px";
-            bucket.style.backgroundColor = "white";
+            bucket.className = "border rounded p-1 bg-white";
             bucket.style.minHeight = "50px";
-            bucket.style.fontSize = "0.8rem";
             bucket.dataset.value = i;
-            bucket.innerHTML = `<div style="font-weight:bold; color:var(--red-dark); border-bottom:1px solid #eee; margin-bottom:2px; text-align:center;">${i}</div><div class="bucket-players" style="display:flex; flex-wrap:wrap; gap:2px; justify-content:center;"></div>`;
+            bucket.innerHTML = `<div class="font-bold text-red-dark text-center text-small mb-1" style="border-bottom:1px solid #eee;">${i}</div><div class="bucket-players d-flex flex-wrap justify-content-center" style="gap:2px;"></div>`;
             bucketsContainer.appendChild(bucket);
         }
 
@@ -256,11 +244,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     span.textContent = rollData.count > 1 ? `${rollData.name} x${rollData.count}` : rollData.name;
                     span.dataset.name = rollData.name;
                     span.dataset.count = rollData.count;
-                    span.style.backgroundColor = "var(--parchment-dark)";
-                    span.style.padding = "1px 4px";
-                    span.style.borderRadius = "3px";
-                    span.style.fontSize = "0.75rem";
-                    span.style.border = "1px solid var(--gold-dark)";
+                    span.className = "bg-parchment-dark px-2 rounded text-xs border";
+                    span.style.borderColor = "var(--gold-dark)";
                     bucket.appendChild(span);
                 }
             });
@@ -277,9 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
             data.logs.forEach(logHTML => {
                 const logElement = document.createElement('div');
                 logElement.classList.add('log-entry');
-                logElement.style.display = "flex";
-                logElement.style.justifyContent = "space-between";
-                logElement.style.alignItems = "center";
+                logElement.className = "log-entry d-flex justify-content-between align-items-center";
                 logElement.innerHTML = `<span class="log-content">${logHTML}</span><button class="delete-feature-btn" style="margin-left: 8px;">&times;</button>`;
                 
                 logElement.querySelector('.delete-feature-btn').addEventListener('click', () => {
@@ -318,17 +301,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function addMonster(name, skipSave = false) {
             const div = document.createElement('div');
-            div.style.display = "flex";
-            div.style.justifyContent = "space-between";
-            div.style.alignItems = "center";
-            div.style.padding = "8px 12px";
-            div.style.marginBottom = "8px";
-            div.style.backgroundColor = "white";
-            div.style.border = "1px solid var(--gold)";
-            div.style.borderRadius = "4px";
-            div.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
+            div.className = "d-flex justify-content-between align-items-center p-2 mb-2 bg-white border rounded shadow-sm";
             div.innerHTML = `
-                <span style="font-weight: 600; color: var(--ink); font-family: 'Cinzel', serif;">${name}</span>
+                <span class="font-bold text-ink" style="font-family: 'Cinzel', serif;">${name}</span>
                 <button class="delete-feature-btn" title="Remove Monster">&times;</button>
             `;
             div.querySelector('.delete-feature-btn').addEventListener('click', () => {
@@ -532,11 +507,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         span.textContent = player;
                         span.dataset.name = player;
                         span.dataset.count = 1;
-                        span.style.backgroundColor = "var(--parchment-dark)";
-                        span.style.padding = "1px 4px";
-                        span.style.borderRadius = "3px";
-                        span.style.fontSize = "0.75rem";
-                        span.style.border = "1px solid var(--gold-dark)";
+                        span.className = "bg-parchment-dark px-2 rounded text-xs border";
+                        span.style.borderColor = "var(--gold-dark)";
                         bucket.appendChild(span);
                     }
                 }
@@ -658,8 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const damageText = (outcome === 'succeed' && damage) ? ` <span class="damage">${damage}</span> dmg` : '';
 
                 logElement.style.display = "flex";
-                logElement.style.justifyContent = "space-between";
-                logElement.style.alignItems = "center";
+                logElement.className = "log-entry d-flex justify-content-between align-items-center";
                 logElement.innerHTML = `<span class="log-content">${player} ${actionType} ${monster} (<span class="${outcome === 'fail' ? 'fail' : ''}">${outcomeText}</span>)${damageText}</span><button class="delete-feature-btn" style="margin-left: 8px;">&times;</button>`;
                 
                 logElement.querySelector('.delete-feature-btn').addEventListener('click', () => {
