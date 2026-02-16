@@ -140,6 +140,7 @@ const conditionsDB = {
   Unconscious:
     "Incapacitated. Drop held items. Prone. Auto-fail Str/Dex saves. Attacks against you have Advantage and are crits if within 5ft.",
 };
+window.conditionsDB = {};
 
 const conditionIcons = {
   Blinded: "🙈",
@@ -1117,11 +1118,12 @@ async function checkDataUploadStatus() {
         loadActionsFromData(parsedData);
         loadTablesFromData(parsedData);
         loadLanguagesFromData(parsedData);
+        loadConditionsFromData(parsedData);
       }
       const btnItems = document.getElementById("btn-search-items-zip");
       const btnCantrips = document.getElementById("btn-search-cantrips-zip");
       const btnSpells = document.getElementById("btn-search-spells-zip");
-      const hasData = !!req.result;
+      const hasData = req.result && req.result.length > 0;
 
       // Inject Feat Search Button if missing
       let btnFeats = document.getElementById("btn-search-feats-zip");
@@ -1240,6 +1242,31 @@ async function checkDataUploadStatus() {
           input.placeholder = "Enter weapon name";
         }
       });
+
+      // Toggle Conditions Input
+      const condInput = document.getElementById("activeConditionsInput");
+      const condDisplay = document.getElementById("conditionsDisplay");
+      if (condInput) {
+          const hasConditions = window.conditionsDB && Object.keys(window.conditionsDB).length > 0;
+          if (hasData && hasConditions) {
+              condInput.setAttribute("readonly", "true");
+              condInput.onclick = window.openConditionModal;
+              condInput.style.cursor = "pointer";
+              condInput.placeholder = "Click to select conditions...";
+              condInput.style.display = "block";
+              condInput.type = "text";
+              if (condDisplay) condDisplay.style.display = "none";
+          } else {
+              condInput.removeAttribute("readonly");
+              condInput.removeAttribute("onclick");
+              condInput.onclick = null;
+              condInput.style.cursor = "text";
+              condInput.placeholder = "Enter conditions (comma separated)...";
+              condInput.style.display = "block";
+              condInput.type = "text";
+              if (condDisplay) condDisplay.style.display = "none";
+          }
+      }
 
       // Check for pending level up after data is confirmed available
       if (localStorage.getItem('pendingLevelUp') === 'true') {
@@ -1893,6 +1920,35 @@ function loadLanguagesFromData(parsedData) {
   allLanguagesCache = Array.from(unique.values()).sort((a,b) => a.name.localeCompare(b.name));
 }
 
+function loadConditionsFromData(parsedData) {
+  if (!parsedData) return;
+  const conditionMap = new Map();
+  
+  parsedData.forEach((json) => {
+      const arrays = [json.condition, json.status];
+      arrays.forEach(arr => {
+          if (Array.isArray(arr)) {
+              arr.forEach(c => {
+                  if (!c.name) return;
+                  if (!conditionMap.has(c.name)) {
+                      conditionMap.set(c.name, c);
+                  } else {
+                      const existing = conditionMap.get(c.name);
+                      if (c.source === 'XPHB') conditionMap.set(c.name, c);
+                      else if (c.source === 'PHB' && existing.source !== 'XPHB') conditionMap.set(c.name, c);
+                  }
+              });
+          }
+      });
+  });
+
+  window.conditionsDB = {};
+  Array.from(conditionMap.keys()).sort().forEach(name => {
+      const c = conditionMap.get(name);
+      window.conditionsDB[name] = window.cleanText(window.processEntries(c.entries));
+  });
+}
+
 window.openLanguageSearch = function() {
     let modal = document.getElementById("languageSearchModal");
     if (!modal) {
@@ -2130,18 +2186,29 @@ function renderFeatSearchPage() {
 /* =========================================
       4. WEAPONS, CONDITIONS, MODALS
       ========================================= */
-window.openConditionModal = function () {
+window.openConditionModal = function (targetCondition = null) {
+  if (!window.isDataAvailable) return;
   const container = document.getElementById("conditionListContainer");
   container.innerHTML = "";
   const currentVal = document.getElementById("activeConditionsInput").value;
   const activeList = currentVal ? currentVal.split(",") : [];
-  Object.keys(conditionsDB).forEach((name) => {
-    const desc = conditionsDB[name];
+  
+  let targetEl = null;
+
+  Object.keys(window.conditionsDB).forEach((name) => {
+    const desc = window.conditionsDB[name];
     const div = document.createElement("div");
     div.className = "checklist-item";
     div.style.flexDirection = "column";
     div.style.alignItems = "flex-start";
     div.style.padding = "10px";
+    
+    if (targetCondition && name === targetCondition) {
+        targetEl = div;
+        div.style.border = "2px solid var(--red)";
+        div.style.backgroundColor = "var(--parchment)";
+    }
+
     const topRow = document.createElement("div");
     topRow.style.display = "flex";
     topRow.style.alignItems = "center";
@@ -2165,6 +2232,7 @@ window.openConditionModal = function () {
     descText.style.marginLeft = "26px";
     descText.style.lineHeight = "1.4";
     descText.textContent = desc;
+    descText.innerHTML = desc;
     div.appendChild(topRow);
     div.appendChild(descText);
     div.onclick = (e) => {
@@ -2176,6 +2244,12 @@ window.openConditionModal = function () {
     container.appendChild(div);
   });
   document.getElementById("conditionModal").style.display = "flex";
+  
+  if (targetEl) {
+      setTimeout(() => {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+  }
 };
 window.closeConditionModal = () =>
   (document.getElementById("conditionModal").style.display = "none");
@@ -2192,6 +2266,9 @@ function saveConditionsSelection() {
 window.renderConditionTags = function () {
   const val = document.getElementById("activeConditionsInput").value;
   const display = document.getElementById("conditionsDisplay");
+  
+  updateStickyConditions(val ? val.split(",") : []);
+
   if (!val) {
     display.textContent = "None";
     display.style.color = "var(--ink-light)";
@@ -2200,6 +2277,63 @@ window.renderConditionTags = function () {
   display.textContent = val.split(",").join(", ");
   display.style.color = "var(--red)";
 };
+
+function updateStickyConditions(conditions) {
+  let container = document.getElementById("sticky-conditions-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "sticky-conditions-container";
+    document.body.appendChild(container);
+  }
+  container.innerHTML = "";
+  conditions.forEach((c) => {
+    const cleanC = c.trim();
+    if (!cleanC) return;
+    const icon = conditionIcons[cleanC] || "⚠️";
+    const div = document.createElement("div");
+    div.className = "sticky-condition-icon";
+    // div.title = cleanC; // Removed title to use custom label
+    div.innerHTML = `<span class="cond-icon">${icon}</span><span class="cond-label">${cleanC}</span>`;
+    
+    div.onclick = function(e) {
+        e.stopPropagation();
+        
+        if (!window.isDataAvailable) {
+            // Free text mode: clicking icon removes it
+            const currentVal = document.getElementById("activeConditionsInput").value;
+            const list = currentVal.split(",").map(s => s.trim());
+            const index = list.indexOf(cleanC);
+            if (index > -1) {
+                list.splice(index, 1);
+                document.getElementById("activeConditionsInput").value = list.join(", ");
+                window.renderConditionTags();
+                window.saveCharacter();
+            }
+            return;
+        }
+
+        // Check for hover capability (Desktop vs Mobile)
+        const hasHover = window.matchMedia('(hover: hover)').matches;
+        
+        if (hasHover) {
+            window.openConditionModal(cleanC);
+        } else {
+            // Mobile: First tap expands, Second tap opens modal
+            if (this.classList.contains('expanded')) {
+                window.openConditionModal(cleanC);
+            } else {
+                // Collapse others
+                Array.from(container.children).forEach(child => child.classList.remove('expanded'));
+                this.classList.add('expanded');
+                // Auto-collapse after 3s
+                if (this.collapseTimer) clearTimeout(this.collapseTimer);
+                this.collapseTimer = setTimeout(() => this.classList.remove('expanded'), 3000);
+            }
+        }
+    };
+    container.appendChild(div);
+  });
+}
 
 window.openWeaponProfModal = function () {
   const currentVal = document.getElementById("weaponProfs").value;
@@ -3693,6 +3827,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document
       .getElementById("charSize")
       ?.addEventListener("change", calculateWeight);
+    document.getElementById("activeConditionsInput")?.addEventListener("input", window.renderConditionTags);
 
     // Load Data
     const saved = localStorage.getItem("dndCharacter");
@@ -4706,7 +4841,7 @@ window.openClassPickerModal = async function(callback) {
                 if (!file.name.toLowerCase().endsWith('.json')) return;
                 try {
                     const json = JSON.parse(file.content);
-                    if (json.class) json.class.forEach(c => classes.add(c.name));
+                    if (json.class) json.class.forEach(c => { if (!c.isSidekick) classes.add(c.name); });
                     if (json.classFeature) json.classFeature.forEach(f => classes.add(f.className));
                 } catch (e) {}
             });

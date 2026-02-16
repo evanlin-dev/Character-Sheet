@@ -116,6 +116,10 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
   padding-right: 30px;
 }
 
+#activeConditionsInput {
+  font-size: 0.9rem;
+}
+
 /* =========================================
    SIDEBAR NAVIGATION & WIDE LAYOUT
    ========================================= */
@@ -774,50 +778,61 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
    13. STICKY CONDITIONS
    ========================================= */
 #sticky-conditions-container {
-  position: absolute;
-  top: 20px;
-  right: -50px;
+  position: fixed;
+  top: 80px;
+  left: 20px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  z-index: 100;
+  gap: 10px;
+  z-index: 1900;
   pointer-events: none;
 }
 
 .sticky-condition-icon {
   background: var(--red);
   color: white;
-  width: 40px;
-  height: 40px;
-  border-radius: 4px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: -2px 2px 5px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
   transition: all 0.2s ease;
-  border: 1px solid var(--red-dark);
-  border-right: none;
+  border: 2px solid var(--gold);
 }
 
-.sticky-condition-icon:hover {
+.sticky-condition-icon .cond-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.4));
+}
+
+.sticky-condition-icon .cond-label {
+  display: none;
+  margin-left: 8px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  font-family: "Cinzel", serif;
+  white-space: nowrap;
+}
+
+.sticky-condition-icon:hover,
+.sticky-condition-icon.expanded {
   background: var(--red-dark);
-  transform: translateX(-3px);
+  transform: scale(1.05);
   width: auto;
-  padding: 0 12px;
+  padding: 0 15px;
+  border-radius: 25px;
+  justify-content: flex-start;
 }
 
-.sticky-condition-icon:hover span {
-    display: none;
+.sticky-condition-icon:hover .cond-label,
+.sticky-condition-icon.expanded .cond-label {
+    display: block;
 }
-
-.sticky-condition-icon:hover::after {
-    content: attr(title);
-    white-space: nowrap;
-}
-
 /* =========================================
    14. SIDEBAR MENU
    ========================================= */
