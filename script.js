@@ -503,7 +503,12 @@ window.updateHpBar = function () {
 
 window.adjustHP = function (amount) {
   const hpInput = document.getElementById("hp");
-  hpInput.value = (parseInt(hpInput.value) || 0) + amount;
+  const maxHpInput = document.getElementById("maxHp");
+  let val = (parseInt(hpInput.value) || 0) + amount;
+  const max = parseInt(maxHpInput.value) || 1;
+  if (val < 0) val = 0;
+  if (val > max) val = max;
+  hpInput.value = val;
   updateHpBar();
   saveCharacter();
 };
@@ -515,6 +520,81 @@ window.adjustTempHP = function (amount) {
   updateHpBar();
   saveCharacter();
 };
+
+window.openHpManagementModal = function() {
+    let modal = document.getElementById('hpManageModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'hpManageModal';
+        modal.className = 'info-modal-overlay';
+        modal.innerHTML = `
+            <div class="info-modal-content" style="max-width: 350px; text-align: center;">
+                <button class="close-modal-btn" onclick="window.closeHpManageModal()">&times;</button>
+                <h3 class="info-modal-title">Manage HP</h3>
+                <div style="margin-bottom: 15px;">
+                    <input type="number" id="hpManageAmount" placeholder="Amount" style="font-size: 2rem; width: 100%; text-align: center; border: 2px solid var(--gold); border-radius: 8px; padding: 10px; font-weight: bold; color: var(--red-dark);">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                    <button class="btn" style="background: #8b0000; border-color: #500;" onclick="window.applyHpChange('damage')">Damage</button>
+                    <button class="btn" style="background: #2d6a4f; border-color: #1b4332;" onclick="window.applyHpChange('heal')">Heal</button>
+                </div>
+                <button class="btn btn-secondary" style="width: 100%;" onclick="window.applyHpChange('temp')">Set Temp HP</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        const input = document.getElementById('hpManageAmount');
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') window.applyHpChange('damage'); 
+        });
+    }
+    document.getElementById('hpManageAmount').value = '';
+    modal.style.display = 'flex';
+    setTimeout(() => document.getElementById('hpManageAmount').focus(), 50);
+};
+
+window.closeHpManageModal = function() {
+    const modal = document.getElementById('hpManageModal');
+    if (modal) modal.style.display = 'none';
+};
+
+window.applyHpChange = function(type) {
+    const amountInput = document.getElementById('hpManageAmount');
+    const val = parseInt(amountInput.value);
+    if (isNaN(val) || val < 0) return;
+
+    const hpInput = document.getElementById("hp");
+    const maxHpInput = document.getElementById("maxHp");
+    const tempHpInput = document.getElementById("tempHp");
+    
+    let currentHp = parseInt(hpInput.value) || 0;
+    let maxHp = parseInt(maxHpInput.value) || 1;
+    let tempHp = parseInt(tempHpInput.value) || 0;
+
+    if (type === 'heal') {
+        currentHp += val;
+        if (currentHp > maxHp) currentHp = maxHp;
+    } else if (type === 'damage') {
+        let damage = val;
+        if (tempHp > 0) {
+            const absorbed = Math.min(tempHp, damage);
+            tempHp -= absorbed;
+            damage -= absorbed;
+        }
+        currentHp -= damage;
+        if (currentHp < 0) currentHp = 0;
+    } else if (type === 'temp') {
+        tempHp = val;
+    }
+
+    hpInput.value = currentHp;
+    tempHpInput.value = tempHp;
+    
+    window.updateHpBar();
+    window.saveCharacter();
+    window.closeHpManageModal();
+};
+
 window.toggleSkill = function (skillName) {
   skillProficiency[skillName] = !skillProficiency[skillName];
   document
@@ -3824,6 +3904,27 @@ document.addEventListener("DOMContentLoaded", () => {
     ["hp", "maxHp", "tempHp"].forEach((id) =>
       document.getElementById(id).addEventListener("input", updateHpBar),
     );
+    document.getElementById("hp").addEventListener("change", function() {
+        const max = parseInt(document.getElementById("maxHp").value) || 1;
+        let val = parseInt(this.value) || 0;
+        if (val < 0) val = 0;
+        if (val > max) val = max;
+        this.value = val;
+        updateHpBar();
+        saveCharacter();
+    });
+    
+    const hpControls = document.querySelector('.hp-controls');
+    if (hpControls && !document.getElementById('hp-manage-btn')) {
+        const btn = document.createElement('button');
+        btn.id = 'hp-manage-btn';
+        btn.className = 'hp-btn';
+        btn.innerHTML = '⚡';
+        btn.title = "Manage HP (Heal/Damage)";
+        btn.onclick = window.openHpManagementModal;
+        hpControls.appendChild(btn);
+    }
+
     document
       .getElementById("charSize")
       ?.addEventListener("change", calculateWeight);
@@ -4043,7 +4144,8 @@ document.addEventListener("DOMContentLoaded", () => {
         '#themeModal',
         '#lastSavedModal',
         '#expModal',
-        '#languageSearchModal'
+        '#languageSearchModal',
+        '#hpManageModal'
     ];
 
     const checkModals = () => {
