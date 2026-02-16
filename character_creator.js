@@ -665,14 +665,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const div = document.createElement('div');
             div.className = 'checklist-item';
             div.textContent = s.name;
+            const sourceHtml = s.source ? `<span style="font-size:0.75rem; color:var(--ink-light);">[${s.source}]</span>` : '';
+            div.innerHTML = `<span>${s.name}</span>${sourceHtml}`;
             div.style.justifyContent = 'center';
             div.onclick = () => {
                 document.querySelectorAll('#creator-subclass-list .checklist-item').forEach(item => {
                     item.style.background = 'white';
                     item.style.color = 'var(--ink)';
+                    const src = item.querySelector('span:nth-child(2)');
+                    if (src) src.style.color = 'var(--ink-light)';
                 });
                 div.style.background = 'var(--red)';
                 div.style.color = 'white';
+                const src = div.querySelector('span:nth-child(2)');
+                if (src) src.style.color = 'rgba(255,255,255,0.8)';
                 selectedSubclass = s.shortName;
                 selectedSubclassSource = s.source;
                 renderClassFeatures();
@@ -724,6 +730,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // Future steps will go here
     });
+
+    const getReferencedClassFeatures = (className, source) => {
+        const refs = new Set();
+        const feats = allClassFeatures.filter(f => f.className === className && f.source === source);
+        const scan = (obj) => {
+            if (!obj) return;
+            if (Array.isArray(obj)) { obj.forEach(scan); return; }
+            if (typeof obj === 'object') {
+                if (obj.type === 'refClassFeature' && obj.classFeature) {
+                    refs.add(obj.classFeature.split('|')[0]);
+                }
+                if (obj.entries) scan(obj.entries);
+            }
+        };
+        feats.forEach(f => scan(f.entries));
+        return refs;
+    };
 
     function renderClassFeatures(suppressToast = false) {
         if (!selectedClass) return;
@@ -778,11 +801,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const referencedFeatures = getReferencedClassFeatures(className, currentClassSource);
+
         let features = allClassFeatures.filter(f => 
             f.className === className && 
             f.source === currentClassSource &&
             !f.subclassShortName && 
-            f.level <= selectedLevel
+            f.level <= selectedLevel &&
+            !referencedFeatures.has(f.name)
         );
 
         if (selectedSubclass) {
@@ -910,6 +936,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } else if (f.name === "Weapon Mastery") {
                 renderWeaponMasteryChoices(targetParent, f, selectedClass, f.level);
+            } else if (f.name === "Divine Order") {
+                renderDivineOrderChoice(targetParent, f);
             } else if (f.name === "Ability Score Improvement") {
                 renderFeatSelection(targetParent, f, selectedClass, f.level);
                 
@@ -1208,6 +1236,63 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (!suppressToast) checkNewFeats();
         renderGrantedSpells();
+    }
+
+    function renderDivineOrderChoice(parentElement, feature) {
+        const container = document.createElement('div');
+        container.className = "mt-2 p-2 border rounded";
+        container.style.background = "rgba(255,255,255,0.5)";
+        
+        container.innerHTML = `<div style="font-weight:bold; margin-bottom:8px; border-bottom:1px solid var(--gold-dark);">Select Divine Order:</div>`;
+        
+        let options = [];
+        const findOptions = (obj) => {
+            if (!obj) return;
+            if (obj.type === 'options' && obj.entries) {
+                options = obj.entries;
+                return;
+            }
+            if (obj.entries) {
+                if (Array.isArray(obj.entries)) obj.entries.forEach(findOptions);
+            }
+            if (Array.isArray(obj)) obj.forEach(findOptions);
+        };
+        findOptions(feature.entries);
+        
+        if (options.length === 0) return;
+
+        options.forEach(opt => {
+            if (opt.type === 'refClassFeature') {
+                const name = opt.classFeature.split('|')[0];
+                const featObj = allClassFeatures.find(f => f.name === name && f.className === selectedClass && f.source === currentClassSource);
+                
+                const div = document.createElement('div');
+                div.className = 'checklist-item';
+                div.style.flexDirection = 'column';
+                div.style.alignItems = 'flex-start';
+                div.style.cursor = 'pointer';
+                
+                if (selectedOptionalFeatures.has(name)) {
+                    div.style.background = 'var(--red)';
+                    div.style.color = 'white';
+                }
+
+                div.innerHTML = `<div style="font-weight:bold;">${name}</div>`;
+                if (featObj) {
+                    let desc = processEntries(featObj.entries);
+                    desc = formatDescription(desc);
+                    div.innerHTML += `<div style="font-size:0.85rem; margin-top:4px; opacity:0.9;">${desc}</div>`;
+                }
+                
+                div.onclick = () => {
+                    options.forEach(o => selectedOptionalFeatures.delete(o.classFeature.split('|')[0]));
+                    selectedOptionalFeatures.add(name);
+                    renderClassFeatures();
+                };
+                container.appendChild(div);
+            }
+        });
+        parentElement.appendChild(container);
     }
 
     function renderClassPreview() {
@@ -1573,6 +1658,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 feat = candidates.find(f => f.source === 'XPHB') || candidates.find(f => f.source === 'PHB') || candidates[0];
                 if (feat) isFeat = true;
             }
+            if (!feat && selectedClass) {
+                // Check class features (for Divine Order options)
+                feat = allClassFeatures.find(f => f.name === featName && f.className === selectedClass && f.source === currentClassSource);
+            }
             if (!feat && featName.includes(" (")) {
                 const baseName = featName.substring(0, featName.lastIndexOf(" ("));
                 candidates = allFeats.filter(f => f.name === baseName);
@@ -1582,7 +1671,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (feat) features.push({ feature: feat, contextName: name, isFeat: isFeat });
         });
         if (selectedClass) {
-            const classFeats = allClassFeatures.filter(f => f.className === selectedClass && f.source === currentClassSource && !f.subclassShortName && f.level <= selectedLevel);
+            const referencedFeatures = getReferencedClassFeatures(selectedClass, currentClassSource);
+            const classFeats = allClassFeatures.filter(f => 
+                f.className === selectedClass && 
+                f.source === currentClassSource && 
+                !f.subclassShortName && 
+                f.level <= selectedLevel &&
+                !referencedFeatures.has(f.name)
+            );
             classFeats.forEach(f => features.push({ feature: f, contextName: f.name }));
         }
         if (selectedClass && selectedSubclass) {
@@ -3086,15 +3182,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!feat) feat = candidates.find(f => f.source === 'PHB');
             if (!feat) feat = candidates[0];
             if (feat) selectedFeatures.push({ feature: feat, contextName: name });
+            else {
+                // Check class features
+                const cf = allClassFeatures.find(f => f.name === name && f.className === selectedClass && f.source === currentClassSource);
+                if (cf) selectedFeatures.push({ feature: cf, contextName: name });
+            }
         });
 
         // Add Class Features
         if (selectedClass) {
+            const referencedFeatures = getReferencedClassFeatures(selectedClass, currentClassSource);
             const classFeats = allClassFeatures.filter(f => 
                 f.className === selectedClass && 
                 f.source === currentClassSource && 
                 !f.subclassShortName && 
-                f.level <= selectedLevel
+                f.level <= selectedLevel &&
+                !referencedFeatures.has(f.name)
             );
             classFeats.forEach(f => selectedFeatures.push({ feature: f, contextName: f.name }));
         }
@@ -4448,17 +4551,23 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!feat) {
                 feat = featCandidates.find(f => f.source === 'XPHB') || featCandidates.find(f => f.source === 'PHB') || featCandidates[0];
             }
+            if (!feat && selectedClass) {
+                // Check class features
+                feat = allClassFeatures.find(f => f.name === featName && f.className === selectedClass && f.source === currentClassSource);
+            }
             
             if (feat) featuresToCheck.push(feat);
         });
 
         // Add Class Features
         if (selectedClass) {
+            const referencedFeatures = getReferencedClassFeatures(selectedClass, currentClassSource);
             const classFeats = allClassFeatures.filter(f => 
                 f.className === selectedClass && 
                 f.source === currentClassSource && 
                 !f.subclassShortName && 
-                f.level <= selectedLevel
+                f.level <= selectedLevel &&
+                !referencedFeatures.has(f.name)
             );
             featuresToCheck.push(...classFeats);
         }
@@ -4910,11 +5019,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Class Features
+        const referencedFeatures = getReferencedClassFeatures(selectedClass, currentClassSource);
         const classFeats = allClassFeatures.filter(f => 
             f.className === selectedClass && 
             f.source === currentClassSource &&
             (!f.subclassShortName || f.subclassShortName === selectedSubclass) && 
-            f.level <= selectedLevel
+            f.level <= selectedLevel &&
+            !referencedFeatures.has(f.name)
         );
 
         // Add Subclass Features
@@ -5011,6 +5122,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     addToActionLists(feat, `Feat: ${feat.name}`, cleanedDesc);
                 }
             } else {
+                // Check if it's a class feature (e.g. Protector)
+                const classFeat = allClassFeatures.find(f => f.name === name && f.className === selectedClass && f.source === currentClassSource);
+                if (classFeat) {
+                    let desc = processEntries(classFeat.entries || classFeat.entry);
+                    const cleanedDesc = cleanText(desc);
+                    const title = classFeat.level ? `Lvl ${classFeat.level}: ${classFeat.name}` : classFeat.name;
+                    features.push({ title: title, desc: cleanedDesc, type: 'class' });
+                    addToActionLists(classFeat, title, cleanedDesc);
+                    return; // Skip optional feature check below
+                }
                 const candidates = allOptionalFeatures.filter(f => f.name === name);
                 let feat = candidates.find(f => f.source === 'XPHB') || candidates.find(f => f.source === 'PHB') || candidates[0];
                 if (feat) {
@@ -5258,7 +5379,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Class Features
         if (selectedClass) {
-            featuresForSpells.push(...allClassFeatures.filter(f => f.className === selectedClass && f.source === currentClassSource && !f.subclassShortName && f.level <= selectedLevel));
+            const referencedFeatures = getReferencedClassFeatures(selectedClass, currentClassSource);
+            featuresForSpells.push(...allClassFeatures.filter(f => 
+                f.className === selectedClass && 
+                f.source === currentClassSource && 
+                !f.subclassShortName && 
+                f.level <= selectedLevel &&
+                !referencedFeatures.has(f.name)
+            ));
         }
         // Subclass Features
         if (selectedClass && selectedSubclass) {

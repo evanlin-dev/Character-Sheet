@@ -140,7 +140,7 @@ const conditionsDB = {
   Unconscious:
     "Incapacitated. Drop held items. Prone. Auto-fail Str/Dex saves. Attacks against you have Advantage and are crits if within 5ft.",
 };
-window.conditionsDB = {};
+window.conditionsDB = { ...conditionsDB };
 
 const conditionIcons = {
   Blinded: "🙈",
@@ -2005,7 +2005,7 @@ function loadConditionsFromData(parsedData) {
   const conditionMap = new Map();
   
   parsedData.forEach((json) => {
-      const arrays = [json.condition, json.status];
+      const arrays = [json.condition, json.conditions, json.status];
       arrays.forEach(arr => {
           if (Array.isArray(arr)) {
               arr.forEach(c => {
@@ -2022,7 +2022,7 @@ function loadConditionsFromData(parsedData) {
       });
   });
 
-  window.conditionsDB = {};
+  window.conditionsDB = { ...conditionsDB };
   Array.from(conditionMap.keys()).sort().forEach(name => {
       const c = conditionMap.get(name);
       window.conditionsDB[name] = window.cleanText(window.processEntries(c.entries));
@@ -2275,7 +2275,7 @@ window.openConditionModal = function (targetCondition = null) {
   
   let targetEl = null;
 
-  Object.keys(window.conditionsDB).forEach((name) => {
+  Object.keys(window.conditionsDB).sort().forEach((name) => {
     const desc = window.conditionsDB[name];
     const div = document.createElement("div");
     div.className = "checklist-item";
