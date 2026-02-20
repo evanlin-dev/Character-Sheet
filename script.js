@@ -234,6 +234,12 @@ window.processEntries = function (entries) {
     return html;
   }
 
+  if (entries.type === "refFeat") return `<strong>Feat:</strong> {@feat ${entries.feat}}`;
+  if (entries.type === "refOptionalfeature") return `<strong>Option:</strong> {@optionalfeature ${entries.optionalfeature}}`;
+  if (entries.type === "refClassFeature") return `<strong>Feature:</strong> {@classFeature ${entries.classFeature}}`;
+  if (entries.type === "refSubclassFeature") return `<strong>Feature:</strong> {@subclassFeature ${entries.subclassFeature}}`;
+  if (entries.type === "refSpell") return `<strong>Spell:</strong> {@spell ${entries.spell}}`;
+
   let text = "";
   if (entries.name) text += `<strong>${entries.name}.</strong> `;
   if (entries.entries) text += window.processEntries(entries.entries);
@@ -4276,6 +4282,8 @@ window.showLevelUpButton = function(level) {
 };
 
 window.openLevelUpModal = async function(level) {
+    window.pendingLevelUpChanges = { spells: new Set(), choices: new Map() };
+
     if (!window.isDataAvailable) return;
     let modal = document.getElementById('levelUpModal');
     if (!modal) {
@@ -4305,6 +4313,28 @@ window.openLevelUpModal = async function(level) {
         modal.querySelector('.info-modal-title').textContent = `Level ${level} Features`;
         document.getElementById('levelUpContent').innerHTML = 'Loading...';
     }
+
+    // Reset Confirm Button Listener
+    const oldBtn = document.getElementById('confirmLevelUpBtn');
+    const newBtn = oldBtn.cloneNode(true);
+    oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+    
+    newBtn.addEventListener('click', async () => {
+        if (window.pendingLevelUpChanges) {
+            for (const spellName of window.pendingLevelUpChanges.spells) {
+                await window.addSpellFromFeature(spellName, true);
+            }
+            for (const [key, choice] of window.pendingLevelUpChanges.choices) {
+                window.addFeatureItem("featsContainer", choice.name, choice.desc);
+            }
+        }
+        localStorage.removeItem('pendingLevelUp');
+        localStorage.removeItem('previousLevel');
+        const btn = document.getElementById('level-up-arrow-btn');
+        if (btn) btn.remove();
+        document.getElementById('levelUpModal').style.display = 'none';
+        alert("Level up confirmed! Features and spells have been added.");
+    });
     
     modal.style.display = 'flex';
     
@@ -4508,7 +4538,7 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
             list.appendChild(spellBtn);
         }
         
-        features.forEach(f => {
+        for (const f of features) {
             const div = document.createElement('div');
             div.style.marginBottom = '15px';
             div.style.border = '1px solid var(--gold)';
@@ -4516,8 +4546,25 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
             div.style.padding = '10px';
             div.style.background = 'white';
             
-            let desc = window.processEntries(f.entries || f.entry);
-            desc = window.cleanText(desc);
+            let rawDesc = window.processEntries(f.entries || f.entry);
+            let desc = window.cleanText(rawDesc);
+            
+            // Scan for interactive elements
+            const spellsFound = new Set();
+            const featsFound = new Set();
+            
+            const spellRegex = /{@spell ([^}|]+)/g;
+            let match;
+            while ((match = spellRegex.exec(rawDesc)) !== null) {
+                spellsFound.add(match[1]);
+                if (window.pendingLevelUpChanges) {
+                    window.pendingLevelUpChanges.spells.add(match[1]);
+                }
+            }
+            
+            if (rawDesc.includes('{@filter') && rawDesc.includes('|feats')) {
+                featsFound.add('filter');
+            }
             
             div.innerHTML = `
                 <div style="font-weight:bold; color:var(--red-dark); border-bottom:1px solid var(--gold-dark); margin-bottom:5px; padding-bottom:2px;">
@@ -4525,8 +4572,172 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
                 </div>
                 <div style="font-size:0.9rem; line-height:1.5; overflow-wrap: break-word; word-break: break-word;">${desc}</div>
             `;
+            
+            if (f.name.includes("Fighting Style")) {
+                const fsContainer = document.createElement('div');
+                fsContainer.style.marginTop = "10px";
+                fsContainer.style.padding = "10px";
+                fsContainer.style.border = "1px dashed var(--gold)";
+                fsContainer.style.background = "rgba(0,0,0,0.02)";
+                
+                const hasBlessedWarrior = rawDesc.includes("Blessed Warrior");
+                
+                if (hasBlessedWarrior) {
+                    fsContainer.innerHTML = `<div style="font-weight:bold; font-size:0.9rem; margin-bottom:5px;">Select Option:</div>`;
+                    
+                    const primarySelect = document.createElement('select');
+                    primarySelect.className = "styled-select";
+                    primarySelect.style.width = "100%";
+                    primarySelect.innerHTML = `
+                        <option value="">-- Choose --</option>
+                        <option value="feat">Fighting Style Feat</option>
+                        <option value="Blessed Warrior">Blessed Warrior</option>
+                    `;
+                    
+                    const secondaryContainer = document.createElement('div');
+                    secondaryContainer.style.marginTop = "10px";
+                    
+                    const detailDiv = document.createElement('div');
+                    detailDiv.style.marginTop = "10px";
+                    detailDiv.style.fontSize = "0.9rem";
+
+                    primarySelect.onchange = async () => {
+                        secondaryContainer.innerHTML = '';
+                        detailDiv.innerHTML = '';
+                        
+                        if (primarySelect.value === 'feat') {
+                            const featSelect = document.createElement('select');
+                            featSelect.className = "styled-select";
+                            featSelect.style.width = "100%";
+                            featSelect.innerHTML = `<option value="">-- Select Fighting Style --</option>`;
+                            
+                            const feats = await window.getFeatsByCategory("FS");
+                            feats.forEach(feat => {
+                                if (feat.name === "Blessed Warrior") return;
+                                const opt = document.createElement('option');
+                                opt.value = feat.name;
+                                opt.textContent = feat.name;
+                                featSelect.appendChild(opt);
+                            });
+                            
+                            featSelect.onchange = () => {
+                                const selected = feats.find(ft => ft.name === featSelect.value);
+                                if (selected) {
+                                    let d = window.processEntries(selected.entries);
+                                    d = window.cleanText(d);
+                                    detailDiv.innerHTML = `<strong>${selected.name}:</strong> ${d}`;
+                                    if (window.pendingLevelUpChanges) {
+                                        window.pendingLevelUpChanges.choices.set(f.name, { name: selected.name, desc: d });
+                                    }
+                                } else {
+                                    detailDiv.innerHTML = "";
+                                    if (window.pendingLevelUpChanges) window.pendingLevelUpChanges.choices.delete(f.name);
+                                }
+                            };
+                            secondaryContainer.appendChild(featSelect);
+                            
+                        } else if (primarySelect.value === 'Blessed Warrior') {
+                            const feats = await window.getFeatsByCategory("Blessed Warrior", ["Blessed Warrior"]);
+                            const selected = feats.find(f => f.name === "Blessed Warrior");
+                            if (selected) {
+                                let d = window.processEntries(selected.entries);
+                                d = window.cleanText(d);
+                                detailDiv.innerHTML = `<strong>${selected.name}:</strong> ${d}`;
+                                if (window.pendingLevelUpChanges) {
+                                    window.pendingLevelUpChanges.choices.set(f.name, { name: selected.name, desc: d });
+                                }
+                            }
+                        }
+                    };
+                    
+                    fsContainer.appendChild(primarySelect);
+                    fsContainer.appendChild(secondaryContainer);
+                    fsContainer.appendChild(detailDiv);
+                } else {
+                    fsContainer.innerHTML = `<div style="font-weight:bold; font-size:0.9rem; margin-bottom:5px;">Select Fighting Style:</div>`;
+                    const select = document.createElement('select');
+                    select.className = "styled-select";
+                    select.style.width = "100%";
+                    select.innerHTML = `<option value="">-- Choose --</option>`;
+                    
+                    const feats = await window.getFeatsByCategory("FS");
+                    feats.forEach(feat => {
+                        const opt = document.createElement('option');
+                        opt.value = feat.name;
+                        opt.textContent = feat.name;
+                        select.appendChild(opt);
+                    });
+                
+                const detailDiv = document.createElement('div');
+                detailDiv.style.marginTop = "10px";
+                detailDiv.style.fontSize = "0.9rem";
+                
+                const addBtn = document.createElement('button');
+                addBtn.className = "btn btn-secondary";
+                addBtn.style.marginTop = "5px";
+                addBtn.style.display = "none";
+                addBtn.textContent = "Add Fighting Style";
+                
+                select.onchange = () => {
+                    const selected = feats.find(ft => ft.name === select.value);
+                    if (selected) {
+                        let d = window.processEntries(selected.entries);
+                        d = window.cleanText(d);
+                        detailDiv.innerHTML = `<strong>${selected.name}:</strong> ${d}`;
+                        addBtn.style.display = "inline-block";
+                        addBtn.onclick = () => {
+                            window.addFeatureItem("featsContainer", selected.name, d);
+                            alert(`Added ${selected.name} to Feats.`);
+                        };
+                        if (window.pendingLevelUpChanges) {
+                            window.pendingLevelUpChanges.choices.set(f.name, { name: selected.name, desc: d });
+                        }
+                    } else {
+                        detailDiv.innerHTML = "";
+                        addBtn.style.display = "none";
+                        if (window.pendingLevelUpChanges) window.pendingLevelUpChanges.choices.delete(f.name);
+                    }
+                };
+                
+                fsContainer.appendChild(select);
+                fsContainer.appendChild(detailDiv);
+                fsContainer.appendChild(addBtn);
+                }
+                div.appendChild(fsContainer);
+            }
+            
+            if (spellsFound.size > 0 || featsFound.size > 0) {
+                const btnContainer = document.createElement('div');
+                btnContainer.style.marginTop = '10px';
+                btnContainer.style.display = 'flex';
+                btnContainer.style.gap = '5px';
+                btnContainer.style.flexWrap = 'wrap';
+                
+                if (spellsFound.size > 0) {
+                    const note = document.createElement('div');
+                    note.style.fontSize = '0.8rem';
+                    note.style.color = 'var(--ink-light)';
+                    note.style.fontStyle = 'italic';
+                    note.style.width = '100%';
+                    note.innerHTML = `<strong>Auto-add:</strong> ${Array.from(spellsFound).join(', ')}`;
+                    btnContainer.appendChild(note);
+                }
+                
+                if (featsFound.size > 0) {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn btn-secondary';
+                    btn.style.padding = '4px 8px';
+                    btn.style.fontSize = '0.8rem';
+                    btn.innerHTML = `Browse Feats`;
+                    btn.onclick = () => window.openFeatSearch();
+                    btnContainer.appendChild(btn);
+                }
+                
+                div.appendChild(btnContainer);
+            }
+            
             list.appendChild(div);
-        });
+        }
     } catch (e) {
         console.error(e);
         if (showBackBtn) {
@@ -4541,6 +4752,115 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
         err.textContent = 'Error loading data. Ensure data is uploaded.';
         list.appendChild(err);
     }
+};
+
+window.addSpellFromFeature = async function(spellName, silent = false) {
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const data = await new Promise((resolve) => {
+            const req = store.get('currentData');
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        });
+        
+        if (!data) return alert("No data loaded.");
+        
+        let foundSpell = null;
+        for (const file of data) {
+            if (!file.name.toLowerCase().endsWith('.json')) continue;
+            try {
+                const json = JSON.parse(file.content);
+                const spells = json.spell || json.spells || json.data;
+                if (Array.isArray(spells)) {
+                    const match = spells.find(s => s.name && s.name.toLowerCase() === spellName.toLowerCase());
+                    if (match) {
+                        if (!foundSpell) foundSpell = match;
+                        else if (match.source === 'XPHB') foundSpell = match;
+                        else if (match.source === 'PHB' && foundSpell.source !== 'XPHB') foundSpell = match;
+                    }
+                }
+            } catch (e) {}
+        }
+        
+        if (foundSpell) {
+            let time = "";
+            if (foundSpell.time && foundSpell.time[0]) {
+                const t = foundSpell.time[0];
+                time = `${t.number} ${t.unit}`;
+            }
+            let range = "";
+            if (foundSpell.range) {
+                if (foundSpell.range.distance) range = `${foundSpell.range.distance.amount ? foundSpell.range.distance.amount + " " : ""}${foundSpell.range.distance.type}`;
+                else range = foundSpell.range.type;
+            }
+            let desc = window.processEntries(foundSpell.entries);
+            desc = window.cleanText(desc);
+            
+            const spellData = {
+                name: foundSpell.name,
+                level: foundSpell.level,
+                time: time,
+                range: range,
+                ritual: foundSpell.meta && foundSpell.meta.ritual ? true : false,
+                concentration: foundSpell.duration && foundSpell.duration[0] && foundSpell.duration[0].concentration ? true : false,
+                material: foundSpell.components && (foundSpell.components.m || foundSpell.components.M) ? true : false,
+                description: desc,
+                prepared: true
+            };
+            
+            window.addSpellRow('preparedSpellsList', foundSpell.level, spellData);
+            alert(`Added ${foundSpell.name} to Prepared Spells.`);
+            if (!silent) alert(`Added ${foundSpell.name} to Prepared Spells.`);
+        } else {
+            alert("Spell data not found.");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Error adding spell.");
+    }
+};
+
+window.getFeatsByCategory = async function(category, extraFeats = []) {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const data = await new Promise((resolve) => {
+        const req = store.get('currentData');
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+    });
+    if (!data) return [];
+    
+    const feats = [];
+    data.forEach(file => {
+        if (!file.name.toLowerCase().endsWith('.json')) return;
+        try {
+            const json = JSON.parse(file.content);
+            if (json.feat) {
+                json.feat.forEach(f => {
+                    let match = false;
+                    if (f.traits && f.traits.some(t => t.toLowerCase().includes(category.toLowerCase()))) match = true;
+                    if (f.category && f.category.toLowerCase().includes(category.toLowerCase())) match = true;
+                    if (extraFeats.includes(f.name)) match = true;
+                    if (match) feats.push(f);
+                });
+            }
+        } catch (e) {}
+    });
+    
+    const unique = new Map();
+    feats.forEach(f => {
+        if (!unique.has(f.name)) unique.set(f.name, f);
+        else {
+            const existing = unique.get(f.name);
+            if (f.source === 'XPHB') unique.set(f.name, f);
+            else if (f.source === 'PHB' && existing.source !== 'XPHB') unique.set(f.name, f);
+        }
+    });
+    
+    return Array.from(unique.values()).sort((a,b) => a.name.localeCompare(b.name));
 };
 
 window.fetchLevelUpFeatures = async function(className, subclass, level, minLevel = null) {
