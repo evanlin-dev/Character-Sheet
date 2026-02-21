@@ -678,6 +678,15 @@ window.addFeatureItem = function (containerId, title = "", desc = "") {
     header.style.flexGrow = "1";
   }
 
+  const dragHandle = document.createElement("div");
+  dragHandle.className = "drag-handle";
+  dragHandle.innerHTML = "☰";
+  dragHandle.style.marginRight = "8px";
+  dragHandle.style.cursor = "grab";
+  dragHandle.style.flexShrink = "0";
+  if (isCompact) dragHandle.style.alignSelf = "center";
+  header.appendChild(dragHandle);
+
   const titleInput = document.createElement("textarea");
   titleInput.className = "feature-title-input";
   titleInput.placeholder = "Feature Name";
@@ -687,6 +696,9 @@ window.addFeatureItem = function (containerId, title = "", desc = "") {
     saveCharacter();
     autoResizeTextarea(this);
   };
+  
+  titleInput.style.width = "auto";
+  titleInput.style.flex = "1";
 
   if (isCompact) {
     titleInput.style.width = "100%";
@@ -777,6 +789,7 @@ window.addFeatureItem = function (containerId, title = "", desc = "") {
 
   container.appendChild(box);
   autoResizeTextarea(titleInput); // Initial resize
+  setupDragItem(box, containerId);
   saveCharacter();
 };
 
@@ -822,6 +835,7 @@ function setupDragItem(item, containerId) {
 function getDragAfterElement(container, y) {
   const draggableElements = [
     ...container.querySelectorAll(
+      ".inventory-item:not(.dragging), .spell-row:not(.dragging), .feature-box:not(.dragging)",
       ".inventory-item:not(.dragging), .spell-row:not(.dragging)",
     ),
   ];
@@ -3842,28 +3856,34 @@ document.addEventListener("DOMContentLoaded", () => {
         parseInt(document.getElementById("experience").value) || 0;
       let currentLevel = parseInt(document.getElementById("level").value) || 1;
       const oldLevel = currentLevel;
+
       currentXp += toAdd;
+      
       let checkedLevel = true;
       while (checkedLevel) {
         let nextLevelEntry = xpTable.find((x) => x.lvl === currentLevel + 1);
         let currentLevelEntry = xpTable.find((x) => x.lvl === currentLevel);
-        if (!nextLevelEntry) {
+        
+        if (!nextLevelEntry || !currentLevelEntry) {
           checkedLevel = false;
           break;
         }
+        
         let xpNeeded = nextLevelEntry.xp - currentLevelEntry.xp;
+        
         if (currentXp >= xpNeeded) {
           currentXp -= xpNeeded;
           currentLevel++;
-          document.getElementById("profBonus").value = xpTable.find(
-            (x) => x.lvl === currentLevel,
-          ).prof;
+          let newProf = xpTable.find((x) => x.lvl === currentLevel)?.prof;
+          if (newProf) document.getElementById("profBonus").value = newProf;
         } else {
           checkedLevel = false;
         }
       }
+
       document.getElementById("experience").value = currentXp;
       document.getElementById("level").value = currentLevel;
+
       expModal.style.display = "none";
       updateModifiers();
       saveCharacter();
@@ -4357,6 +4377,14 @@ window.openLevelUpModal = async function(level) {
                 }
             }
 
+            if (window.pendingLevelUpChanges.features) {
+                window.pendingLevelUpChanges.features.forEach(f => {
+                    let desc = window.processEntries(f.entries || f.entry);
+                    desc = window.cleanText(desc);
+                    window.addFeatureItem("classFeaturesContainer", f.name, desc);
+                });
+            }
+
             for (const spellName of window.pendingLevelUpChanges.spells) {
                 await window.addSpellFromFeature(spellName, true);
             }
@@ -4616,10 +4644,15 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
         // Clear auto-detected items to prevent stale data from previous renders
         window.pendingLevelUpChanges.spells.clear();
         window.pendingLevelUpChanges.choices.clear();
+        window.pendingLevelUpChanges.features = [];
     }
 
     try {
         const features = await fetchLevelUpFeatures(charClass, charSubclass, level, minLevel || level);
+        
+        if (window.pendingLevelUpChanges) {
+            window.pendingLevelUpChanges.features = features;
+        }
         
         if (showBackBtn) {
             const loading = document.getElementById('lvl-loading');
