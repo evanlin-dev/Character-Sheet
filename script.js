@@ -4329,6 +4329,21 @@ window.openLevelUpModal = async function(level) {
     oldBtn.parentNode.replaceChild(newBtn, oldBtn);
     
     newBtn.addEventListener('click', async () => {
+        // Show Loading
+        const loadingOverlay = document.createElement('div');
+        loadingOverlay.className = 'info-modal-overlay';
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.style.zIndex = '3000';
+        loadingOverlay.innerHTML = `
+            <div class="info-modal-content" style="max-width: 300px; text-align: center; padding: 20px;">
+                <h3 style="margin-top:0;">Processing Level Up...</h3>
+                <div style="margin: 20px 0;">Please wait while features and spells are added.</div>
+                <div style="border: 4px solid #f3f3f3; border-top: 4px solid var(--red); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+            </div>
+        `;
+        document.body.appendChild(loadingOverlay);
+
+        try {
         if (window.pendingLevelUpChanges) {
             // Apply Subclass Change
             if (window.pendingLevelUpChanges.subclass) {
@@ -4353,6 +4368,27 @@ window.openLevelUpModal = async function(level) {
                     window.addSpellRow(item.target, item.spellData.level, item.spellData);
                 });
             }
+            
+            // Apply Spell Slot Updates
+            if (window.pendingLevelUpChanges.warlockUpdate) {
+                const update = window.pendingLevelUpChanges.warlockUpdate;
+                if (spellSlotsData.length > 0) {
+                    // Update the first slot entry (assuming Warlock primary or Pact Magic slot)
+                    spellSlotsData[0].level = update.level;
+                    spellSlotsData[0].total = update.count;
+                    if (spellSlotsData[0].used > update.count) spellSlotsData[0].used = update.count;
+                } else {
+                    spellSlotsData.push({ level: update.level, total: update.count, used: 0 });
+                }
+                renderSpellSlots();
+            }
+            if (window.pendingLevelUpChanges.newSlotLevel) {
+                const lvl = window.pendingLevelUpChanges.newSlotLevel;
+                if (!spellSlotsData.some(s => s.level === lvl)) {
+                    spellSlotsData.push({ level: lvl, total: 1, used: 0 });
+                    renderSpellSlots();
+                }
+            }
         }
         localStorage.removeItem('pendingLevelUp');
         localStorage.removeItem('previousLevel');
@@ -4363,7 +4399,13 @@ window.openLevelUpModal = async function(level) {
         window.updateClassDisplay();
         window.saveCharacter();
         
+        loadingOverlay.remove();
         alert("Level up confirmed! Features and spells have been added.");
+        } catch (e) {
+            console.error(e);
+            loadingOverlay.remove();
+            alert("Error processing level up: " + e.message);
+        }
     });
     
     modal.style.display = 'flex';
@@ -4452,6 +4494,78 @@ window.openLevelUpModal = async function(level) {
         }
         window.renderLevelUpFeatures(c.name, c.subclass, c.level, false, -1, minLevel);
     }
+};
+
+window.getSpellsFromFeature = function(feature, charLevel) {
+    const spells = new Set();
+    
+    const extractFromText = (text) => {
+        const regex = /{@spell ([^}|]+)/g;
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            spells.add(match[1]);
+        }
+    };
+
+    const traverse = (entry) => {
+        if (!entry) return;
+        if (typeof entry === 'string') {
+            extractFromText(entry);
+            return;
+        }
+        if (Array.isArray(entry)) {
+            entry.forEach(traverse);
+            return;
+        }
+        
+        if (entry.type === 'table') {
+            let levelColIndex = -1;
+            if (entry.colLabels) {
+                levelColIndex = entry.colLabels.findIndex(l => /level/i.test(l));
+            }
+            
+            if (levelColIndex !== -1 && entry.rows) {
+                entry.rows.forEach(row => {
+                    let levelCell = row[levelColIndex];
+                    if (typeof levelCell === 'object' && levelCell.value) levelCell = levelCell.value;
+                    
+                    const levelStr = String(levelCell).replace(/[^0-9]/g, '');
+                    const reqLevel = parseInt(levelStr);
+                    
+                    if (!isNaN(reqLevel)) {
+                        if (reqLevel <= charLevel) {
+                            row.forEach(cell => {
+                                if (typeof cell === 'string') extractFromText(cell);
+                                else if (typeof cell === 'object') traverse(cell);
+                            });
+                        }
+                    } else {
+                        row.forEach(cell => {
+                             if (typeof cell === 'string') extractFromText(cell);
+                             else if (typeof cell === 'object') traverse(cell);
+                        });
+                    }
+                });
+            } else {
+                if (entry.rows) {
+                    entry.rows.forEach(row => {
+                        row.forEach(cell => {
+                             if (typeof cell === 'string') extractFromText(cell);
+                             else if (typeof cell === 'object') traverse(cell);
+                        });
+                    });
+                }
+            }
+            return;
+        }
+
+        if (entry.entries) traverse(entry.entries);
+        if (entry.items) traverse(entry.items);
+        if (entry.entry) traverse(entry.entry);
+    };
+
+    traverse(feature.entries || feature.entry);
+    return spells;
 };
 
 window.renderLevelUpFeatures = async function(charClass, charSubclass, level, showBackBtn = false, classIndex = -1, minLevel = null, levelsAdded = 1) {
@@ -4640,11 +4754,25 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
                 else if (level >= 3) maxLevel = 1;
             }
 
+            let spellText = `+ Add Spells`;
+            let spellHint = "";
+
+            if (charClass === "Wizard") {
+                spellText = `+ Add 2 Spells to Spellbook`;
+                spellHint = "Wizards add 2 new spells to their spellbook.";
+            } else if (["Bard", "Sorcerer", "Warlock", "Ranger"].includes(charClass) || (charClass === "Fighter" && charSubclass && charSubclass.includes("Eldritch Knight")) || (charClass === "Rogue" && charSubclass && charSubclass.includes("Arcane Trickster"))) {
+                spellText = `+ Learn New Spell`;
+                spellHint = "You typically learn 1 new spell per level.";
+            } else if (["Cleric", "Druid", "Paladin", "Artificer"].includes(charClass)) {
+                spellText = `+ Add Spells to Sheet`;
+                spellHint = "You have access to your full list. Add spells to prepare them.";
+            }
+
             const spellBtn = document.createElement('button');
             spellBtn.className = 'btn';
             spellBtn.style.width = '100%';
-            spellBtn.style.marginBottom = '15px';
-            spellBtn.innerHTML = `+ Add New Spells/Cantrips (Max Lvl ${maxLevel})`;
+            spellBtn.style.marginBottom = '5px';
+            spellBtn.innerHTML = `${spellText} <span style="font-size:0.8em; opacity:0.8;">(Max Lvl ${maxLevel})</span>`;
             
             let filterClass = charClass;
             if (charClass === "Fighter" && charSubclass && charSubclass.includes("Eldritch Knight")) filterClass = "Wizard";
@@ -4699,6 +4827,20 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
 
             spellBtn.onclick = () => {
                 window.openSpellSearch('spellList', 'all', maxLevel, filterClass, (spellData) => {
+                    // Check if already selected in pending changes
+                    if (window.pendingLevelUpChanges && window.pendingLevelUpChanges.customSpells) {
+                        if (window.pendingLevelUpChanges.customSpells.some(s => s.spellData.name === spellData.name)) {
+                            alert("You have already selected this spell.");
+                            return;
+                        }
+                    }
+                    // Check if already on sheet
+                    const existing = Array.from(document.querySelectorAll('.spell-name')).some(i => i.value.toLowerCase() === spellData.name.toLowerCase());
+                    if (existing) {
+                        alert("You already have this spell.");
+                        return;
+                    }
+
                     const target = (spellData.level === 0) ? 'cantripList' : 'spellList';
                     
                     if (window.pendingLevelUpChanges) {
@@ -4712,6 +4854,117 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
                 });
             };
             list.appendChild(spellBtn);
+
+            // Fetch Class Table Data for Spell Info
+            (async () => {
+                try {
+                    const db = await openDB();
+                    const tx = db.transaction(STORE_NAME, 'readonly');
+                    const store = tx.objectStore(STORE_NAME);
+                    const data = await new Promise((resolve) => {
+                        const req = store.get('currentData');
+                        req.onsuccess = () => resolve(req.result);
+                        req.onerror = () => resolve(null);
+                    });
+
+                    if (data) {
+                        let classObj = null;
+                        for (const file of data) {
+                            if (!file.name.toLowerCase().endsWith('.json')) continue;
+                            try {
+                                const json = JSON.parse(file.content);
+                                if (json.class) {
+                                    const matches = json.class.filter(c => c.name.toLowerCase() === charClass.toLowerCase());
+                                    for (const m of matches) {
+                                        if (!classObj) classObj = m;
+                                        else if (m.source === 'XPHB') classObj = m;
+                                        else if (m.source === 'PHB' && classObj.source !== 'XPHB') classObj = m;
+                                    }
+                                }
+                            } catch (e) {}
+                        }
+
+                        if (classObj && classObj.classTableGroups) {
+                            const currentLevelIdx = level - 1;
+                            const prevLevelIdx = level - 2;
+                            
+                            const getValue = (lvlIdx, regex) => {
+                                if (lvlIdx < 0) return 0;
+                                for (const group of classObj.classTableGroups) {
+                                    if (!group.colLabels) continue;
+                                    const colIndex = group.colLabels.findIndex(l => regex.test(l.replace(/{@\w+\s*([^}]+)?}/g, "$1")));
+                                    if (colIndex !== -1 && group.rows && group.rows[lvlIdx]) {
+                                        let val = group.rows[lvlIdx][colIndex];
+                                        if (typeof val === 'object' && val.value !== undefined) val = val.value;
+                                        return val;
+                                    }
+                                }
+                                return 0;
+                            };
+
+                            let infoHtml = "";
+
+                            // Spells Known
+                            const spellsKnown = getValue(currentLevelIdx, /Spells\s*Known/i);
+                            const prevSpellsKnown = getValue(prevLevelIdx, /Spells\s*Known/i);
+                            if (spellsKnown && spellsKnown > prevSpellsKnown) {
+                                infoHtml += `<div>You can learn <strong>${spellsKnown - prevSpellsKnown}</strong> new spell(s) (Total Known: ${spellsKnown}).</div>`;
+                            }
+
+                            // Spell Slots
+                            if (charClass === "Warlock") {
+                                const slotLevel = getValue(currentLevelIdx, /Slot Level/i);
+                                const prevSlotLevel = getValue(prevLevelIdx, /Slot Level/i);
+                                const slotCount = getValue(currentLevelIdx, /Spell Slots/i);
+                                const parseLvl = (v) => parseInt(String(v).match(/\d+/)) || 0;
+                                const currLvlNum = parseLvl(slotLevel);
+                                const prevLvlNum = parseLvl(prevSlotLevel);
+                                
+                                if (currLvlNum > prevLvlNum) {
+                                    infoHtml += `<div style="margin-top:4px; color:var(--red-dark);">Spell Slots upgrade to <strong>Level ${currLvlNum}</strong>.</div>`;
+                                    if (window.pendingLevelUpChanges) window.pendingLevelUpChanges.warlockUpdate = { level: currLvlNum, count: parseInt(slotCount)||1 };
+                                } else if (slotCount > getValue(prevLevelIdx, /Spell Slots/i)) {
+                                    if (window.pendingLevelUpChanges) window.pendingLevelUpChanges.warlockUpdate = { level: currLvlNum, count: parseInt(slotCount)||1 };
+                                }
+                            } else {
+                                for (let i = 1; i <= 9; i++) {
+                                    const val = getValue(currentLevelIdx, new RegExp(`^${i}(?:st|nd|rd|th)(?:\\s*Level)?$`, 'i'));
+                                    const prevVal = getValue(prevLevelIdx, new RegExp(`^${i}(?:st|nd|rd|th)(?:\\s*Level)?$`, 'i'));
+                                    if (val > 0 && prevVal == 0) {
+                                        infoHtml += `<div style="margin-top:4px; color:var(--red-dark);">You gain <strong>Level ${i} Spell Slots</strong>!</div>`;
+                                        if (window.pendingLevelUpChanges) window.pendingLevelUpChanges.newSlotLevel = i;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (infoHtml) {
+                                const infoDiv = document.createElement('div');
+                                infoDiv.style.background = "var(--parchment-dark)";
+                                infoDiv.style.padding = "8px";
+                                infoDiv.style.borderRadius = "4px";
+                                infoDiv.style.marginBottom = "10px";
+                                infoDiv.style.fontSize = "0.9rem";
+                                infoDiv.style.border = "1px solid var(--gold)";
+                                infoDiv.innerHTML = infoHtml;
+                                list.insertBefore(infoDiv, selectedSpellsDiv);
+                            }
+                        }
+                    }
+                } catch (e) { console.error(e); }
+            })();
+
+            if (spellHint) {
+                const hintDiv = document.createElement('div');
+                hintDiv.style.fontSize = '0.8rem';
+                hintDiv.style.color = 'var(--ink-light)';
+                hintDiv.style.fontStyle = 'italic';
+                hintDiv.style.marginBottom = '15px';
+                hintDiv.style.textAlign = 'center';
+                hintDiv.textContent = spellHint;
+                list.appendChild(hintDiv);
+            }
+
             list.appendChild(selectedSpellsDiv);
         }
         
@@ -4727,15 +4980,12 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
             let desc = window.cleanText(rawDesc);
             
             // Scan for interactive elements
-            const spellsFound = new Set();
+            const spellsFound = window.getSpellsFromFeature(f, level);
             const featsFound = new Set();
             
-            const spellRegex = /{@spell ([^}|]+)/g;
-            let match;
-            while ((match = spellRegex.exec(rawDesc)) !== null) {
-                spellsFound.add(match[1]);
+            if (spellsFound.size > 0) {
                 if (window.pendingLevelUpChanges) {
-                    window.pendingLevelUpChanges.spells.add(match[1]);
+                    spellsFound.forEach(s => window.pendingLevelUpChanges.spells.add(s));
                 }
             }
             
@@ -4933,6 +5183,13 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
 
 window.addSpellFromFeature = async function(spellName, silent = false) {
     try {
+        // Check if spell already exists in the sheet to prevent duplicates
+        const existing = Array.from(document.querySelectorAll('.spell-name')).some(i => i.value.toLowerCase() === spellName.toLowerCase());
+        if (existing) {
+            if (!silent) alert(`${spellName} is already in your spell list.`);
+            return;
+        }
+
         const db = await openDB();
         const tx = db.transaction(STORE_NAME, 'readonly');
         const store = tx.objectStore(STORE_NAME);
