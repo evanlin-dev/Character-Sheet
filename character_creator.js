@@ -5659,6 +5659,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 let desc = processEntries(spell.entries);
+                if (spell.entriesHigherLevel) {
+                    desc += "<br><br>" + processEntries(spell.entriesHigherLevel);
+                }
                 desc = cleanText(desc);
                 if (duration) desc = `**Duration:** ${duration}\n\n${desc}`;
 

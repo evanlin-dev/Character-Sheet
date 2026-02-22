@@ -1951,6 +1951,9 @@ function renderSpellSearchPage() {
 
       if (spell.entries) desc = window.processEntries(spell.entries);
       else if (spell.description) desc = spell.description;
+      if (spell.entriesHigherLevel) {
+        desc += "<br><br>" + window.processEntries(spell.entriesHigherLevel);
+      }
       desc = window.cleanText(desc);
 
       if (spell.time && spell.time[0]) {
@@ -5263,6 +5266,9 @@ window.addSpellFromFeature = async function(spellName, silent = false) {
                 else range = foundSpell.range.type;
             }
             let desc = window.processEntries(foundSpell.entries);
+            if (foundSpell.entriesHigherLevel) {
+                desc += "<br><br>" + window.processEntries(foundSpell.entriesHigherLevel);
+            }
             desc = window.cleanText(desc);
             
             const spellData = {
