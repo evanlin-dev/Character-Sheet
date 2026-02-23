@@ -99,7 +99,7 @@
 
       <div class="sheet-section full-width">
       <h2 class="section-title" id="section-stats">Ability Scores, Saves & Skills</h2>
-      <div style="text-align: center; margin-bottom: 20px">
+      <div class="setup-scores-container" style="text-align: center; margin-bottom: 20px">
         <button
           class="btn btn-secondary"
           onclick="openScoreModal()"
@@ -549,22 +549,22 @@
       </div>
 
       <div class="tab-content" id="equipment">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <h3 style="font-family: 'Cinzel', serif; font-size: 1rem; color: var(--red-dark); margin: 0;">Currency</h3>
-          <div style="display: flex; gap: 5px;">
-            <button class="btn btn-secondary" onclick="openCurrencyModal()" style="padding: 4px 10px; font-size: 0.8rem;">Exchange Rates</button>
-            <button class="btn btn-secondary" onclick="openSplitMoneyModal()" style="padding: 4px 10px; font-size: 0.8rem;">Split Loot</button>
-            <button class="btn btn-secondary" onclick="openManageMoneyModal()" style="padding: 4px 10px; font-size: 0.8rem;">Add/Spend</button>
+        <div class="inventory-top-bar">
+          <div class="currency-container">
+            <div class="mini-field"><label>CP</label><input type="number" id="cp" value="0"></div>
+            <div class="mini-field"><label>SP</label><input type="number" id="sp" value="0"></div>
+            <div class="mini-field"><label>EP</label><input type="number" id="ep" value="0"></div>
+            <div class="mini-field"><label>GP</label><input type="number" id="gp" value="0"></div>
+            <div class="mini-field"><label>PP</label><input type="number" id="pp" value="0"></div>
+          </div>
+          <div class="currency-actions">
+            <button class="btn btn-secondary" onclick="openCurrencyModal()">Exchange</button>
+            <button class="btn btn-secondary" onclick="openSplitMoneyModal()">Split</button>
+            <button class="btn btn-secondary" onclick="openManageMoneyModal()">Manage</button>
           </div>
         </div>
-        <div class="grid grid-3" style="margin-bottom: 16px">
-          <div class="field"><label class="field-label">Copper</label><input type="number" id="cp" value="0" /></div>
-          <div class="field"><label class="field-label">Silver</label><input type="number" id="sp" value="0" /></div>
-          <div class="field"><label class="field-label">Electrum</label><input type="number" id="ep" value="0" /></div>
-          <div class="field"><label class="field-label">Gold</label><input type="number" id="gp" value="0" /></div>
-          <div class="field"><label class="field-label">Platinum</label><input type="number" id="pp" value="0" /></div>
-        </div>
-
+        <div class="tab-columns">
+        <div class="sheet-section-col">
         <h3 class="section-title">Equipped Gear</h3>
         <div class="inventory-header">
           <span></span>
@@ -577,7 +577,9 @@
         </div>
         
         <div id="equippedList" class="inventory-list" style="min-height: 60px; border: 2px dashed var(--gold-dark); border-radius: 6px; padding: 8px; margin-bottom: 24px; background: rgba(255, 255, 255, 0.3);"></div>
+        </div>
 
+        <div class="sheet-section-col">
         <h3 class="section-title">Backpack / Inventory</h3>
         <div class="inventory-header">
           <span></span>
@@ -599,14 +601,16 @@
           <div>Carrying Capacity: <span id="totalWeightVal">0</span> / <span id="maxWeightVal">150</span> lbs</div>
           <div style="font-size: 0.8rem; font-style: italic; opacity: 0.8">Max Drag/Lift: <span id="maxDragVal">300</span> lbs</div>
         </div>
+        </div>
 
-        <div class="attunement-section">
+        <div class="attunement-section sheet-section-col">
           <h3 class="section-title">Magical Attunement</h3>
           <div class="attunement-grid">
             <div class="attunement-slot"><input type="text" id="attune1" placeholder="Empty Slot" style="text-align: center; font-weight: bold"/></div>
             <div class="attunement-slot"><input type="text" id="attune2" placeholder="Empty Slot" style="text-align: center; font-weight: bold"/></div>
             <div class="attunement-slot"><input type="text" id="attune3" placeholder="Empty Slot" style="text-align: center; font-weight: bold"/></div>
           </div>
+        </div>
         </div>
       </div>
 
@@ -624,12 +628,15 @@
           <div class="field"><label class="field-label">Spell Modifier</label><input type="number" id="spellAttackMod" placeholder="+0" /></div>
           <div class="field"><label class="field-label">Spell Attack Bonus</label><input type="number" id="spellAttackBonus" placeholder="+0" /></div>
         </div>
-
+        
+        <div class="tab-columns">
+        <div class="sheet-section-col">
         <h3 class="section-title">Spell Slots</h3>
         <div id="spellSlotsContainer"></div>
         <button class="add-feature-btn" onclick="addNewSpellLevel()">+ Add Spell Level</button>
-        <div style="margin-top: 24px"></div>
+        </div>
 
+        <div class="sheet-section-col">
         <h3 class="section-title">Cantrips (Level 0)</h3>
         <div class="spell-list-header">
           <span></span><span></span><span>Lvl</span><span>Name</span><span>Time</span><span>Range</span> <span title="Ritual">R</span><span title="Concentration">C</span><span title="Material">M</span><span></span><span></span>
@@ -639,13 +646,17 @@
             <button class="add-feature-btn" onclick="addSpellRow('cantripList', 0)">+ Add Custom</button>
             <button id="btn-search-cantrips-zip" class="add-feature-btn" onclick="openSpellSearch('cantripList', 'cantrip')" style="display: none;">Search Cantrips</button>
         </div>
+        </div>
 
+        <div class="sheet-section-col">
         <h3 class="section-title" style="margin-top: 24px">Prepared Spells</h3>
         <div class="spell-list-header">
           <span></span><span>Prep</span><span>Lvl</span><span>Name</span><span>Time</span><span>Range</span> <span title="Ritual">R</span><span title="Concentration">C</span><span title="Material">M</span><span></span><span></span>
         </div>
         <div id="preparedSpellsList" class="spell-list-container" style="min-height: 40px; border: 1px dashed var(--gold); border-radius: 4px; padding: 4px;"></div>
+        </div>
 
+        <div class="sheet-section-col">
         <h3 class="section-title" style="margin-top: 24px">Known Spells</h3>
         <div class="spell-list-header">
           <span></span><span>Prep</span><span>Lvl</span><span>Name</span><span>Time</span><span>Range</span> <span title="Ritual">R</span><span title="Concentration">C</span><span title="Material">M</span><span></span><span></span>
@@ -654,6 +665,8 @@
         <div style="display: flex; gap: 10px;">
             <button class="add-feature-btn" onclick="addSpellRow('spellList', 1)">+ Add Custom</button>
             <button id="btn-search-spells-zip" class="add-feature-btn" onclick="openSpellSearch('spellList', 'leveled')" style="display: none;">Search Spells</button>
+        </div>
+        </div>
         </div>
       </div>
       </div>

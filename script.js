@@ -489,10 +489,14 @@ window.updateHpBar = function () {
   const current = parseInt(document.getElementById("hp").value) || 0;
   const max = parseInt(document.getElementById("maxHp").value) || 1;
   const temp = parseInt(document.getElementById("tempHp").value) || 0;
-  const currentPct = Math.min(100, Math.max(0, (current / max) * 100));
-  const tempPct = Math.min(100, (temp / max) * 100);
+  
+  // If using DDB Box, these might not exist, so check first
   const hpBarCurrent = document.getElementById("hpBarCurrent");
   const hpBarTemp = document.getElementById("hpBarTemp");
+  
+  if (hpBarCurrent && hpBarTemp) {
+  const currentPct = Math.min(100, Math.max(0, (current / max) * 100));
+  const tempPct = Math.min(100, (temp / max) * 100);
   if (current >= max) {
     hpBarCurrent.style.width = `${currentPct}%`;
     hpBarTemp.style.width = `${tempPct}%`;
@@ -502,9 +506,13 @@ window.updateHpBar = function () {
     hpBarTemp.style.width = `${Math.min(tempPct, 100 - currentPct)}%`;
     hpBarTemp.style.left = `${currentPct}%`;
   }
-  document.getElementById("hpTextDisplay").textContent =
-    current + (temp > 0 ? ` (+${temp})` : "");
-  document.getElementById("maxHpTextDisplay").textContent = max;
+  }
+  
+  const textDisplay = document.getElementById("hpTextDisplay");
+  if (textDisplay) {
+      textDisplay.textContent = current + (temp > 0 ? ` (+${temp})` : "");
+      document.getElementById("maxHpTextDisplay").textContent = max;
+  }
 };
 
 window.adjustHP = function (amount) {
@@ -3285,6 +3293,20 @@ window.saveCharacter = function () {
     activeTab: document.querySelector(".tab-content.active")?.id,
   };
   localStorage.setItem("dndCharacter", JSON.stringify(characterData));
+
+  // Update Dense Header if active
+  const denseHeader = document.getElementById('dense-header');
+  if (denseHeader) {
+      const nameVal = characterData.charName || "Character Name";
+      const raceVal = characterData.race || "Race";
+      const classVal = characterData.charClass || "Class";
+      const levelVal = characterData.level || "1";
+      denseHeader.innerHTML = `
+          <div style="font-family:'Cinzel',serif; font-weight:700; font-size:1.6rem; color:var(--red-dark); line-height:1.2;">${nameVal}</div>
+          <div style="font-family:'Crimson Text',serif; font-size:1rem; color:var(--ink); font-weight:bold;">${raceVal} ${classVal}</div>
+          <div style="font-family:'Cinzel',serif; font-size:0.9rem; color:var(--ink-light); margin-top:2px;">Level ${levelVal}</div>
+      `;
+  }
 };
 
 window.downloadJSON = function () {
@@ -3531,6 +3553,13 @@ window.createSidebarMenu = function () {
   };
   sidebarContent.appendChild(charBtn);
 
+  // Dense Mode Toggle
+  const denseBtn = document.createElement("button");
+  denseBtn.className = "sidebar-btn";
+  denseBtn.innerText = "Toggle Dense View";
+  denseBtn.onclick = window.toggleDenseMode;
+  sidebarContent.appendChild(denseBtn);
+
   if (actionsDiv) {
     Array.from(actionsDiv.children).forEach((child) => {
       // Move buttons/labels to sidebar
@@ -3555,15 +3584,7 @@ window.injectCombatActions = function (actionsData) {
     refDiv.style.marginBottom = "15px";
 
     // Insert Logic
-    const tabContent = actionsContainer.closest(".tab-content");
     let inserted = false;
-    if (tabContent && tabContent.parentElement) {
-      const tabs = tabContent.parentElement.querySelector(".tabs");
-      if (tabs) {
-        tabs.parentNode.insertBefore(refDiv, tabs);
-        inserted = true;
-      }
-    }
     if (
       !inserted &&
       actionsContainer.parentElement &&
@@ -3606,6 +3627,275 @@ window.injectCombatActions = function (actionsData) {
       list.appendChild(document.createTextNode(", "));
     }
   });
+};
+
+window.toggleDenseMode = function () {
+  document.body.classList.toggle("dense-mode");
+  const isDense = document.body.classList.contains("dense-mode");
+  localStorage.setItem("denseMode", isDense);
+  resizeAllTextareas();
+  
+  if (isDense) {
+      window.enableDenseLayout();
+  } else {
+      window.disableDenseLayout();
+  }
+};
+
+window.enableDenseLayout = function() {
+    if (document.getElementById('dense-layout-root')) return;
+    const sheet = document.querySelector('.character-sheet');
+    if (!sheet) return;
+
+    // Create Grid Structure
+    const root = document.createElement('div');
+    root.id = 'dense-layout-root';
+    
+    const combatArea = document.createElement('div');
+    combatArea.id = 'dense-combat-top';
+
+    const scoresArea = document.createElement('div');
+    scoresArea.id = 'dense-scores';
+    
+    const sidebarArea = document.createElement('div');
+    sidebarArea.id = 'dense-sidebar';
+    
+    const mainArea = document.createElement('div');
+    mainArea.id = 'dense-main';
+    
+    root.appendChild(combatArea);
+    root.appendChild(scoresArea);
+    root.appendChild(sidebarArea);
+    root.appendChild(mainArea);
+
+    // Helper to move element with placeholder
+    const move = (el, target) => {
+        if (!el) return;
+        const ph = document.createElement('div');
+        ph.id = `ph-${el.id || Math.random().toString(36).substr(2,9)}`;
+        ph.className = 'dense-placeholder';
+        ph.style.display = 'none';
+        el.parentNode.insertBefore(ph, el);
+        el.dataset.originalParent = ph.id;
+        target.appendChild(el);
+    };
+
+    // 0. Move Combat & HP (Top)
+    const combatStats = document.querySelector('.combat-stats');
+    if (combatStats) move(combatStats, combatArea);
+    
+    const ddbHp = document.querySelector('.ddb-hp-box');
+    if (ddbHp) move(ddbHp, combatArea);
+
+    // Hide Top Section & Create Dense Header
+    const charNameInput = document.getElementById('charName');
+    if (charNameInput) {
+        const topSection = charNameInput.closest('.sheet-section');
+        if (topSection) {
+            topSection.style.display = 'none';
+            topSection.dataset.hiddenByDense = 'true';
+
+            const denseHeader = document.createElement('div');
+            denseHeader.id = 'dense-header';
+
+            const nameVal = charNameInput.value || "Character Name";
+            const raceVal = document.getElementById('race').value || "Race";
+            const classVal = document.getElementById('charClass').value || "Class";
+            const levelVal = document.getElementById('level').value || "1";
+            
+            denseHeader.innerHTML = `
+                <div style="font-family:'Cinzel',serif; font-weight:700; font-size:1.6rem; color:var(--red-dark); line-height:1.2;">${nameVal}</div>
+                <div style="font-family:'Crimson Text',serif; font-size:1rem; color:var(--ink); font-weight:bold;">${raceVal} ${classVal}</div>
+                <div style="font-family:'Cinzel',serif; font-size:0.9rem; color:var(--ink-light); margin-top:2px;">Level ${levelVal}</div>
+            `;
+            
+            topSection.parentNode.insertBefore(denseHeader, topSection);
+        }
+    }
+
+    // Shorten Stat Names
+    document.querySelectorAll('.stat-name').forEach(el => {
+        if (!el.dataset.originalText) el.dataset.originalText = el.textContent;
+        el.textContent = el.textContent.substring(0, 3).toUpperCase();
+    });
+
+    // 1. Move Stats (Top) & Skills (Left)
+    document.querySelectorAll('.stat-card').forEach(card => {
+        const stat = card.querySelector('.stat');
+        const skills = card.querySelector('.stat-skills');
+        if (stat) move(stat, scoresArea);
+        if (skills) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'dense-skill-group feature-box';
+            wrapper.style.marginBottom = '0';
+            
+            // Add Header
+            const statName = stat.querySelector('.stat-name');
+            if (statName) {
+                const header = document.createElement('div');
+                header.className = 'dense-group-header';
+                header.textContent = (statName.dataset.originalText || statName.textContent).toUpperCase();
+                header.style.fontWeight = 'bold';
+                header.style.color = 'var(--red-dark)';
+                header.style.borderBottom = '1px solid var(--gold)';
+                header.style.marginBottom = '5px';
+                header.style.fontSize = '0.85rem';
+                wrapper.appendChild(header);
+            }
+
+            move(skills, wrapper);
+            sidebarArea.appendChild(wrapper);
+        }
+    });
+
+    // 2. Move Proficiencies (Left)
+    const profsWrapper = document.createElement('div');
+    profsWrapper.className = 'feature-box dense-profs-wrapper';
+    profsWrapper.style.display = 'flex';
+    profsWrapper.style.flexDirection = 'column';
+    profsWrapper.style.gap = '5px';
+    profsWrapper.innerHTML = '<div class="feature-header" style="border-bottom: 1px solid var(--gold); margin-bottom: 2px; font-weight: bold; color: var(--red-dark); font-size: 0.85rem; padding-bottom: 2px;">Proficiencies</div>';
+
+    const armorField = document.getElementById('armorLight')?.closest('.field');
+    if (armorField) move(armorField, profsWrapper);
+    
+    const weaponField = document.getElementById('weaponProfs')?.closest('.field') || document.getElementById('weaponProfsSelector')?.closest('.field');
+    if (weaponField) move(weaponField, profsWrapper);
+    
+    const toolField = document.getElementById('toolProfs')?.closest('.field');
+    if (toolField) move(toolField, profsWrapper);
+    
+    if (profsWrapper.children.length > 1) {
+        sidebarArea.appendChild(profsWrapper);
+    }
+    
+    const langField = document.getElementById('languages')?.closest('.field');
+    if (langField) move(langField, sidebarArea);
+    
+    const defField = document.getElementById('defenses')?.closest('.field');
+    if (defField) move(defField, sidebarArea);
+
+    const condField = document.getElementById('activeConditionsInput')?.closest('.field');
+    if (condField) move(condField, sidebarArea);
+
+    const hpDeathGrid = document.querySelector('.hp-death-grid');
+    if (hpDeathGrid) move(hpDeathGrid, sidebarArea);
+
+    // 3. Move Tabs & Actions (Right)
+    const tabs = document.querySelector('.tabs');
+    if (tabs) move(tabs, mainArea);
+    
+    document.querySelectorAll('.tab-content').forEach(tc => move(tc, mainArea));
+
+    // Move Action Economy to Tabs
+    const actionHeader = document.getElementById('section-actions');
+    if (actionHeader) {
+        const actionSection = actionHeader.closest('.sheet-section');
+        if (actionSection) {
+            // Create Tab Button
+            const actionTabBtn = document.createElement('div');
+            actionTabBtn.className = 'tab dense-generated-tab';
+            actionTabBtn.textContent = 'Actions';
+            actionTabBtn.setAttribute('onclick', "switchTab('dense-actions')");
+            
+            // Insert next to Spells tab
+            if (tabs) {
+                const spellsTab = Array.from(tabs.children).find(el => el.textContent.includes('Spells'));
+                if (spellsTab && spellsTab.nextSibling) {
+                    tabs.insertBefore(actionTabBtn, spellsTab.nextSibling);
+                } else {
+                    tabs.appendChild(actionTabBtn);
+                }
+            }
+
+            // Prepare Content
+            actionSection.classList.add('tab-content');
+            actionSection.id = 'dense-actions';
+            
+            move(actionSection, mainArea);
+        }
+    }
+
+    // Insert Root before Stat Block (keeping Name/Inputs at top)
+    const statBlock = document.querySelector('.stat-block');
+    if (statBlock) {
+        statBlock.parentNode.insertBefore(root, statBlock);
+    } else {
+        // Fallback
+        const header = document.querySelector('.header');
+        if (header && header.nextSibling) header.parentNode.insertBefore(root, header.nextSibling);
+        else sheet.appendChild(root);
+    }
+};
+
+window.disableDenseLayout = function() {
+    const root = document.getElementById('dense-layout-root');
+    if (!root) return;
+
+    // Remove Dense Header & Show Top Section
+    const denseHeader = document.getElementById('dense-header');
+    if (denseHeader) denseHeader.remove();
+
+    // Restore Stat Names
+    document.querySelectorAll('.stat-name').forEach(el => {
+        if (el.dataset.originalText) {
+            el.textContent = el.dataset.originalText;
+            delete el.dataset.originalText;
+        }
+    });
+
+    const charNameInput = document.getElementById('charName');
+    if (charNameInput) {
+        const topSection = charNameInput.closest('.sheet-section');
+        if (topSection && topSection.dataset.hiddenByDense === 'true') {
+            topSection.style.display = '';
+            delete topSection.dataset.hiddenByDense;
+        }
+    }
+
+    // Cleanup Action Tab
+    const actionSection = document.getElementById('dense-actions');
+    if (actionSection) {
+        actionSection.classList.remove('tab-content');
+        actionSection.classList.remove('active');
+        actionSection.removeAttribute('id');
+    }
+    document.querySelectorAll('.dense-generated-tab').forEach(el => el.remove());
+
+    const restore = (el) => {
+        if (el.dataset.originalParent) {
+            const ph = document.getElementById(el.dataset.originalParent);
+            if (ph) {
+                ph.parentNode.insertBefore(el, ph);
+                ph.remove();
+                delete el.dataset.originalParent;
+            }
+        }
+    };
+
+    // Restore from Combat Top
+    const combatTop = root.querySelector('#dense-combat-top');
+    if (combatTop) Array.from(combatTop.children).forEach(restore);
+
+    // Restore from Scores
+    Array.from(root.querySelector('#dense-scores').children).forEach(restore);
+    
+    // Restore from Sidebar
+    Array.from(root.querySelector('#dense-sidebar').children).forEach(child => {
+        if (child.classList.contains('dense-skill-group') || child.classList.contains('dense-save-group') || child.classList.contains('dense-profs-wrapper')) {
+            Array.from(child.children).forEach(restore);
+        } else {
+            restore(child);
+        }
+    });
+    
+    // Restore from Main
+    Array.from(root.querySelector('#dense-main').children).forEach(restore);
+
+    // Remove Labels
+    document.querySelectorAll('.dense-ability-label').forEach(el => el.remove());
+
+    root.remove();
 };
 
 window.toggleSidebar = function () {
@@ -3808,6 +4098,98 @@ window.initQuickNav = function () {
   buildLinks();
 };
 
+window.injectDDBHPBox = function() {
+    const hpBar = document.querySelector('.hp-bar-container');
+    const hpControls = document.querySelector('.hp-controls');
+    
+    // Find insertion point (replace existing HP bar)
+    let target = hpBar || hpControls;
+    if (!target) return; 
+    
+    const container = document.createElement('div');
+    container.className = 'ddb-hp-box';
+    container.innerHTML = `
+        <div class="ddb-box-background">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 317 88.98" class="ddb-svg">
+                <path fill="#FEFEFE" d="M9.35,8,7,10.29a38.78,38.78,0,0,1,.35,6.19l.85,57c0,4.29.29,6.67,3.67,9.37l3.76,2.46c2.56,2,19.53,1.87,9.58,1.87l271.48-.68c3.29,0,5.19-2.23,7.75-4.28l3-2.64c3.38-2.7,1.7-2.4,1.7-6.69L310,17.06c0-4.28-.76-8-4.13-10.71h0a18.9,18.9,0,0,0-10.39-3.64L19.59,2.48A36.38,36.38,0,0,0,9.35,8Z"></path>
+                <path fill="#C53131" d="M305.89,0H11.1L0,9V79.93l11.1,9H305.89l11.11-9V9ZM294.34,86.5H22.6A24.06,24.06,0,0,1,8.69,78.78V10.24a24.36,24.36,0,0,1,14-7.76H294.4a24.09,24.09,0,0,1,13.91,7.72V78.73a24.36,24.36,0,0,1-14,7.77ZM3.05,21.16a27.77,27.77,0,0,1,4-8.79V76.63c-.37-.53-.76-1-1.09-1.62a27.78,27.78,0,0,1-2.89-7.1ZM310,12.34c.37.54.76,1.05,1.09,1.62A28,28,0,0,1,314,21.07V67.81a27.91,27.91,0,0,1-4,8.8Zm4-2.27v7a26.94,26.94,0,0,0-4-6.77v-.13h-.1a24.53,24.53,0,0,0-11.24-7.68h6ZM12.37,2.48h6A24.53,24.53,0,0,0,7.13,10.16H7v.13a26.94,26.94,0,0,0-4,6.77v-7ZM3.05,78.91v-7a26.81,26.81,0,0,0,4,6.78v.13h.1A24.61,24.61,0,0,0,18.37,86.5h-6ZM304.63,86.5h-6a24.61,24.61,0,0,0,11.24-7.68h.1v-.13a26.81,26.81,0,0,0,4-6.78v7Z"></path>
+            </svg>
+        </div>
+        <div class="ddb-content">
+            <h1 class="ddb-label">Hit Points</h1>
+            <div class="ddb-controls">
+                <button class="ddb-btn heal-btn">Heal</button>
+                <input class="ddb-input" type="number" placeholder="Amount" id="hp-adjust-input">
+                <button class="ddb-btn damage-btn">Damage</button>
+            </div>
+            <div class="ddb-stats">
+                <div class="ddb-stat-item">
+                    <label>Current</label>
+                    <input type="number" id="hp" class="ddb-current-val" value="0">
+                </div>
+                <div class="ddb-separator">/</div>
+                <div class="ddb-stat-item">
+                    <label>Max</label>
+                    <input type="number" id="maxHp" class="ddb-small-val" value="0">
+                </div>
+                <div class="ddb-stat-item" style="margin-left:10px;">
+                    <label>Temp</label>
+                    <input type="number" id="tempHp" class="ddb-small-val" value="0" style="color:#2d6a4f;">
+                </div>
+            </div>
+        </div>
+    `;
+    
+    target.parentNode.insertBefore(container, target);
+    if (hpBar) hpBar.remove();
+    if (hpControls) hpControls.remove();
+    
+    // Re-attach listeners
+    const hpInput = document.getElementById('hp');
+    const maxHpInput = document.getElementById('maxHp');
+    const tempHpInput = document.getElementById('tempHp');
+    const adjustInput = document.getElementById('hp-adjust-input');
+    
+    [hpInput, maxHpInput, tempHpInput].forEach(el => {
+        el.addEventListener('input', window.saveCharacter);
+        el.addEventListener('change', window.saveCharacter);
+    });
+
+    container.querySelector('.heal-btn').onclick = () => {
+        const amt = parseInt(adjustInput.value) || 0;
+        if (amt <= 0) return;
+        let cur = parseInt(hpInput.value) || 0;
+        let max = parseInt(maxHpInput.value) || 0;
+        cur = Math.min(cur + amt, max);
+        hpInput.value = cur;
+        adjustInput.value = '';
+        window.saveCharacter();
+    };
+
+    container.querySelector('.damage-btn').onclick = () => {
+        const amt = parseInt(adjustInput.value) || 0;
+        if (amt <= 0) return;
+        let cur = parseInt(hpInput.value) || 0;
+        let temp = parseInt(tempHpInput.value) || 0;
+        
+        let damage = amt;
+        if (temp > 0) {
+            const absorbed = Math.min(temp, damage);
+            temp -= absorbed;
+            damage -= absorbed;
+            tempHpInput.value = temp;
+        }
+        cur = Math.max(cur - damage, 0);
+        hpInput.value = cur;
+        adjustInput.value = '';
+        window.saveCharacter();
+    };
+    
+    adjustInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') container.querySelector('.damage-btn').click();
+    });
+};
+
 /* =========================================
       6. INITIALIZATION
       ========================================= */
@@ -3815,6 +4197,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // Initialize UI components (Sidebar, QuickNav)
   if (window.createSidebarMenu) window.createSidebarMenu();
   if (window.initQuickNav) window.initQuickNav();
+  
+  // Inject DDB HP Box
+  if (window.injectDDBHPBox) window.injectDDBHPBox();
 
   // Guard clause: Only run initialization if we are on the character sheet (checking for charName input)
   if (!document.getElementById("charName")) return;
@@ -3828,6 +4213,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   window.isInitializing = true;
+
+    // Load Dense Mode Preference
+    if (localStorage.getItem("denseMode") === "true") {
+      document.body.classList.add("dense-mode");
+    }
 
   try {
     // Check for data immediately
@@ -3976,7 +4366,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const saved = localStorage.getItem("dndCharacter");
     if (saved) {
       const data = JSON.parse(saved);
-      if (data.currentTheme) document.body.className = data.currentTheme;
+      if (data.currentTheme) {
+        document.body.className = data.currentTheme;
+        // Enforce dense mode preference over saved theme string
+        if (localStorage.getItem("denseMode") === "true") {
+          document.body.classList.add("dense-mode");
+        } else {
+          document.body.classList.remove("dense-mode");
+        }
+      }
       Object.keys(data).forEach((key) => {
         const el = document.getElementById(key);
         if (
@@ -4228,6 +4626,11 @@ document.addEventListener("DOMContentLoaded", () => {
   } catch (e) {
     console.error("Initialization error:", e);
   } finally {
+    // Enable Dense Layout if needed (after data load so header has correct values)
+    if (document.body.classList.contains("dense-mode")) {
+        window.enableDenseLayout();
+    }
+
     // Delay unlocking to allow any pending DOM events to fire without triggering a save
     setTimeout(() => {
       window.isInitializing = false;

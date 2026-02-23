@@ -429,6 +429,53 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
 .currency-table th, .currency-table td { border: 1px solid var(--gold); padding: 8px; text-align: center; font-family: "Crimson Text", serif; }
 .currency-table th { background: var(--parchment-dark); font-family: "Cinzel", serif; font-size: 0.8rem; color: var(--red-dark); }
 
+/* Inventory Top Bar */
+.inventory-top-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  padding: 10px;
+  background: white;
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+}
+.currency-container { display: flex; gap: 8px; flex-wrap: wrap; }
+.currency-actions { display: flex; gap: 5px; }
+.currency-actions .btn { padding: 4px 10px; font-size: 0.8rem; }
+
+.mini-field {
+  background: var(--parchment);
+  border: 1px solid var(--gold-dark);
+  border-radius: 4px;
+  padding: 2px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 50px;
+}
+.mini-field label {
+  font-family: "Cinzel", serif;
+  font-size: 0.65rem;
+  font-weight: bold;
+  color: var(--ink-light);
+  margin-bottom: 0;
+}
+.mini-field input {
+  font-size: 1.1rem;
+  font-weight: bold;
+  text-align: center;
+  padding: 0;
+  min-height: auto;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--red-dark);
+  width: 100%;
+}
+
 /* Alignment Grid */
 .alignment-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
 .alignment-option { background: var(--parchment-dark); border: 1px solid var(--gold); padding: 15px 5px; text-align: center; font-weight: bold; cursor: pointer; border-radius: 4px; font-family: "Cinzel", serif; font-size: 0.9rem; }
@@ -1357,3 +1404,391 @@ body.dm-screen-page .character-sheet {
 
 .equip-option-box { transition: all 0.2s ease; }
 .equip-option-box:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+
+/* =========================================
+   21. DENSE MODE (COMPACT VIEW)
+   ========================================= */
+body.dense-mode {
+  font-size: 13px;
+  overflow-x: hidden;
+}
+
+body.dense-mode .character-sheet {
+  max-width: 98%;
+  padding: 12px;
+}
+
+body.dense-mode .header h1 { font-size: 1.6rem; margin-bottom: 4px; }
+body.dense-mode .section-title { font-size: 1.1rem; margin: 12px 0 6px; padding-bottom: 2px; }
+body.dense-mode .grid { gap: 8px; margin-bottom: 12px; }
+
+/* Compact Fields & Inputs */
+body.dense-mode .field { padding: 2px 6px; min-height: auto; border-width: 1px; }
+body.dense-mode .field-label { font-size: 0.65rem; margin-bottom: 1px; }
+body.dense-mode input, 
+body.dense-mode select, 
+body.dense-mode textarea { 
+  font-size: 0.85rem; 
+  min-height: 20px; 
+  height: auto; 
+  padding: 1px 0; 
+}
+body.dense-mode .styled-select { padding: 1px 18px 1px 4px; background-position: right 2px center; }
+
+/* Compact Stats */
+body.dense-mode .stat { padding: 4px; }
+body.dense-mode .stat-value { font-size: 1.4rem; }
+body.dense-mode .stat-name { font-size: 0.65rem; margin-bottom: 1px; }
+
+/* Compact Skills */
+body.dense-mode .skill-item { padding: 1px 4px; gap: 4px; font-size: 0.8rem; }
+body.dense-mode .skill-checkbox { width: 12px; height: 12px; }
+body.dense-mode .checkmark { font-size: 0.65rem; }
+
+/* Compact Combat */
+body.dense-mode .combat-stat { padding: 4px; border-width: 1px; }
+body.dense-mode .combat-stat-value, body.dense-mode .combat-stat input { font-size: 1.2rem; }
+body.dense-mode .hp-bar-container { height: 14px; margin-bottom: 6px; }
+body.dense-mode .hp-overlay-text { line-height: 14px; font-size: 0.65rem; }
+
+/* Compact Features/Lists */
+body.dense-mode .feature-box { padding: 4px; margin-bottom: 6px; }
+body.dense-mode .feature-header { margin-bottom: 2px; padding-bottom: 2px; }
+body.dense-mode .feature-title-input { font-size: 0.85rem; font-weight: bold; }
+body.dense-mode .spell-row { padding: 2px 4px; gap: 4px; font-size: 0.8rem; margin-bottom: 4px; }
+body.dense-mode .inventory-item { padding: 2px 6px; gap: 4px; font-size: 0.8rem; }
+
+/* Multi-column Layout for Dense Mode on Desktop */
+/* New Grid Layout Structure */
+#dense-layout-root {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  grid-template-areas: 
+    "combat combat"
+    "scores scores"
+    "sidebar main";
+  gap: 12px;
+  margin-top: 10px;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  #dense-layout-root {
+    grid-template-columns: 1fr;
+    grid-template-areas: 
+      "combat"
+      "scores"
+      "sidebar"
+      "main";
+  }
+}
+
+#dense-combat-top {
+  grid-area: combat;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#dense-scores {
+  grid-area: scores;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--parchment-dark);
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--gold);
+  flex-wrap: wrap;
+}
+
+#dense-scores > .stat {
+  flex: 1;
+  min-width: 0;
+}
+
+#dense-sidebar {
+  grid-area: sidebar;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#dense-main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#dense-actions > h2.section-title {
+  display: none;
+}
+
+.dense-ability-label {
+  font-size: 0.65rem;
+  color: var(--ink-light);
+  font-weight: bold;
+  margin-left: auto;
+  text-transform: uppercase;
+  background: rgba(0,0,0,0.05);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+@media (min-width: 1024px) {
+  body.dense-mode .character-sheet:not(.creator-mode):not(.dm-mode) {
+      display: block;
+      column-count: auto; /* Reset main container columns */
+  }
+  
+  /* Apply columns to the tab content itself so items flow within the tab */
+  body.dense-mode .tab-content.active {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+  }
+
+  /* Prevent items from splitting across columns */
+  body.dense-mode .feature-box,
+  body.dense-mode .inventory-item,
+  body.dense-mode .spell-row,
+  body.dense-mode .resource-item,
+  body.dense-mode .combat-stat,
+  body.dense-mode .stat-card {
+      break-inside: avoid;
+      page-break-inside: avoid;
+      margin-bottom: 8px;
+  }
+
+  /* Hide original stat block container in dense mode as children are moved */
+  body.dense-mode .stat-block {
+      display: none;
+  }
+  
+  /* Force Combat stats to be dense row */
+  body.dense-mode .combat-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      gap: 8px;
+  }
+}
+
+/* =========================================
+   22. DDB STYLE HP BOX
+   ========================================= */
+.ddb-hp-box {
+  position: relative;
+  width: 100%;
+  max-width: 350px;
+  margin: 0 auto 20px;
+  font-family: "Roboto", sans-serif;
+  min-height: 100px;
+  border: 3px solid var(--gold-dark);
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+.ddb-box-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  display: none;
+}
+
+.ddb-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.2));
+}
+
+.ddb-content {
+  position: relative;
+  z-index: 1;
+  padding: 12px 20px 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ddb-label {
+  font-family: "Cinzel", serif;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: #999;
+  margin: 0 0 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.ddb-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+.ddb-btn {
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: #333;
+  transition: all 0.2s;
+}
+.ddb-btn:hover { border-color: var(--red); color: var(--red); }
+.ddb-btn.heal { color: #2d6a4f; border-color: #2d6a4f; }
+.ddb-btn.heal:hover { background: #2d6a4f; color: white; }
+.ddb-btn.damage { color: #8b0000; border-color: #8b0000; }
+.ddb-btn.damage:hover { background: #8b0000; color: white; }
+
+.ddb-input { width: 60px; text-align: center; border: 1px solid #ccc; border-radius: 4px; padding: 4px; font-size: 1rem; font-weight: bold; color: var(--ink); }
+
+.ddb-stats { display: flex; align-items: flex-end; gap: 15px; width: 100%; justify-content: center; }
+.ddb-stat-item { display: flex; flex-direction: column; align-items: center; }
+.ddb-stat-item label { font-size: 0.65rem; text-transform: uppercase; color: #666; margin-bottom: 2px; font-weight: bold; }
+.ddb-current-val { font-size: 2.2rem; font-weight: bold; color: #8b2e2e; border: none; background: transparent; text-align: center; width: 90px; padding: 0; line-height: 1; }
+.ddb-small-val { font-size: 1.4rem; font-weight: bold; color: #666; border: none; background: transparent; text-align: center; width: 60px; padding: 0; line-height: 1; }
+.ddb-separator { font-size: 2rem; color: #ccc; margin-bottom: 5px; font-weight: 300; }
+
+/* Hide Section Titles and Setup Button in Dense Mode */
+body.dense-mode h2.section-title { display: none; }
+body.dense-mode .setup-scores-container { display: none; }
+
+#dense-header {
+  text-align: center;
+  margin-bottom: 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--gold);
+  column-span: all;
+  width: 100%;
+}
+
+/* Tab Columns - Default (Normal View) */
+.tab-columns {
+  display: block;
+}
+
+.sheet-section-col {
+  margin-bottom: 20px;
+}
+
+.sheet-section-col .section-title {
+  margin-top: 0;
+}
+
+/* Remove margin from attunement section when in column */
+.attunement-section.sheet-section-col {
+  /* Normal view styles are handled by .attunement-section class */
+}
+
+/* Dense Mode Overrides for Tab Columns */
+body.dense-mode .tab-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+@media (min-width: 1200px) {
+  body.dense-mode .tab-columns {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+body.dense-mode .sheet-section-col {
+  background: white;
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  padding: 5px;
+  height: 100%;
+  overflow-x: auto;
+  margin-bottom: 0;
+}
+
+body.dense-mode .attunement-section.sheet-section-col {
+  margin-top: 0;
+  border-top: 1px solid var(--gold);
+  padding-top: 5px;
+}
+
+/* Make contents smaller in Dense Mode */
+body.dense-mode .sheet-section-col .section-title {
+  font-size: 0.9rem;
+  margin-bottom: 5px;
+  padding-bottom: 2px;
+}
+
+body.dense-mode .sheet-section-col .inventory-header,
+body.dense-mode .sheet-section-col .spell-list-header {
+  font-size: 0.7rem;
+  padding: 0 4px;
+}
+
+body.dense-mode .sheet-section-col .inventory-item,
+body.dense-mode .sheet-section-col .spell-row {
+  padding: 2px 4px;
+  font-size: 0.75rem;
+  gap: 4px;
+}
+
+body.dense-mode .sheet-section-col input,
+body.dense-mode .sheet-section-col select,
+body.dense-mode .sheet-section-col button {
+  font-size: 0.75rem;
+  min-height: 20px;
+  padding: 1px 4px;
+}
+
+@media (min-width: 769px) {
+  /* Normal View Min-Width */
+  .tab-columns .spell-list-header, .tab-columns .spell-row,
+  .tab-columns .inventory-header, .tab-columns .inventory-item {
+    min-width: 500px;
+  }
+  
+  /* Dense View Override - Remove Min-Width to fit columns */
+  body.dense-mode .tab-columns .spell-list-header, 
+  body.dense-mode .tab-columns .spell-row,
+  body.dense-mode .tab-columns .inventory-header, 
+  body.dense-mode .tab-columns .inventory-item {
+    min-width: 0;
+  }
+  
+  /* Tighter Grid Columns for Dense Mode */
+  body.dense-mode .inventory-item,
+  body.dense-mode .inventory-header {
+    grid-template-columns: 20px 20px 1fr 40px 40px 25px 25px;
+  }
+  
+  body.dense-mode .spell-row,
+  body.dense-mode .spell-list-header {
+    grid-template-columns: 20px 20px 25px 1fr 40px 40px 20px 20px 20px 20px 20px;
+  }
+}
+
+/* Dense Mode Inventory Header "Equip" -> "E" */
+body.dense-mode .inventory-header span:nth-child(2) {
+  visibility: hidden;
+  position: relative;
+}
+body.dense-mode .inventory-header span:nth-child(2)::after {
+  content: "E";
+  visibility: visible;
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+}
