@@ -3572,6 +3572,15 @@ window.createSidebarMenu = function () {
   denseBtn.onclick = window.toggleDenseMode;
   sidebarContent.appendChild(denseBtn);
 
+  // Swap Scores Toggle
+  const swapBtn = document.createElement("button");
+  swapBtn.className = "sidebar-btn";
+  swapBtn.id = "btn-swap-score";
+  const isSwapped = document.body.classList.contains("swap-scores");
+  swapBtn.innerText = isSwapped ? "Swap Score/Mod (On)" : "Swap Score/Mod";
+  swapBtn.onclick = window.toggleScoreSwap;
+  sidebarContent.appendChild(swapBtn);
+
   if (actionsDiv) {
     Array.from(actionsDiv.children).forEach((child) => {
       // Move buttons/labels to sidebar
@@ -3641,6 +3650,17 @@ window.injectCombatActions = function (actionsData) {
   });
 };
 
+window.toggleScoreSwap = function () {
+  document.body.classList.toggle("swap-scores");
+  const isSwapped = document.body.classList.contains("swap-scores");
+  localStorage.setItem("swapScores", isSwapped);
+  
+  const btn = document.getElementById("btn-swap-score");
+  if (btn) btn.innerText = isSwapped ? "Swap Score/Mod (On)" : "Swap Score/Mod";
+
+  window.toggleSidebar(); // Close sidebar
+};
+
 window.toggleDenseMode = function () {
   document.body.classList.toggle("dense-mode");
   const isDense = document.body.classList.contains("dense-mode");
@@ -3702,9 +3722,24 @@ window.enableDenseLayout = function() {
     // 0. Move Combat & HP (Top)
     const combatStats = document.querySelector('.combat-stats');
     if (combatStats) move(combatStats, combatArea);
-    
+
+    // Wrapper for HP and Death Saves
+    const hpDeathWrapper = document.createElement('div');
+    hpDeathWrapper.className = 'dense-hp-death-wrapper';
+    combatArea.appendChild(hpDeathWrapper);
+
     const ddbHp = document.querySelector('.ddb-hp-box');
-    if (ddbHp) move(ddbHp, combatArea);
+    if (ddbHp) move(ddbHp, hpDeathWrapper);
+
+    const deathSavesBox = document.querySelector('.death-saves-box');
+    if (deathSavesBox) move(deathSavesBox, hpDeathWrapper);
+
+    // Hide Size Box
+    const sizeField = document.getElementById('charSize')?.closest('.field');
+    if (sizeField) {
+        sizeField.style.display = 'none';
+        sizeField.dataset.hiddenByDenseSize = 'true';
+    }
 
     // Hide Top Section & Create Dense Header
     const charNameInput = document.getElementById('charName');
@@ -3807,9 +3842,6 @@ window.enableDenseLayout = function() {
         
         sidebarLeft.appendChild(defWrapper);
     }
-
-    const deathSavesBox = document.querySelector('.death-saves-box');
-    if (deathSavesBox) move(deathSavesBox, sidebarLeft);
 
     const hpDeathGrid = document.querySelector('.hp-death-grid');
     if (hpDeathGrid) hpDeathGrid.style.display = 'none';
@@ -3914,6 +3946,13 @@ window.disableDenseLayout = function() {
         }
     }
 
+    // Restore Size Box
+    const sizeField = document.getElementById('charSize')?.closest('.field');
+    if (sizeField && sizeField.dataset.hiddenByDenseSize === 'true') {
+        sizeField.style.display = '';
+        delete sizeField.dataset.hiddenByDenseSize;
+    }
+
     // Cleanup Action Tab
     const actionSection = document.getElementById('dense-actions');
     if (actionSection) {
@@ -3923,6 +3962,7 @@ window.disableDenseLayout = function() {
     }
     document.querySelectorAll('.dense-generated-tab').forEach(el => el.remove());
     document.querySelectorAll('.dense-attacks-header').forEach(el => el.remove());
+    document.querySelectorAll('.dense-hp-death-wrapper').forEach(el => el.remove());
 
     // Restore all moved elements
     document.querySelectorAll('[data-original-parent]').forEach(el => {
@@ -4309,6 +4349,15 @@ window.injectDDBHPBox = function() {
       6. INITIALIZATION
       ========================================= */
 document.addEventListener("DOMContentLoaded", () => {
+  // Load Dense Mode Preference
+  if (localStorage.getItem("denseMode") === "true") {
+    document.body.classList.add("dense-mode");
+  }
+  // Load Swap Scores Preference
+  if (localStorage.getItem("swapScores") === "true") {
+    document.body.classList.add("swap-scores");
+  }
+
   // Initialize UI components (Sidebar, QuickNav)
   if (window.createSidebarMenu) window.createSidebarMenu();
   if (window.initQuickNav) window.initQuickNav();
@@ -4336,12 +4385,16 @@ document.addEventListener("DOMContentLoaded", () => {
       pbInput.style.fontWeight = "600";
   }
 
-  window.isInitializing = true;
-
     // Load Dense Mode Preference
     if (localStorage.getItem("denseMode") === "true") {
       document.body.classList.add("dense-mode");
     }
+    // Load Swap Scores Preference
+    if (localStorage.getItem("swapScores") === "true") {
+      document.body.classList.add("swap-scores");
+    }
+
+  window.isInitializing = true;
 
   try {
     // Check for data immediately
@@ -4497,6 +4550,12 @@ document.addEventListener("DOMContentLoaded", () => {
           document.body.classList.add("dense-mode");
         } else {
           document.body.classList.remove("dense-mode");
+        }
+        // Enforce swap scores preference over saved theme string
+        if (localStorage.getItem("swapScores") === "true") {
+          document.body.classList.add("swap-scores");
+        } else {
+          document.body.classList.remove("swap-scores");
         }
       }
       Object.keys(data).forEach((key) => {

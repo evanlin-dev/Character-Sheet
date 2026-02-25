@@ -213,7 +213,7 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
 .stat-block { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
 .stat-card { display: flex; flex-direction: column; gap: 8px; }
 
-.stat { background: linear-gradient(135deg, var(--red-dark) 0%, var(--red) 100%); border-radius: 8px; padding: 16px; text-align: center; box-shadow: 0 4px 12px var(--shadow-heavy); position: relative; overflow: hidden; }
+.stat { background: linear-gradient(135deg, var(--red-dark) 0%, var(--red) 100%); border-radius: 8px; padding: 16px; text-align: center; box-shadow: 0 4px 12px var(--shadow-heavy); position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .stat::before { content: ""; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%); transform: rotate(45deg); }
 .stat-name { font-family: "Cinzel", serif; font-size: 0.85rem; font-weight: 600; color: var(--gold); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
 .stat-value { font-size: 2.5rem; font-weight: 700; color: white; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3); position: relative; }
@@ -1547,6 +1547,22 @@ body.dense-mode .inventory-item { padding: 2px 6px; gap: 4px; font-size: 0.8rem;
   display: none;
 }
 
+.dense-hp-death-wrapper {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  max-width: 420px;
+  margin: 0 auto;
+}
+.dense-hp-death-wrapper .ddb-hp-box {
+  margin: 0;
+  flex: 1;
+  max-width: none;
+}
+.dense-hp-death-wrapper .death-saves-box {
+  width: auto;
+}
+
 body.dense-mode .dense-add-weapon-btn {
   width: 100%;
   margin-bottom: 10px;
@@ -1826,4 +1842,32 @@ body.dense-mode .inventory-header span:nth-child(2)::after {
   left: 0;
   right: 0;
   text-align: center;
+}
+
+/* Swap Scores Logic */
+body.swap-scores .stat-name { order: 1; }
+body.swap-scores .stat-modifier { order: 2; }
+body.swap-scores .stat-value { order: 3; }
+
+/* Swap Emphasis (Normal Mode) */
+body.swap-scores .stat-value { 
+  font-size: 1.1rem !important; 
+  text-shadow: none !important; 
+  color: var(--parchment) !important; 
+}
+body.swap-scores .stat-modifier input { 
+  font-size: 2.5rem !important; 
+  font-weight: 700 !important; 
+  color: white !important; 
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3) !important; 
+}
+
+/* Swap Emphasis (Dense Mode) */
+body.swap-scores.dense-mode .stat-value { 
+  font-size: 0.7rem !important; 
+  font-weight: normal !important; 
+}
+body.swap-scores.dense-mode .stat-modifier input { 
+  font-size: 1.4rem !important; 
+  font-weight: 800 !important; 
 }
