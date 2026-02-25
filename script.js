@@ -3801,8 +3801,11 @@ window.enableDenseLayout = function() {
         sidebarArea.appendChild(defWrapper);
     }
 
+    const deathSavesBox = document.querySelector('.death-saves-box');
+    if (deathSavesBox) move(deathSavesBox, sidebarArea);
+
     const hpDeathGrid = document.querySelector('.hp-death-grid');
-    if (hpDeathGrid) move(hpDeathGrid, sidebarArea);
+    if (hpDeathGrid) hpDeathGrid.style.display = 'none';
 
     // 3. Move Tabs & Actions (Right)
     const tabs = document.querySelector('.tabs');
@@ -3912,6 +3915,9 @@ window.disableDenseLayout = function() {
         }
         delete el.dataset.originalParent;
     });
+
+    const hpDeathGrid = document.querySelector('.hp-death-grid');
+    if (hpDeathGrid) hpDeathGrid.style.display = '';
 
     // Remove Labels
     document.querySelectorAll('.dense-ability-label').forEach(el => el.remove());
