@@ -3785,10 +3785,21 @@ window.enableDenseLayout = function() {
     if (langField) move(langField, sidebarArea);
     
     const defField = document.getElementById('defenses')?.closest('.field');
-    if (defField) move(defField, sidebarArea);
+    const condField = document.getElementById('activeConditionsInput')?.closest('.combat-stat') || document.getElementById('activeConditionsInput')?.closest('.field');
 
-    const condField = document.getElementById('activeConditionsInput')?.closest('.field');
-    if (condField) move(condField, sidebarArea);
+    if (defField || condField) {
+        const defWrapper = document.createElement('div');
+        defWrapper.className = 'feature-box dense-defenses-wrapper';
+        defWrapper.style.display = 'flex';
+        defWrapper.style.flexDirection = 'column';
+        defWrapper.style.gap = '5px';
+        defWrapper.innerHTML = '<div class="feature-header" style="border-bottom: 1px solid var(--gold); margin-bottom: 2px; font-weight: bold; color: var(--red-dark); font-size: 0.85rem; padding-bottom: 2px;">Defenses & Immunities</div>';
+        
+        if (defField) move(defField, defWrapper);
+        if (condField) move(condField, defWrapper);
+        
+        sidebarArea.appendChild(defWrapper);
+    }
 
     const hpDeathGrid = document.querySelector('.hp-death-grid');
     if (hpDeathGrid) move(hpDeathGrid, sidebarArea);
