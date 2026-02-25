@@ -3853,6 +3853,17 @@ window.enableDenseLayout = function() {
                 move(weaponList, actionSection);
                 actionSection.prepend(weaponList);
                 
+                const addWeaponBtn = document.querySelector('button[onclick="addWeapon()"]');
+                if (addWeaponBtn) {
+                    move(addWeaponBtn, actionSection);
+                    if (weaponList.nextSibling) {
+                        actionSection.insertBefore(addWeaponBtn, weaponList.nextSibling);
+                    } else {
+                        actionSection.appendChild(addWeaponBtn);
+                    }
+                    addWeaponBtn.classList.add('dense-add-weapon-btn');
+                }
+                
                 const atkHeader = document.createElement('div');
                 atkHeader.className = 'dense-attacks-header feature-header';
                 atkHeader.style.fontWeight = 'bold';
@@ -3928,6 +3939,7 @@ window.disableDenseLayout = function() {
 
     // Remove Labels
     document.querySelectorAll('.dense-ability-label').forEach(el => el.remove());
+    document.querySelectorAll('.dense-add-weapon-btn').forEach(el => el.classList.remove('dense-add-weapon-btn'));
 
     root.remove();
 };

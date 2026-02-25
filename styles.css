@@ -1436,7 +1436,7 @@ body.dense-mode textarea {
 body.dense-mode .styled-select { padding: 1px 18px 1px 4px; background-position: right 2px center; }
 
 /* Compact Stats */
-body.dense-mode .stat { padding: 2px 4px; display: flex; flex-direction: column; justify-content: center; gap: 0; max-height: 48px; }
+body.dense-mode .stat { padding: 6px 4px; display: flex; flex-direction: column; justify-content: center; gap: 0; max-height: none; }
 body.dense-mode .stat-value { font-size: 1.4rem; line-height: 0.9; }
 body.dense-mode .stat-name { font-size: 0.6rem; margin-bottom: 0; line-height: 1; }
 body.dense-mode .stat input {
@@ -1511,12 +1511,13 @@ body.dense-mode .inventory-item { padding: 2px 6px; gap: 4px; font-size: 0.8rem;
   border-radius: 0;
   border: none;
   flex-wrap: nowrap;
+  margin-top: 3px;
 }
 
 #dense-scores > .stat {
   flex: 1;
   min-width: 0;
-  padding: 1px 0;
+  padding: 6px 4px;
   border-radius: 4px;
 }
 
@@ -1539,10 +1540,18 @@ body.dense-mode .inventory-item { padding: 2px 6px; gap: 4px; font-size: 0.8rem;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin-top: 0;
 }
 
 #dense-actions > h2.section-title {
   display: none;
+}
+
+body.dense-mode .dense-add-weapon-btn {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 4px;
+  font-size: 0.85rem;
 }
 
 .dense-ability-label {
