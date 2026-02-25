@@ -1436,9 +1436,19 @@ body.dense-mode textarea {
 body.dense-mode .styled-select { padding: 1px 18px 1px 4px; background-position: right 2px center; }
 
 /* Compact Stats */
-body.dense-mode .stat { padding: 4px; }
-body.dense-mode .stat-value { font-size: 1.4rem; }
-body.dense-mode .stat-name { font-size: 0.65rem; margin-bottom: 1px; }
+body.dense-mode .stat { padding: 2px 4px; display: flex; flex-direction: column; justify-content: center; gap: 0; max-height: 48px; }
+body.dense-mode .stat-value { font-size: 1.4rem; line-height: 0.9; }
+body.dense-mode .stat-name { font-size: 0.6rem; margin-bottom: 0; line-height: 1; }
+body.dense-mode .stat input {
+  min-height: 0;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  line-height: 0.9;
+  width: 100%;
+}
+body.dense-mode .stat-modifier input { font-size: 0.7rem; margin-bottom: 0; }
+body.dense-mode .stat-value input { font-size: 1.4rem; font-weight: 800; }
 
 /* Compact Skills */
 body.dense-mode .skill-item { padding: 1px 4px; gap: 4px; font-size: 0.8rem; }
@@ -1462,11 +1472,12 @@ body.dense-mode .inventory-item { padding: 2px 6px; gap: 4px; font-size: 0.8rem;
 /* New Grid Layout Structure */
 #dense-layout-root {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 480px 1fr;
   grid-template-areas: 
     "combat combat"
-    "scores scores"
+    "scores main"
     "sidebar main";
+  grid-template-rows: min-content min-content 1fr;
   gap: 12px;
   margin-top: 10px;
   width: 100%;
@@ -1494,24 +1505,33 @@ body.dense-mode .inventory-item { padding: 2px 6px; gap: 4px; font-size: 0.8rem;
   grid-area: scores;
   display: flex;
   justify-content: space-between;
-  gap: 8px;
-  background: var(--parchment-dark);
-  padding: 8px;
-  border-radius: 6px;
-  border: 1px solid var(--gold);
-  flex-wrap: wrap;
+  gap: 1px;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  flex-wrap: nowrap;
 }
 
 #dense-scores > .stat {
   flex: 1;
   min-width: 0;
+  padding: 1px 0;
+  border-radius: 4px;
 }
 
 #dense-sidebar {
   grid-area: sidebar;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+#dense-sidebar-left, #dense-sidebar-right {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 #dense-main {

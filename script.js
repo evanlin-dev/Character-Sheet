@@ -3671,6 +3671,13 @@ window.enableDenseLayout = function() {
     
     const sidebarArea = document.createElement('div');
     sidebarArea.id = 'dense-sidebar';
+
+    const sidebarLeft = document.createElement('div');
+    sidebarLeft.id = 'dense-sidebar-left';
+    const sidebarRight = document.createElement('div');
+    sidebarRight.id = 'dense-sidebar-right';
+    sidebarArea.appendChild(sidebarLeft);
+    sidebarArea.appendChild(sidebarRight);
     
     const mainArea = document.createElement('div');
     mainArea.id = 'dense-main';
@@ -3756,7 +3763,7 @@ window.enableDenseLayout = function() {
             }
 
             move(skills, wrapper);
-            sidebarArea.appendChild(wrapper);
+            sidebarRight.appendChild(wrapper);
         }
     });
 
@@ -3778,11 +3785,11 @@ window.enableDenseLayout = function() {
     if (toolField) move(toolField, profsWrapper);
     
     if (profsWrapper.children.length > 1) {
-        sidebarArea.appendChild(profsWrapper);
+        sidebarLeft.appendChild(profsWrapper);
     }
     
     const langField = document.getElementById('languages')?.closest('.field');
-    if (langField) move(langField, sidebarArea);
+    if (langField) move(langField, sidebarLeft);
     
     const defField = document.getElementById('defenses')?.closest('.field');
     const condField = document.getElementById('activeConditionsInput')?.closest('.combat-stat') || document.getElementById('activeConditionsInput')?.closest('.field');
@@ -3798,11 +3805,11 @@ window.enableDenseLayout = function() {
         if (defField) move(defField, defWrapper);
         if (condField) move(condField, defWrapper);
         
-        sidebarArea.appendChild(defWrapper);
+        sidebarLeft.appendChild(defWrapper);
     }
 
     const deathSavesBox = document.querySelector('.death-saves-box');
-    if (deathSavesBox) move(deathSavesBox, sidebarArea);
+    if (deathSavesBox) move(deathSavesBox, sidebarLeft);
 
     const hpDeathGrid = document.querySelector('.hp-death-grid');
     if (hpDeathGrid) hpDeathGrid.style.display = 'none';
