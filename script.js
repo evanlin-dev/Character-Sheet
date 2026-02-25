@@ -3909,6 +3909,29 @@ window.enableDenseLayout = function() {
         }
     }
 
+    // Move Resources to Tabs
+    const resourcesContainer = document.getElementById('resourcesContainer');
+    if (resourcesContainer) {
+        const resourcesSection = resourcesContainer.closest('.sheet-section');
+        if (resourcesSection) {
+            // Create Tab Button
+            const resTabBtn = document.createElement('div');
+            resTabBtn.className = 'tab dense-generated-tab';
+            resTabBtn.textContent = 'Resources';
+            resTabBtn.setAttribute('onclick', "switchTab('dense-resources')");
+            
+            if (tabs) {
+                tabs.appendChild(resTabBtn);
+            }
+
+            // Prepare Content
+            resourcesSection.classList.add('tab-content');
+            resourcesSection.id = 'dense-resources';
+            
+            move(resourcesSection, mainArea);
+        }
+    }
+
     // Insert Root before Stat Block (keeping Name/Inputs at top)
     const statBlock = document.querySelector('.stat-block');
     if (statBlock) {
@@ -3960,6 +3983,15 @@ window.disableDenseLayout = function() {
         actionSection.classList.remove('active');
         actionSection.removeAttribute('id');
     }
+
+    // Cleanup Resources Tab
+    const resSection = document.getElementById('dense-resources');
+    if (resSection) {
+        resSection.classList.remove('tab-content');
+        resSection.classList.remove('active');
+        resSection.removeAttribute('id');
+    }
+
     document.querySelectorAll('.dense-generated-tab').forEach(el => el.remove());
     document.querySelectorAll('.dense-attacks-header').forEach(el => el.remove());
     document.querySelectorAll('.dense-hp-death-wrapper').forEach(el => el.remove());
