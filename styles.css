@@ -1588,6 +1588,7 @@ body.dense-mode .inventory-item { padding: 2px 6px; gap: 4px; font-size: 0.8rem;
   border-radius: 12px;
   background: white;
   box-shadow: 0 4px 12px var(--shadow);
+  display: none;
 }
 
 .ddb-box-background {
@@ -1666,6 +1667,11 @@ body.dense-mode .inventory-item { padding: 2px 6px; gap: 4px; font-size: 0.8rem;
 /* Hide Section Titles and Setup Button in Dense Mode */
 body.dense-mode h2.section-title { display: none; }
 body.dense-mode .setup-scores-container { display: none; }
+
+/* Show DDB HP Box in Dense Mode */
+body.dense-mode .ddb-hp-box { display: block; }
+/* Hide Standard HP Bar in Dense Mode */
+body.dense-mode .hp-bar-container, body.dense-mode .hp-controls { display: none; }
 
 #dense-header {
   text-align: center;

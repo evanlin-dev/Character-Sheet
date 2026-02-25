@@ -516,6 +516,14 @@ window.updateHpBar = function () {
       textDisplay.textContent = current + (temp > 0 ? ` (+${temp})` : "");
       document.getElementById("maxHpTextDisplay").textContent = max;
   }
+
+  // Sync DDB Box if present
+  const ddbHp = document.getElementById("ddb-hp");
+  const ddbMax = document.getElementById("ddb-maxHp");
+  const ddbTemp = document.getElementById("ddb-tempHp");
+  if (ddbHp) ddbHp.value = current;
+  if (ddbMax) ddbMax.value = max;
+  if (ddbTemp) ddbTemp.value = temp;
 };
 
 window.adjustHP = function (amount) {
@@ -4129,30 +4137,45 @@ window.injectDDBHPBox = function() {
             <div class="ddb-stats">
                 <div class="ddb-stat-item">
                     <label>Current</label>
-                    <input type="number" id="hp" class="ddb-current-val" value="0">
+                    <input type="number" id="ddb-hp" class="ddb-current-val" value="0">
                 </div>
                 <div class="ddb-separator">/</div>
                 <div class="ddb-stat-item">
                     <label>Max</label>
-                    <input type="number" id="maxHp" class="ddb-small-val" value="0">
+                    <input type="number" id="ddb-maxHp" class="ddb-small-val" value="0">
                 </div>
                 <div class="ddb-stat-item" style="margin-left:10px;">
                     <label>Temp</label>
-                    <input type="number" id="tempHp" class="ddb-small-val" value="0" style="color:#2d6a4f;">
+                    <input type="number" id="ddb-tempHp" class="ddb-small-val" value="0" style="color:#2d6a4f;">
                 </div>
             </div>
         </div>
     `;
     
     target.parentNode.insertBefore(container, target);
-    if (hpBar) hpBar.remove();
-    if (hpControls) hpControls.remove();
     
     // Re-attach listeners
     const hpInput = document.getElementById('hp');
     const maxHpInput = document.getElementById('maxHp');
     const tempHpInput = document.getElementById('tempHp');
     const adjustInput = document.getElementById('hp-adjust-input');
+
+    // Sync DDB inputs to main inputs
+    const ddbHp = document.getElementById("ddb-hp");
+    const ddbMax = document.getElementById("ddb-maxHp");
+    const ddbTemp = document.getElementById("ddb-tempHp");
+
+    const syncToMain = () => {
+        if (ddbHp) hpInput.value = ddbHp.value;
+        if (ddbMax) maxHpInput.value = ddbMax.value;
+        if (ddbTemp) tempHpInput.value = ddbTemp.value;
+        window.updateHpBar();
+        window.saveCharacter();
+    };
+
+    if (ddbHp) ddbHp.addEventListener('input', syncToMain);
+    if (ddbMax) ddbMax.addEventListener('input', syncToMain);
+    if (ddbTemp) ddbTemp.addEventListener('input', syncToMain);
     
     [hpInput, maxHpInput, tempHpInput].forEach(el => {
         el.addEventListener('input', window.saveCharacter);
