@@ -3825,6 +3825,23 @@ window.enableDenseLayout = function() {
             actionSection.id = 'dense-actions';
             
             move(actionSection, mainArea);
+
+            // Move Weapon List to Actions Tab
+            const weaponList = document.getElementById('weapon-list');
+            if (weaponList) {
+                move(weaponList, actionSection);
+                actionSection.prepend(weaponList);
+                
+                const atkHeader = document.createElement('div');
+                atkHeader.className = 'dense-attacks-header feature-header';
+                atkHeader.style.fontWeight = 'bold';
+                atkHeader.style.color = 'var(--red-dark)';
+                atkHeader.style.borderBottom = '1px solid var(--gold)';
+                atkHeader.style.marginBottom = '5px';
+                atkHeader.style.marginTop = '5px';
+                atkHeader.textContent = 'Attacks';
+                actionSection.prepend(atkHeader);
+            }
         }
     }
 
@@ -3873,36 +3890,17 @@ window.disableDenseLayout = function() {
         actionSection.removeAttribute('id');
     }
     document.querySelectorAll('.dense-generated-tab').forEach(el => el.remove());
+    document.querySelectorAll('.dense-attacks-header').forEach(el => el.remove());
 
-    const restore = (el) => {
-        if (el.dataset.originalParent) {
-            const ph = document.getElementById(el.dataset.originalParent);
-            if (ph) {
-                ph.parentNode.insertBefore(el, ph);
-                ph.remove();
-                delete el.dataset.originalParent;
-            }
+    // Restore all moved elements
+    document.querySelectorAll('[data-original-parent]').forEach(el => {
+        const ph = document.getElementById(el.dataset.originalParent);
+        if (ph) {
+            ph.parentNode.insertBefore(el, ph);
+            ph.remove();
         }
-    };
-
-    // Restore from Combat Top
-    const combatTop = root.querySelector('#dense-combat-top');
-    if (combatTop) Array.from(combatTop.children).forEach(restore);
-
-    // Restore from Scores
-    Array.from(root.querySelector('#dense-scores').children).forEach(restore);
-    
-    // Restore from Sidebar
-    Array.from(root.querySelector('#dense-sidebar').children).forEach(child => {
-        if (child.classList.contains('dense-skill-group') || child.classList.contains('dense-save-group') || child.classList.contains('dense-profs-wrapper')) {
-            Array.from(child.children).forEach(restore);
-        } else {
-            restore(child);
-        }
+        delete el.dataset.originalParent;
     });
-    
-    // Restore from Main
-    Array.from(root.querySelector('#dense-main').children).forEach(restore);
 
     // Remove Labels
     document.querySelectorAll('.dense-ability-label').forEach(el => el.remove());
@@ -4110,6 +4108,55 @@ window.initQuickNav = function () {
   buildLinks();
 };
 
+window.openHpSettingsModal = function() {
+    let modal = document.getElementById('hpSettingsModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'hpSettingsModal';
+        modal.className = 'info-modal-overlay';
+        modal.innerHTML = `
+            <div class="info-modal-content" style="max-width: 300px; text-align: center;">
+                <button class="close-modal-btn" onclick="document.getElementById('hpSettingsModal').style.display='none'">&times;</button>
+                <h3 class="info-modal-title">HP Settings</h3>
+                <div class="field" style="margin-bottom: 10px;">
+                    <span class="field-label">Current HP</span>
+                    <input type="number" id="modal-hp-current" style="text-align:center; font-weight:bold;">
+                </div>
+                <div class="field" style="margin-bottom: 10px;">
+                    <span class="field-label">Max HP</span>
+                    <input type="number" id="modal-hp-max" style="text-align:center; font-weight:bold;">
+                </div>
+                <div class="field" style="margin-bottom: 15px;">
+                    <span class="field-label">Temp HP</span>
+                    <input type="number" id="modal-hp-temp" style="text-align:center; font-weight:bold; color:#2d6a4f;">
+                </div>
+                <button class="btn" onclick="window.saveHpSettings()">Save</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    document.getElementById('modal-hp-current').value = document.getElementById('hp').value;
+    document.getElementById('modal-hp-max').value = document.getElementById('maxHp').value;
+    document.getElementById('modal-hp-temp').value = document.getElementById('tempHp').value;
+    
+    modal.style.display = 'flex';
+};
+
+window.saveHpSettings = function() {
+    const cur = parseInt(document.getElementById('modal-hp-current').value) || 0;
+    const max = parseInt(document.getElementById('modal-hp-max').value) || 1;
+    const temp = parseInt(document.getElementById('modal-hp-temp').value) || 0;
+    
+    document.getElementById('hp').value = cur;
+    document.getElementById('maxHp').value = max;
+    document.getElementById('tempHp').value = temp;
+    
+    window.updateHpBar();
+    window.saveCharacter();
+    document.getElementById('hpSettingsModal').style.display = 'none';
+};
+
 window.injectDDBHPBox = function() {
     const hpBar = document.querySelector('.hp-bar-container');
     const hpControls = document.querySelector('.hp-controls');
@@ -4128,7 +4175,10 @@ window.injectDDBHPBox = function() {
             </svg>
         </div>
         <div class="ddb-content">
-            <h1 class="ddb-label">Hit Points</h1>
+            <div style="position: relative; width: 100%; text-align: center;">
+                <h1 class="ddb-label">Hit Points</h1>
+                <button class="edit-hp-btn" style="position: absolute; right: 0; top: -5px; background: none; border: none; cursor: pointer; font-size: 1rem; color: #999; padding: 0;" title="Edit Max HP">⚙️</button>
+            </div>
             <div class="ddb-controls">
                 <button class="ddb-btn heal-btn">Heal</button>
                 <input class="ddb-input" type="number" placeholder="Amount" id="hp-adjust-input">
@@ -4154,6 +4204,8 @@ window.injectDDBHPBox = function() {
     
     target.parentNode.insertBefore(container, target);
     
+    container.querySelector('.edit-hp-btn').onclick = window.openHpSettingsModal;
+
     // Re-attach listeners
     const hpInput = document.getElementById('hp');
     const maxHpInput = document.getElementById('maxHp');
@@ -4621,7 +4673,8 @@ document.addEventListener("DOMContentLoaded", () => {
         '#lastSavedModal',
         '#expModal',
         '#languageSearchModal',
-        '#hpManageModal'
+        '#hpManageModal',
+        '#hpSettingsModal'
     ];
 
     const checkModals = () => {
