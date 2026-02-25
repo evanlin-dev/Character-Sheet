@@ -3723,6 +3723,32 @@ window.enableDenseLayout = function() {
     const combatStats = document.querySelector('.combat-stats');
     if (combatStats) move(combatStats, combatArea);
 
+    // Move Heroic Inspiration to Combat Stats
+    const heroicInspiration = document.getElementById('heroicInspiration');
+    if (heroicInspiration && combatStats) {
+        const wrapper = heroicInspiration.closest('.combat-stat') || heroicInspiration.closest('.field');
+        if (wrapper && !combatStats.contains(wrapper)) {
+            move(wrapper, combatStats);
+            
+            // Place next to Proficiency Bonus if possible
+            const profBonus = document.getElementById('profBonus');
+            const profWrapper = profBonus ? (profBonus.closest('.combat-stat') || profBonus.closest('.field')) : null;
+            if (profWrapper && combatStats.contains(profWrapper)) {
+                profWrapper.parentNode.insertBefore(wrapper, profWrapper.nextSibling);
+            }
+
+            if (wrapper.classList.contains('field')) {
+                wrapper.classList.add('combat-stat');
+                wrapper.classList.remove('field');
+                wrapper.dataset.wasField = 'true';
+                wrapper.style.display = 'flex';
+                wrapper.style.flexDirection = 'column';
+                wrapper.style.alignItems = 'center';
+                wrapper.style.justifyContent = 'center';
+            }
+        }
+    }
+
     // Wrapper for HP and Death Saves
     const hpDeathWrapper = document.createElement('div');
     hpDeathWrapper.className = 'dense-hp-death-wrapper';
@@ -4004,6 +4030,16 @@ window.disableDenseLayout = function() {
             ph.remove();
         }
         delete el.dataset.originalParent;
+
+        if (el.dataset.wasField === 'true') {
+            el.classList.add('field');
+            el.classList.remove('combat-stat');
+            el.style.display = '';
+            el.style.flexDirection = '';
+            el.style.alignItems = '';
+            el.style.justifyContent = '';
+            delete el.dataset.wasField;
+        }
     });
 
     const hpDeathGrid = document.querySelector('.hp-death-grid');
