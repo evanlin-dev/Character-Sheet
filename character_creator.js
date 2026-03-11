@@ -386,6 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             for (const i of json.classFeature) allClassFeatures.push(i);
                         }
                         if (json.subclass && Array.isArray(json.subclass)) {
+                            console.log(`[Creator] Loaded subclasses from ${file.name}:`, json.subclass);
                             for (const i of json.subclass) allSubclasses.push(i);
                         }
                         if (json.subclassFeature && Array.isArray(json.subclassFeature)) {
@@ -649,7 +650,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateSubclassOptions(className) {
         const subclassList = document.getElementById('creator-subclass-list');
         subclassList.innerHTML = '';
-        const available = allSubclasses.filter(s => s.className === className);
+        console.log(`[Creator] Updating subclasses for ${className}`);
+        const targetClass = className.trim().toLowerCase();
+        const available = allSubclasses.filter(s => s.className && s.className.trim().toLowerCase() === targetClass);
+        console.log(`[Creator] Available subclasses:`, available);
         
         // Deduplicate preferring XPHB
         const uniqueMap = new Map();
@@ -685,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 div.style.color = 'white';
                 const src = div.querySelector('span:nth-child(2)');
                 if (src) src.style.color = 'rgba(255,255,255,0.8)';
-                selectedSubclass = s.shortName;
+                selectedSubclass = s.shortName || s.name;
                 selectedSubclassSource = s.source;
                 renderClassFeatures();
                 // Re-render features when subclass changes to update available options
@@ -740,7 +744,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const getReferencedClassFeatures = (className, source) => {
         const refs = new Set();
-        const feats = allClassFeatures.filter(f => f.className === className && f.source === source);
+        const feats = allClassFeatures.filter(f => f.className && f.className.toLowerCase() === className.toLowerCase() && f.source === source);
         const scan = (obj) => {
             if (!obj) return;
             if (Array.isArray(obj)) { obj.forEach(scan); return; }
@@ -763,9 +767,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Move container below subclass container if possible to reduce clutter
         const subContainer = document.getElementById('subclass-container');
         if (container && subContainer && container.parentNode === subContainer.parentNode) {
-             // Insert after subclass container
-             subContainer.parentNode.insertBefore(container, subContainer.nextSibling);
-             // Check for label
+             // Check for label BEFORE moving container
              const label = container.previousElementSibling;
              const isLabel = label && label.tagName === 'LABEL' && label.textContent.includes("Features");
              
@@ -811,7 +813,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const referencedFeatures = getReferencedClassFeatures(className, currentClassSource);
 
         let features = allClassFeatures.filter(f => 
-            f.className === className && 
+            f.className && f.className.toLowerCase() === className.toLowerCase() && 
             f.source === currentClassSource &&
             !f.subclassShortName && 
             f.level <= selectedLevel &&
@@ -820,7 +822,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (selectedSubclass) {
             const subFeatures = allSubclassFeatures.filter(f => 
-                f.className === className && 
+                f.className && f.className.toLowerCase() === className.toLowerCase() && 
                 f.subclassShortName === selectedSubclass && 
                 f.source === selectedSubclassSource &&
                 f.level <= selectedLevel
@@ -1310,7 +1312,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Show all base class features 1-20
         let features = allClassFeatures.filter(f => 
-            f.className === className && 
+            f.className && f.className.toLowerCase() === className.toLowerCase() && 
             f.source === currentClassSource &&
             !f.subclassShortName
         ).sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
@@ -1667,7 +1669,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (!feat && selectedClass) {
                 // Check class features (for Divine Order options)
-                feat = allClassFeatures.find(f => f.name === featName && f.className === selectedClass && f.source === currentClassSource);
+                feat = allClassFeatures.find(f => f.name === featName && f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && f.source === currentClassSource);
             }
             if (!feat && featName.includes(" (")) {
                 const baseName = featName.substring(0, featName.lastIndexOf(" ("));
@@ -1680,7 +1682,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectedClass) {
             const referencedFeatures = getReferencedClassFeatures(selectedClass, currentClassSource);
             const classFeats = allClassFeatures.filter(f => 
-                f.className === selectedClass && 
+                f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && 
                 f.source === currentClassSource && 
                 !f.subclassShortName && 
                 f.level <= selectedLevel &&
@@ -1689,9 +1691,9 @@ document.addEventListener('DOMContentLoaded', () => {
             classFeats.forEach(f => features.push({ feature: f, contextName: f.name }));
         }
         if (selectedClass && selectedSubclass) {
-            const subFeats = allSubclassFeatures.filter(f => f.className === selectedClass && f.subclassShortName === selectedSubclass && f.source === selectedSubclassSource && f.level <= selectedLevel);
+            const subFeats = allSubclassFeatures.filter(f => f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && f.subclassShortName === selectedSubclass && f.source === selectedSubclassSource && f.level <= selectedLevel);
             subFeats.forEach(f => features.push({ feature: f, contextName: f.name }));
-            const subclassObj = allSubclasses.find(s => s.className === selectedClass && s.shortName === selectedSubclass && s.source === selectedSubclassSource);
+            const subclassObj = allSubclasses.find(s => s.className && s.className.toLowerCase() === selectedClass.toLowerCase() && s.shortName === selectedSubclass && s.source === selectedSubclassSource);
             if (subclassObj) features.push({ feature: subclassObj, contextName: subclassObj.name });
         }
         if (selectedSpecies) {
@@ -3195,7 +3197,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (feat) selectedFeatures.push({ feature: feat, contextName: name });
             else {
                 // Check class features
-                const cf = allClassFeatures.find(f => f.name === name && f.className === selectedClass && f.source === currentClassSource);
+                const cf = allClassFeatures.find(f => f.name === name && f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && f.source === currentClassSource);
                 if (cf) selectedFeatures.push({ feature: cf, contextName: name });
             }
         });
@@ -3204,7 +3206,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectedClass) {
             const referencedFeatures = getReferencedClassFeatures(selectedClass, currentClassSource);
             const classFeats = allClassFeatures.filter(f => 
-                f.className === selectedClass && 
+                f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && 
                 f.source === currentClassSource && 
                 !f.subclassShortName && 
                 f.level <= selectedLevel &&
@@ -3216,7 +3218,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add Subclass Features
         if (selectedClass && selectedSubclass) {
             const subFeats = allSubclassFeatures.filter(f => 
-                f.className === selectedClass && 
+                f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && 
                 f.subclassShortName === selectedSubclass && 
                 f.source === selectedSubclassSource && 
                 f.level <= selectedLevel
@@ -3224,7 +3226,7 @@ document.addEventListener('DOMContentLoaded', () => {
             subFeats.forEach(f => selectedFeatures.push({ feature: f, contextName: f.name }));
 
             const subclassObj = allSubclasses.find(s => 
-                s.className === selectedClass && 
+                s.className && s.className.toLowerCase() === selectedClass.toLowerCase() && 
                 s.shortName === selectedSubclass && 
                 s.source === selectedSubclassSource
             );
@@ -4699,7 +4701,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (!feat && selectedClass) {
                 // Check class features
-                feat = allClassFeatures.find(f => f.name === featName && f.className === selectedClass && f.source === currentClassSource);
+                feat = allClassFeatures.find(f => f.name === featName && f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && f.source === currentClassSource);
             }
             
             if (feat) featuresToCheck.push(feat);
@@ -4709,7 +4711,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectedClass) {
             const referencedFeatures = getReferencedClassFeatures(selectedClass, currentClassSource);
             const classFeats = allClassFeatures.filter(f => 
-                f.className === selectedClass && 
+                f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && 
                 f.source === currentClassSource && 
                 !f.subclassShortName && 
                 f.level <= selectedLevel &&
@@ -4721,7 +4723,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add Subclass Features
         if (selectedClass && selectedSubclass) {
             const subFeats = allSubclassFeatures.filter(f => 
-                f.className === selectedClass && 
+                f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && 
                 f.subclassShortName === selectedSubclass && 
                 f.source === selectedSubclassSource && 
                 f.level <= selectedLevel
@@ -4729,7 +4731,7 @@ document.addEventListener('DOMContentLoaded', () => {
             featuresToCheck.push(...subFeats);
 
             const subclassObj = allSubclasses.find(s => 
-                s.className === selectedClass && 
+                s.className && s.className.toLowerCase() === selectedClass.toLowerCase() && 
                 s.shortName === selectedSubclass && 
                 s.source === selectedSubclassSource
             );
@@ -5168,7 +5170,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Class Features
         const referencedFeatures = getReferencedClassFeatures(selectedClass, currentClassSource);
         const classFeats = allClassFeatures.filter(f => 
-            f.className === selectedClass && 
+            f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && 
             f.source === currentClassSource &&
             (!f.subclassShortName || f.subclassShortName === selectedSubclass) && 
             f.level <= selectedLevel &&
@@ -5178,7 +5180,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add Subclass Features
         if (selectedSubclass) {
             const subFeats = allSubclassFeatures.filter(f => 
-                f.className === selectedClass && 
+                f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && 
                 f.subclassShortName === selectedSubclass && 
                 f.source === selectedSubclassSource && 
                 f.level <= selectedLevel
@@ -5270,7 +5272,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } else {
                 // Check if it's a class feature (e.g. Protector)
-                const classFeat = allClassFeatures.find(f => f.name === name && f.className === selectedClass && f.source === currentClassSource);
+                const classFeat = allClassFeatures.find(f => f.name === name && f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && f.source === currentClassSource);
                 if (classFeat) {
                     let desc = processEntries(classFeat.entries || classFeat.entry);
                     const cleanedDesc = cleanText(desc);
@@ -5541,7 +5543,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectedClass) {
             const referencedFeatures = getReferencedClassFeatures(selectedClass, currentClassSource);
             featuresForSpells.push(...allClassFeatures.filter(f => 
-                f.className === selectedClass && 
+                f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && 
                 f.source === currentClassSource && 
                 !f.subclassShortName && 
                 f.level <= selectedLevel &&
@@ -5550,10 +5552,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // Subclass Features
         if (selectedClass && selectedSubclass) {
-            featuresForSpells.push(...allSubclassFeatures.filter(f => f.className === selectedClass && f.subclassShortName === selectedSubclass && f.source === selectedSubclassSource && f.level <= selectedLevel));
+            featuresForSpells.push(...allSubclassFeatures.filter(f => f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && f.subclassShortName === selectedSubclass && f.source === selectedSubclassSource && f.level <= selectedLevel));
             
             const subclassObj = allSubclasses.find(s => 
-                s.className === selectedClass && 
+                s.className && s.className.toLowerCase() === selectedClass.toLowerCase() && 
                 s.shortName === selectedSubclass && 
                 s.source === selectedSubclassSource
             );
@@ -5620,6 +5622,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (entry.prepared) extract(entry.prepared);
                 });
             }
+
+            // Enhanced Spell Extraction: Scan text for {@spell name}
+            // This catches spells mentioned in traits that lack 'additionalSpells' structure
+            const scanTextForSpells = (text) => {
+                const regex = /{@spell ([^}|]+)/g;
+                let match;
+                while ((match = regex.exec(text)) !== null) {
+                    let name = match[1].trim().split('|')[0];
+                    name = name.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase());
+                    finalSpellsSet.add(name);
+                }
+            };
+            const traverseEntries = (obj) => {
+                if (!obj) return;
+                if (typeof obj === 'string') scanTextForSpells(obj);
+                else if (Array.isArray(obj)) obj.forEach(traverseEntries);
+                else if (typeof obj === 'object') {
+                    if (obj.entries) traverseEntries(obj.entries);
+                    if (obj.items) traverseEntries(obj.items);
+                }
+            };
+            traverseEntries(feat.entries);
         });
 
         finalSpellsSet.forEach(sName => {

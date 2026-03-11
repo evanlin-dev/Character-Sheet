@@ -1246,6 +1246,7 @@ async function checkDataUploadStatus() {
       const btnCantrips = document.getElementById("btn-search-cantrips-zip");
       const btnSpells = document.getElementById("btn-search-spells-zip");
       const btnClassTable = document.getElementById("btn-view-class-table");
+      const btnCustomData = document.getElementById("btn-custom-data-manager");
       const hasData = req.result && req.result.length > 0;
 
       // Inject Feat Search Button if missing
@@ -1307,6 +1308,7 @@ async function checkDataUploadStatus() {
         if (btnFeats) btnFeats.style.display = "inline-block";
         if (btnLangs) btnLangs.style.display = "inline-block";
         if (btnClassTable) btnClassTable.style.display = "inline-flex";
+        if (btnCustomData) btnCustomData.style.display = "block";
       } else {
         if (btnItems) btnItems.style.display = "none";
         if (btnCantrips) btnCantrips.style.display = "none";
@@ -1314,6 +1316,7 @@ async function checkDataUploadStatus() {
         if (btnFeats) btnFeats.style.display = "none";
         if (btnLangs) btnLangs.style.display = "none";
         if (btnClassTable) btnClassTable.style.display = "none";
+        if (btnCustomData) btnCustomData.style.display = "none";
       }
 
       // Toggle Weapon Proficiency Input Mode
@@ -3581,6 +3584,18 @@ window.createSidebarMenu = function () {
   swapBtn.onclick = window.toggleScoreSwap;
   sidebarContent.appendChild(swapBtn);
 
+  // Custom Data Manager Button
+  const dataBtn = document.createElement("button");
+  dataBtn.id = "btn-custom-data-manager";
+  dataBtn.className = "sidebar-btn";
+  dataBtn.innerText = "Custom Data / Templates";
+  dataBtn.style.display = "none";
+  dataBtn.onclick = () => {
+    window.openCustomDataManager();
+    window.toggleSidebar();
+  };
+  sidebarContent.appendChild(dataBtn);
+
   if (actionsDiv) {
     Array.from(actionsDiv.children).forEach((child) => {
       // Move buttons/labels to sidebar
@@ -5365,8 +5380,9 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
                     try {
                         const json = JSON.parse(file.content);
                         if (json.subclass) {
+                            console.log(`[Level Up] Scanning subclasses in ${file.name}:`, json.subclass);
                             json.subclass.forEach(sc => {
-                                if (sc.className === charClass) subclasses.push(sc);
+                                if (sc.className && sc.className.trim().toLowerCase() === charClass.trim().toLowerCase()) subclasses.push(sc);
                             });
                         }
                     } catch (e) {}
@@ -6011,13 +6027,18 @@ window.fetchLevelUpFeatures = async function(className, subclass, level, minLeve
             const json = JSON.parse(file.content);
             if (json.classFeature) classFeatures.push(...json.classFeature);
             if (json.subclassFeature) subclassFeatures.push(...json.subclassFeature);
-            if (json.subclass) subclasses.push(...json.subclass);
+            if (json.subclass) {
+                console.log(`[Level Up] Loaded subclasses from ${file.name}:`, json.subclass);
+                subclasses.push(...json.subclass);
+            }
         } catch (e) {}
     });
     console.log("fetchLevelUpFeatures - Extracted:", { classFeatures, subclassFeatures, subclasses });
     
+    const normClass = className ? className.trim().toLowerCase() : "";
+
     // Filter for class features, prioritizing XPHB if available
-    const allClassFeaturesForName = classFeatures.filter(f => f.className.toLowerCase() === className.toLowerCase());
+    const allClassFeaturesForName = classFeatures.filter(f => f.className && f.className.trim().toLowerCase() === normClass);
     const hasXPHB = allClassFeaturesForName.some(f => f.source === 'XPHB');
     const relevantClassFeatures = allClassFeaturesForName.filter(f => {
         if (f.level < startLevel || f.level > level) return false;
@@ -6027,7 +6048,8 @@ window.fetchLevelUpFeatures = async function(className, subclass, level, minLeve
 
     let scShortName = null;
     if (subclass) {
-        const scCandidates = subclasses.filter(s => s.name.toLowerCase() === subclass.toLowerCase() && s.className.toLowerCase() === className.toLowerCase());
+        const normSub = subclass.trim().toLowerCase();
+        const scCandidates = subclasses.filter(s => s.name && s.name.trim().toLowerCase() === normSub && s.className && s.className.trim().toLowerCase() === normClass);
         let scObj = scCandidates.find(s => s.source === 'XPHB');
         if (!scObj) scObj = scCandidates.find(s => s.source === 'PHB');
         if (!scObj) scObj = scCandidates[0];
@@ -6035,7 +6057,8 @@ window.fetchLevelUpFeatures = async function(className, subclass, level, minLeve
     }
     let relevantSubclassFeatures = [];
     if (scShortName) {
-        const allScFeatures = subclassFeatures.filter(f => f.className.toLowerCase() === className.toLowerCase() && f.subclassShortName.toLowerCase() === scShortName.toLowerCase() && f.level >= startLevel && f.level <= level);
+        const normShort = scShortName.trim().toLowerCase();
+        const allScFeatures = subclassFeatures.filter(f => f.className && f.className.trim().toLowerCase() === normClass && f.subclassShortName && f.subclassShortName.trim().toLowerCase() === normShort && f.level >= startLevel && f.level <= level);
         const scHasXPHB = allScFeatures.some(f => f.source === 'XPHB');
         relevantSubclassFeatures = allScFeatures.filter(f => {
              if (scHasXPHB && f.source === 'PHB') return false;
@@ -6433,4 +6456,241 @@ window.openClassPickerModal = async function(callback) {
         createItem("Enter Manually...", true);
 
     } catch (e) { console.error(e); list.innerHTML = '<div style="text-align:center; color:red;">Error loading classes.</div>'; }
+};
+
+/* =========================================
+      CUSTOM DATA MANAGER (Templates)
+      ========================================= */
+window.openCustomDataManager = function() {
+    let modal = document.getElementById('customDataModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'customDataModal';
+        modal.className = 'info-modal-overlay';
+        modal.innerHTML = `
+            <div class="info-modal-content" style="max-width: 400px; text-align: center;">
+                <button class="close-modal-btn" onclick="document.getElementById('customDataModal').style.display='none'">&times;</button>
+                <h3 class="info-modal-title">Custom Data & Templates</h3>
+                <p style="font-size:0.9rem; color:var(--ink-light); margin-bottom:15px; line-height: 1.4;">
+                    Create custom content by downloading a template below.
+                    <br>1. <strong>Download</strong> the JSON template.
+                    <br>2. <strong>Edit</strong> the file with your content.
+                    <br>3. <strong>Upload</strong> via Data Viewer (data.html).
+                </p>
+                <div style="margin-bottom: 15px; background: white; padding: 15px; border: 1px solid var(--gold); border-radius: 4px;">
+                    <label style="font-weight:bold; display:block; margin-bottom:8px; color: var(--red-dark);">Select Template Type</label>
+                    <select id="templateTypeSelect" class="styled-select" style="width:100%; margin-bottom:10px;">
+                        <option value="class">Class Template</option>
+                        <option value="subclass">Subclass Template</option>
+                        <option value="race">Species/Race Template</option>
+                        <option value="feat">Feat Template</option>
+                        <option value="spell">Spell Template</option>
+                    </select>
+                    <button class="btn" onclick="window.downloadDataTemplate()" style="width:100%;">Download JSON</button>
+                </div>
+                <div style="font-size: 0.8rem; font-style: italic; color: var(--ink-light);">
+                    Note: Ensure 'className' and 'source' match exactly when linking features.
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'flex';
+};
+
+window.downloadDataTemplate = function() {
+    const type = document.getElementById('templateTypeSelect').value;
+    let data = {};
+    let filename = "template.json";
+
+    if (type === 'class') {
+        filename = "custom-class.json";
+        data = {
+            "class": [
+                {
+                    "name": "My Custom Class",
+                    "source": "Custom",
+                    "hd": { "number": 1, "faces": 8 },
+                    "proficiency": ["dex", "int"],
+                    "spellcastingAbility": "int",
+                    "casterProgression": "1/2",
+                    "startingProficiencies": {
+                        "armor": ["light", "medium", "shields"],
+                        "weapons": ["simple", "martial"],
+                        "tools": ["thieves' tools"],
+                        "skills": {
+                            "choose": {
+                                "from": ["acrobatics", "arcana", "history", "investigation", "nature", "religion"],
+                                "count": 2
+                            }
+                        }
+                    },
+                    "classTableGroups": [
+                        {
+                            "colLabels": ["{@bold Level}", "{@bold PB}", "{@bold Features}"],
+                            "rows": [
+                                [1, "+2", "{@classFeature My Feature|My Custom Class|Custom|1}"],
+                                [2, "+2", "{@classFeature Another Feature|My Custom Class|Custom|2}"]
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "classFeature": [
+                { "name": "My Feature", "source": "Custom", "className": "My Custom Class", "classSource": "Custom", "level": 1, "entries": ["Description of feature 1."] },
+                { "name": "Another Feature", "source": "Custom", "className": "My Custom Class", "classSource": "Custom", "level": 2, "entries": ["Description of feature 2."] }
+            ]
+        };
+    } else if (type === 'subclass') {
+        filename = "custom-subclass.json";
+        data = {
+            "subclass": [
+                {
+                    "name": "My Custom Subclass",
+                    "shortName": "My Sub",
+                    "source": "Custom",
+                    "className": "Fighter",
+                    "classSource": "PHB",
+                    "subclassFeatures": ["My Subclass Feature|Fighter|PHB|My Subclass|Custom|3"]
+                }
+            ],
+            "subclassFeature": [
+                { "name": "My Subclass Feature", "source": "Custom", "className": "Fighter", "classSource": "PHB", "subclassShortName": "My Sub", "subclassSource": "Custom", "level": 3, "entries": ["Description of subclass feature."] }
+            ]
+        };
+    } else if (type === 'race') {
+        filename = "custom-race.json";
+        data = { "race": [{ "name": "My Custom Species", "source": "Custom", "size": ["M"], "speed": 30, "entries": [{ "name": "Trait 1", "entries": ["Description."] }] }] };
+    } else if (type === 'feat') {
+        filename = "custom-feat.json";
+        data = { "feat": [{ "name": "My Custom Feat", "source": "Custom", "entries": ["Description."], "ability": [{ "str": 1 }] }] };
+    } else if (type === 'spell') {
+        filename = "custom-spell.json";
+        data = { "spell": [{ "name": "My Custom Spell", "source": "Custom", "level": 1, "school": "V", "time": [{ "number": 1, "unit": "action" }], "range": { "type": "point", "distance": { "type": "feet", "amount": 60 } }, "components": { "v": true }, "duration": [{ "type": "instant" }], "entries": ["Effect."], "classes": { "fromClassList": [{ "name": "Wizard", "source": "PHB" }] } }] };
+    }
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+/* =========================================
+      CUSTOM DATA MANAGER (Templates)
+      ========================================= */
+window.openCustomDataManager = async function() {
+    let modal = document.getElementById('customDataModal');
+    
+    let hasData = false;
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const data = await new Promise((resolve) => {
+            const req = store.get('currentData');
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        });
+        if (data && data.length > 0) hasData = true;
+    } catch (e) { console.error("DB Check failed", e); }
+
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'customDataModal';
+        modal.className = 'info-modal-overlay';
+        document.body.appendChild(modal);
+    }
+    
+    modal.innerHTML = `
+            <div class="info-modal-content" style="max-width: 400px; text-align: center;">
+                <button class="close-modal-btn" onclick="document.getElementById('customDataModal').style.display='none'">&times;</button>
+                <h3 class="info-modal-title">Custom Data Manager</h3>
+                <p style="font-size:0.9rem; color:var(--ink-light); margin-bottom:15px; line-height: 1.4;">
+                    Download JSON templates to create custom classes or subclasses. 
+                    <br>Fill them out, compress to .zip (optional), and upload via Data Viewer (data.html) to use in Level Up.
+                    Download JSON templates to create custom classes or subclasses.
+                    <br>Fill them out, and upload here or via Data Viewer (data.html).
+                </p>
+                <div style="margin-bottom: 15px; background: white; padding: 15px; border: 1px solid var(--gold); border-radius: 4px;">
+                    <label style="font-weight:bold; display:block; margin-bottom:8px; color: var(--red-dark);">Download Template</label>
+                    <select id="templateTypeSelect" class="styled-select" style="width:100%; margin-bottom:10px;">
+                        <option value="class">Class Template</option>
+                        <option value="subclass">Subclass Template</option>
+                        <option value="race">Species/Race Template</option>
+                        <option value="feat">Feat Template</option>
+                        <option value="spell">Spell Template</option>
+                    </select>
+                    <button class="btn" onclick="window.downloadDataTemplate()" style="width:100%;">Download JSON</button>
+                </div>
+                ${hasData ? `
+                <div style="margin-bottom: 15px; background: white; padding: 15px; border: 1px solid var(--gold); border-radius: 4px;">
+                    <label style="font-weight:bold; display:block; margin-bottom:8px; color: var(--red-dark);">Upload Custom JSON</label>
+                    <input type="file" id="customJsonUpload" accept=".json" style="width: 100%; margin-bottom: 10px; font-size: 0.9rem;">
+                    <button class="btn" onclick="window.uploadCustomJson()" style="width:100%;">Upload & Refresh</button>
+                </div>
+                ` : ''}
+                <div style="font-size: 0.8rem; font-style: italic; color: var(--ink-light);">
+                    Note: Ensure 'className' and 'source' match exactly when linking features.
+                </div>
+            </div>
+    `;
+    modal.style.display = 'flex';
+};
+
+window.uploadCustomJson = async function() {
+    const input = document.getElementById('customJsonUpload');
+    if (!input || !input.files[0]) return alert("Please select a JSON file.");
+    
+    const file = input.files[0];
+    const reader = new FileReader();
+    
+    reader.onload = async (e) => {
+        try {
+            const content = e.target.result;
+            JSON.parse(content); // Validate JSON
+            
+            const db = await openDB();
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            
+            const currentData = await new Promise((resolve, reject) => {
+                const req = store.get('currentData');
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+            
+            if (!currentData) return alert("No database found. Please use Data Viewer to initialize first.");
+            
+            const newFileEntry = { name: file.name, content: content };
+            const index = currentData.findIndex(f => f.name === file.name);
+            
+            if (index >= 0) {
+                if(!confirm(`File '${file.name}' already exists. Overwrite?`)) return;
+                currentData[index] = newFileEntry;
+            } else {
+                currentData.push(newFileEntry);
+            }
+            
+            // Keep sorted
+            currentData.sort((a, b) => a.name.localeCompare(b.name));
+            
+            await new Promise((resolve, reject) => {
+                const req = store.put(currentData, 'currentData');
+                req.onsuccess = () => resolve();
+                req.onerror = () => reject(req.error);
+            });
+            
+            alert("Custom data uploaded successfully.");
+            location.reload();
+        } catch (err) {
+            console.error(err);
+            alert("Error uploading file: " + err.message);
+        }
+    };
+    reader.readAsText(file);
 };
