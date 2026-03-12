@@ -94,6 +94,17 @@ document.addEventListener('DOMContentLoaded', () => {
         "Pistol": { type: "Martial", cat: "Ranged", dmg: "1d10", dtype: "piercing", props: ["Ammunition (30/90)", "Loading"], mastery: "Vex" }
     };
 
+    // Equipment Packs DB
+    const EQUIPMENT_PACKS = {
+        "burglar's pack": ["Backpack", "Ball Bearings (bag of 1000)", "String (10 feet)", "Bell", "5 Candle", "Crowbar", "Hammer", "10 Piton", "Lantern, Hooded", "2 Oil (flask)", "5 Rations (1 day)", "Tinderbox", "Waterskin", "Rope, Hempen (50 feet)"],
+        "diplomat's pack": ["Chest", "2 Case, Map or Scroll", "Clothes, Fine", "Ink (1 ounce bottle)", "Ink Pen", "Lamp", "2 Oil (flask)", "5 Paper (one sheet)", "Perfume (vial)", "Sealing Wax", "Soap"],
+        "dungeoneer's pack": ["Backpack", "Crowbar", "Hammer", "10 Piton", "10 Torch", "Tinderbox", "10 Rations (1 day)", "Waterskin", "Rope, Hempen (50 feet)"],
+        "entertainer's pack": ["Backpack", "Bedroll", "2 Costume", "5 Candle", "5 Rations (1 day)", "Waterskin", "Disguise Kit"],
+        "explorer's pack": ["Backpack", "Bedroll", "Mess Kit", "Tinderbox", "10 Torch", "10 Rations (1 day)", "Waterskin", "Rope, Hempen (50 feet)"],
+        "priest's pack": ["Backpack", "Blanket", "10 Candle", "Tinderbox", "Alms Box", "2 Incense (block)", "Censer", "Vestments", "2 Rations (1 day)", "Waterskin"],
+        "scholar's pack": ["Backpack", "Book of Lore", "Ink (1 ounce bottle)", "Ink Pen", "10 Parchment (one sheet)", "Sand (little bag)", "Small Knife"]
+    };
+
     // DB Setup
     const DB_NAME = 'DndDataDB';
     const STORE_NAME = 'files';
@@ -5018,6 +5029,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 let name = itemStr;
                 let qty = 1;
                 
+                // Check for Pack Expansion
+                let cleanNameForPack = name.toLowerCase().replace(/\s*\(.*?\)/g, "").trim();
+                let pack = EQUIPMENT_PACKS[cleanNameForPack];
+                if (!pack) {
+                    pack = EQUIPMENT_PACKS[cleanNameForPack.replace(/^(?:a|an|the)\s+/i, "")];
+                }
+
+                if (pack) {
+                    const contents = pack;
+                    addItemsFromList(contents.join(", "), `From ${name}`);
+                    return;
+                }
+                
                 // Check for "Name (x)" or "Name (Qty)" pattern
                 const qtyMatch = itemStr.match(/(.*)\s*\((\d+)\)$/);
                 if (qtyMatch) {
@@ -5081,12 +5105,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 let foundItem = candidates.find(i => i.source === 'XPHB') || candidates.find(i => i.source === 'PHB') || candidates[0];
 
                 if (foundItem) {
+                    let itemDesc = "";
                     console.log(`[Item Lookup] Found data for "${name}":`, foundItem);
-                    if (foundItem.entries) desc = processEntries(foundItem.entries);
-                    else if (foundItem.desc) desc = processEntries(foundItem.desc);
-                    else if (foundItem.description) desc = foundItem.description;
+                    if (foundItem.entries) itemDesc = processEntries(foundItem.entries);
+                    else if (foundItem.desc) itemDesc = processEntries(foundItem.desc);
+                    else if (foundItem.description) itemDesc = foundItem.description;
                     
-                    desc = cleanText(desc);
+                    itemDesc = cleanText(itemDesc);
+                    if (sourceLabel) {
+                        desc = `${sourceLabel}:\n${itemDesc}`;
+                    } else {
+                        desc = itemDesc;
+                    }
                 } else {
                     console.warn(`[Item Lookup] No data found for "${name}" (lookup: "${lookupName}")`);
                 }

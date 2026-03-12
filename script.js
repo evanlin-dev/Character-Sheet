@@ -110,6 +110,18 @@ const weaponProficiencyOptions = [
 // Weapon DB
 let dndWeaponsDB = {};
 window.dndTablesDB = {};
+window.dndItemsDB = {};
+
+// Equipment Packs
+window.EQUIPMENT_PACKS = {
+    "burglar's pack": ["Backpack", "Ball Bearings (bag of 1000)", "String (10 feet)", "Bell", "5 Candle", "Crowbar", "Hammer", "10 Piton", "Lantern, Hooded", "2 Oil (flask)", "5 Rations (1 day)", "Tinderbox", "Waterskin", "Rope, Hempen (50 feet)"],
+    "diplomat's pack": ["Chest", "2 Case, Map or Scroll", "Clothes, Fine", "Ink (1 ounce bottle)", "Ink Pen", "Lamp", "2 Oil (flask)", "5 Paper (one sheet)", "Perfume (vial)", "Sealing Wax", "Soap"],
+    "dungeoneer's pack": ["Backpack", "Crowbar", "Hammer", "10 Piton", "10 Torch", "Tinderbox", "10 Rations (1 day)", "Waterskin", "Rope, Hempen (50 feet)"],
+    "entertainer's pack": ["Backpack", "Bedroll", "2 Costume", "5 Candle", "5 Rations (1 day)", "Waterskin", "Disguise Kit"],
+    "explorer's pack": ["Backpack", "Bedroll", "Mess Kit", "Tinderbox", "10 Torch", "10 Rations (1 day)", "Waterskin", "Rope, Hempen (50 feet)"],
+    "priest's pack": ["Backpack", "Blanket", "10 Candle", "Tinderbox", "Alms Box", "2 Incense (block)", "Censer", "Vestments", "2 Rations (1 day)", "Waterskin"],
+    "scholar's pack": ["Backpack", "Book of Lore", "Ink (1 ounce bottle)", "Ink Pen", "10 Parchment (one sheet)", "Sand (little bag)", "Small Knife"]
+};
 
 const conditionsDB = {
   Blinded:
@@ -883,6 +895,28 @@ window.addInventoryItem = function (
   description = "",
   skipSave = false,
 ) {
+  // Check for Equipment Pack Expansion
+  const cleanName = name.toLowerCase().trim();
+  const noPrefix = cleanName.replace(/^(?:a|an|the)\s+/i, '');
+  const packContents = (window.EQUIPMENT_PACKS || {})[cleanName] || (window.EQUIPMENT_PACKS || {})[noPrefix];
+  if (packContents) {
+      packContents.forEach(p => {
+          let pName = p;
+          let pQty = 1;
+          const match = p.match(/^(\d+)\s+(.*)$/);
+          if (match) { pQty = parseInt(match[1]); pName = match[2]; }
+          
+          let itemDesc = (window.dndItemsDB || {})[pName.toLowerCase().trim()];
+          let fullDesc = `From ${name}`;
+          if (itemDesc) {
+              fullDesc = `${fullDesc}:\n${itemDesc}`;
+          }
+          
+          addInventoryItem(pName, pQty * Math.max(1, parseInt(qty)||1), 0, isEquipped, fullDesc, skipSave);
+      });
+      return;
+  }
+
   const listId = isEquipped ? "equippedList" : "inventoryList";
   const list = document.getElementById(listId);
   const div = document.createElement("div");
@@ -1174,6 +1208,31 @@ function loadWeaponsFromData(parsedData) {
   });
 }
 
+function loadItemsFromData(parsedData) {
+  if (!parsedData) return;
+  window.dndItemsDB = {};
+  parsedData.forEach((json) => {
+    try {
+      const arrays = [json.item, json.items, json.baseitem, json.baseitems, json.magicvariant, json.magicvariants];
+      arrays.forEach(arr => {
+          if (Array.isArray(arr)) {
+              arr.forEach(item => {
+                  if (!item.name) return;
+                  let desc = "";
+                  if (item.entries) desc = window.processEntries(item.entries);
+                  else if (item.desc) desc = window.processEntries(item.desc);
+                  else if (item.description) desc = item.description;
+                  
+                  if (desc) {
+                      window.dndItemsDB[item.name.toLowerCase().trim()] = window.cleanText(desc);
+                  }
+              });
+          }
+      });
+    } catch (e) {}
+  });
+}
+
 function loadActionsFromData(parsedData) {
   if (!parsedData) return;
   let actions = [];
@@ -1237,6 +1296,7 @@ async function checkDataUploadStatus() {
           }
         });
         loadWeaponsFromData(parsedData);
+        loadItemsFromData(parsedData);
         loadActionsFromData(parsedData);
         loadTablesFromData(parsedData);
         loadLanguagesFromData(parsedData);
