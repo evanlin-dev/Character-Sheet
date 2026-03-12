@@ -6021,6 +6021,7 @@ window.fetchLevelUpFeatures = async function(className, subclass, level, minLeve
     const classFeatures = [];
     const subclassFeatures = [];
     const subclasses = [];
+    const classes = [];
     data.forEach(file => {
         if (!file.name.toLowerCase().endsWith('.json')) return;
         try {
@@ -6031,20 +6032,34 @@ window.fetchLevelUpFeatures = async function(className, subclass, level, minLeve
                 console.log(`[Level Up] Loaded subclasses from ${file.name}:`, json.subclass);
                 subclasses.push(...json.subclass);
             }
+            if (json.class) classes.push(...json.class);
         } catch (e) {}
     });
     console.log("fetchLevelUpFeatures - Extracted:", { classFeatures, subclassFeatures, subclasses });
     
     const normClass = className ? className.trim().toLowerCase() : "";
 
+    // Determine Class Source
+    const classCandidates = classes.filter(c => c.name.toLowerCase() === normClass);
+    let classSource = null;
+    if (classCandidates.some(c => c.source === 'XPHB')) classSource = 'XPHB';
+    else if (classCandidates.some(c => c.source === 'PHB')) classSource = 'PHB';
+    else if (classCandidates.length > 0) classSource = classCandidates[0].source;
+
     // Filter for class features, prioritizing XPHB if available
     const allClassFeaturesForName = classFeatures.filter(f => f.className && f.className.trim().toLowerCase() === normClass);
-    const hasXPHB = allClassFeaturesForName.some(f => f.source === 'XPHB');
-    const relevantClassFeatures = allClassFeaturesForName.filter(f => {
-        if (f.level < startLevel || f.level > level) return false;
-        if (hasXPHB && f.source === 'PHB') return false;
-        return true;
-    });
+    
+    let relevantClassFeatures = [];
+    if (classSource) {
+        relevantClassFeatures = allClassFeaturesForName.filter(f => f.level >= startLevel && f.level <= level && f.source === classSource);
+    } else {
+        const hasXPHB = allClassFeaturesForName.some(f => f.source === 'XPHB');
+        relevantClassFeatures = allClassFeaturesForName.filter(f => {
+            if (f.level < startLevel || f.level > level) return false;
+            if (hasXPHB && f.source === 'PHB') return false;
+            return true;
+        });
+    }
 
     let scShortName = null;
     if (subclass) {
