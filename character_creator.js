@@ -29,10 +29,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let allItems = [];
     let lastAvailableFeatNames = null;
 
-    // Tabs Configuration
-    const tabs = ['class', 'race', 'abilities', 'background', 'equipment', 'spells', 'review'];
-    let currentTabIndex = 0;
-
     // Helper for Equipment Selection UI
     window.updateEquipSelection = function(radio) {
         const container = radio.closest('.equip-selection-container');
@@ -566,8 +562,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     } catch (e) {}
                 });
                 renderClassList();
-                renderSpeciesList();
-                renderBackgroundList();
                 console.log("All Optional Features:", allOptionalFeatures);
             }
         } catch (e) { console.error("Error loading DB:", e); }
@@ -584,102 +578,92 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderClassList() {
-        // Replaces original grid card logic with dropdown
         classList.innerHTML = '';
+        classList.className = 'creator-class-grid';
         
         if (allClasses.length === 0) {
-            classList.innerHTML = '<div style="padding:10px; text-align:center; color:var(--ink-light);">Loading classes... (Please upload data)</div>';
+            classList.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:var(--ink-light);">Loading classes... (Please upload data)</div>';
             return;
         }
 
         const validClasses = allClasses.filter(c => !c.isSidekick && (!c.name || !c.name.toLowerCase().includes('sidekick')));
         const uniqueClasses = [...new Set(validClasses.map(c => c.name))].sort();
         
-        const select = document.createElement('select');
-        select.className = 'styled-select';
-        select.style.width = 'calc(100% - 20px)';
-        select.style.margin = '10px';
-        select.style.fontSize = '1.1em';
-
-        const defaultOption = document.createElement('option');
-        defaultOption.text = "Select Class...";
-        defaultOption.value = "";
-        defaultOption.disabled = true;
-        defaultOption.selected = !selectedClass;
-        select.appendChild(defaultOption);
-
         uniqueClasses.forEach(c => {
-            const option = document.createElement('option');
-            option.value = c;
+            const div = document.createElement('div');
+            div.className = 'creator-class-card';
             
+            // Get metadata from data
             let clsObj = validClasses.find(cl => cl.name === c && cl.source === 'XPHB');
             if (!clsObj && c === 'Artificer') clsObj = validClasses.find(cl => cl.name === c && cl.source === 'EFA');
             if (!clsObj) clsObj = validClasses.find(cl => cl.name === c && cl.source === 'PHB');
             if (!clsObj) clsObj = validClasses.find(cl => cl.name === c);
             
-            option.textContent = `${c}${clsObj && clsObj.source ? ` [${clsObj.source}]` : ''}`;
-            if (selectedClass === c) option.selected = true;
-            select.appendChild(option);
-        });
-
-        select.addEventListener('change', (e) => {
-            const c = e.target.value;
-            if (!c) return;
-            
-            console.log("Selected Class:", c);
-            selectedClass = c;
-            
-            // Determine Source (Prefer XPHB, then PHB)
-            const sources = validClasses.filter(cls => cls.name === c).map(cls => cls.source);
-            if (sources.length === 0) {
-                const featureSources = new Set(allClassFeatures.filter(f => f.className === c).map(f => f.source));
-                sources.push(...featureSources);
+            let metaHtml = "";
+            if (clsObj) {
+                metaHtml += `<div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; line-height:1.1;">`;
+                if (clsObj.hd) {
+                    const hd = clsObj.hd.faces || clsObj.hd;
+                    metaHtml += `<div style="font-size:0.75rem; color:var(--ink-light);">HD: d${hd}</div>`;
+                }
+                if (clsObj.source) {
+                    metaHtml += `<div style="font-size:0.65rem; color:var(--gold-dark); font-style:italic;">${clsObj.source}</div>`;
+                }
+                metaHtml += `</div>`;
             }
-            if (c === 'Artificer' && sources.includes('EFA')) currentClassSource = 'EFA';
-            else if (sources.includes('XPHB')) currentClassSource = 'XPHB';
-            else if (sources.includes('PHB')) currentClassSource = 'PHB';
-            else currentClassSource = sources[0] || 'PHB';
 
-            // Reset Level/Subclass on class change
-            selectedLevel = 1;
-            levelSelect.value = 1;
-            selectedSubclass = null;
-            selectedSubclassSource = null;
-            selectedOptionalFeatures.clear();
-            selectedSpells.clear();
-            updateSubclassOptions(c);
+            div.innerHTML = `<span class="creator-class-name">${c}</span>${metaHtml}`;
             
-            renderClassPreview();
-            renderCoreTraits();
-            renderClassTable();
-            renderClassFeatures();
-        });
+            div.onclick = () => {
+                document.querySelectorAll('.creator-class-card').forEach(item => item.classList.remove('selected'));
+                console.log("Selected Class:", c);
+                selectedClass = c;
+                div.classList.add('selected');
+                
+                // Determine Source (Prefer XPHB, then PHB)
+                const sources = validClasses.filter(cls => cls.name === c).map(cls => cls.source);
+                if (sources.length === 0) {
+                    const featureSources = new Set(allClassFeatures.filter(f => f.className === c).map(f => f.source));
+                    sources.push(...featureSources);
+                }
+                if (c === 'Artificer' && sources.includes('EFA')) currentClassSource = 'EFA';
+                else if (sources.includes('XPHB')) currentClassSource = 'XPHB';
+                else if (sources.includes('PHB')) currentClassSource = 'PHB';
+                else currentClassSource = sources[0] || 'PHB';
 
-        classList.appendChild(select);
+                // Reset Level/Subclass on class change
+                selectedLevel = 1;
+                levelSelect.value = 1;
+                selectedSubclass = null;
+                selectedSubclassSource = null;
+                selectedOptionalFeatures.clear();
+                selectedSpells.clear();
+                updateSubclassOptions(c);
+                updateUIState();
+                renderClassPreview();
+                renderCoreTraits();
+                renderClassTable();
+                renderClassFeatures();
+            };
+            
+            classList.appendChild(div);
+        });
     }
 
     // Level Change
     levelSelect.addEventListener('change', () => {
         selectedLevel = parseInt(levelSelect.value);
+        updateUIState();
         renderClassFeatures(true); // Suppress toast on level change
         renderClassFeatures(); // Allow toast
     });
 
     function updateSubclassOptions(className) {
         const subclassList = document.getElementById('creator-subclass-list');
-        const subContainer = document.getElementById('subclass-container');
         subclassList.innerHTML = '';
-        
+        console.log(`[Creator] Updating subclasses for ${className}`);
         const targetClass = className.trim().toLowerCase();
         const available = allSubclasses.filter(s => s.className && s.className.trim().toLowerCase() === targetClass);
-        
-        if (available.length === 0) {
-            subContainer.style.display = 'none';
-            selectedSubclass = null;
-            return;
-        }
-        subContainer.style.display = 'flex';
-
         console.log(`[Creator] Available subclasses:`, available);
         
         // Deduplicate preferring XPHB
@@ -698,86 +682,75 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const unique = Array.from(uniqueMap.values()).sort((a,b) => a.name.localeCompare(b.name));
 
-        const select = document.createElement('select');
-        select.className = 'styled-select';
-        select.style.width = '100%';
-        
-        const defaultOption = document.createElement('option');
-        defaultOption.text = "Select Subclass...";
-        defaultOption.value = "";
-        defaultOption.disabled = true;
-        defaultOption.selected = !selectedSubclass;
-        select.appendChild(defaultOption);
-
-        unique.forEach((s, idx) => {
-            const option = document.createElement('option');
-            option.value = idx;
-            option.textContent = `${s.name}${s.source ? ` [${s.source}]` : ''}`;
-            if (selectedSubclass === (s.shortName || s.name)) option.selected = true;
-            select.appendChild(option);
+        unique.forEach(s => {
+            const div = document.createElement('div');
+            div.className = 'checklist-item';
+            div.textContent = s.name;
+            const sourceHtml = s.source ? `<span style="font-size:0.75rem; color:var(--ink-light);">[${s.source}]</span>` : '';
+            div.innerHTML = `<span>${s.name}</span>${sourceHtml}`;
+            div.style.justifyContent = 'center';
+            div.onclick = () => {
+                document.querySelectorAll('#creator-subclass-list .checklist-item').forEach(item => {
+                    item.style.background = 'white';
+                    item.style.color = 'var(--ink)';
+                    const src = item.querySelector('span:nth-child(2)');
+                    if (src) src.style.color = 'var(--ink-light)';
+                });
+                div.style.background = 'var(--red)';
+                div.style.color = 'white';
+                const src = div.querySelector('span:nth-child(2)');
+                if (src) src.style.color = 'rgba(255,255,255,0.8)';
+                selectedSubclass = s.shortName || s.name;
+                selectedSubclassSource = s.source;
+                renderClassFeatures();
+                // Re-render features when subclass changes to update available options
+            };
+            subclassList.appendChild(div);
         });
-
-        select.addEventListener('change', (e) => {
-            const idx = e.target.value;
-            if (idx === "") return;
-            const s = unique[idx];
-            selectedSubclass = s.shortName || s.name;
-            selectedSubclassSource = s.source;
-            renderClassFeatures();
-        });
-
-        subclassList.appendChild(select);
     }
 
-    // Navigation Logic
-    function switchTab(index) {
-        if (index < 0 || index >= tabs.length) return;
+    function updateUIState() {
+        const step2 = document.getElementById('step-2-section');
+        const subContainer = document.getElementById('subclass-container');
         
-        // Validate before moving from Class tab
-        if (currentTabIndex === 0 && index > 0 && !selectedClass) {
-            alert("Please select a class first.");
+        if (selectedClass) {
+            step2.style.display = 'block';
+        } else {
+            step2.style.display = 'none';
+        }
+
+        if (selectedLevel >= 3) {
+            subContainer.style.display = 'block';
+        } else {
+            subContainer.style.display = 'none';
+            selectedSubclass = null; // Reset subclass if level drops below 3
+        }
+    }
+
+    // Next Step Handler
+    const nextBtn = document.getElementById('next-step-btn');
+    nextBtn.addEventListener('click', () => {
+        if (!selectedClass) {
+            alert("Please select a class.");
             return;
         }
-        
-        currentTabIndex = index;
-        const tabId = tabs[index];
 
-        // Update Tabs UI
-        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-        document.querySelector(`.nav-tab[data-tab="${tabId}"]`).classList.add('active');
+        const step3 = document.getElementById('step-3-section');
+        const step4 = document.getElementById('step-4-review');
 
-        // Update Pane Visibility
-        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-        document.getElementById(`tab-${tabId}`).classList.add('active');
-
-        // Update Footer Buttons
-        const btnPrev = document.getElementById('btn-prev');
-        const btnNext = document.getElementById('btn-next');
-        
-        btnPrev.style.display = index === 0 ? 'none' : 'block';
-        btnNext.textContent = index === tabs.length - 1 ? 'Create Character' : 'Next';
-
-        // Specific Tab Init Logic
-        if (tabId === 'abilities') {
+        if (step3.style.display === 'none') {
+            step3.style.display = 'block';
+            renderBackgroundOptions();
+            renderSpeciesSection();
+            renderDeitySection();
             renderAbilityScoreSection();
-            // renderDeitySection is static now, handled by button click
-        }
-        if (tabId === 'review') {
-            renderReviewSection();
-        }
-    }
-
-    document.querySelectorAll('.nav-tab').forEach((tab, index) => {
-        tab.addEventListener('click', () => switchTab(index));
-    });
-
-    document.getElementById('btn-prev').addEventListener('click', () => switchTab(currentTabIndex - 1));
-    document.getElementById('btn-next').addEventListener('click', () => {
-        if (currentTabIndex === tabs.length - 1) {
-            createCharacter();
+            step3.scrollIntoView({ behavior: 'smooth' });
+            nextBtn.textContent = "Review & Finish";
         } else {
-            switchTab(currentTabIndex + 1);
+            renderReviewSection();
+            nextBtn.textContent = "Update Review";
         }
+        // Future steps will go here
     });
 
     const getReferencedClassFeatures = (className, source) => {
@@ -797,135 +770,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return refs;
     };
 
-    // Recursively walk through a feature's entries to find `type: "options"` 
-    // and extract the selectable feature references.
-    function extractOptionSets(entries) {
-        const optionSets = [];
-        
-        function walk(obj) {
-            if (!obj || typeof obj !== "object") return;
-            if (Array.isArray(obj)) {
-                obj.forEach(walk);
-            } else {
-                if (obj.type === "options") {
-                    const count = obj.count != null ? obj.count : 1;
-                    const choices = [];
-                    
-                    if (obj.entries) {
-                        obj.entries.forEach(ent => {
-                            if (ent.type === "refOptionalfeature") {
-                                choices.push({ type: "optionalfeature", uid: ent.optionalfeature });
-                            } else if (ent.type === "refClassFeature") {
-                                choices.push({ type: "classFeature", uid: ent.classFeature });
-                            } else if (ent.type === "refSubclassFeature") {
-                                choices.push({ type: "subclassFeature", uid: ent.subclassFeature });
-                            } else if (ent.name) {
-                                // Fallback for inline text/feature choices
-                                choices.push({ type: "entries", name: ent.name, entries: ent.entries });
-                            }
-                        });
-                    }
-                    
-                    if (choices.length > 0) {
-                        optionSets.push({ count, choices, setId: Math.random().toString(36).substring(7) });
-                    }
-                }
-                Object.values(obj).forEach(walk);
-            }
-        }
-        
-        walk(entries);
-        return optionSets;
-    }
-
-    // Resolves the parsed UIDs into actual feature objects and renders the UI
-    function renderExplicitOptions(parentElement, optionSets, className, charLevel, subclass) {
-        optionSets.forEach(optSet => {
-            const wrapper = document.createElement("div");
-            wrapper.className = "feature-options-wrapper mt-2 p-2 border rounded";
-            wrapper.style.backgroundColor = "rgba(255, 255, 255, 0.5)";
-            wrapper.innerHTML = `<div style="font-weight:bold; margin-bottom:4px; border-bottom:1px solid var(--gold-dark);">Choose ${optSet.count} option(s):</div>`;
-            
-            // Resolve the features from the global data pools based on UID
-            const candidates = [];
-            optSet.choices.forEach(choice => {
-                if (choice.type === "optionalfeature" && typeof allOptionalFeatures !== "undefined") {
-                    const [name, source] = choice.uid.split("|");
-                    const found = allOptionalFeatures.find(opt => 
-                        opt.name.toLowerCase() === name.toLowerCase() && 
-                        (source ? opt.source.toLowerCase() === source.toLowerCase() : true)
-                    );
-                    if (found) candidates.push(found);
-                } else if (choice.type === "classFeature" && typeof allClassFeatures !== "undefined") {
-                    const [name, cName, cSource, level, source] = choice.uid.split("|");
-                    const found = allClassFeatures.find(cf => 
-                        cf.name.toLowerCase() === name.toLowerCase() && 
-                        cf.className.toLowerCase() === cName.toLowerCase() && 
-                        cf.level === Number(level)
-                    );
-                    if (found) candidates.push(found);
-                } else if (choice.type === "entries") {
-                    candidates.push(choice);
-                }
-            });
-
-            // Render checkboxes for the choices
-            candidates.forEach(candidate => {
-                const lbl = document.createElement("label");
-                lbl.className = "d-flex align-items-start mt-1";
-                lbl.style.cursor = "pointer";
-                
-                const cb = document.createElement("input");
-                cb.type = "checkbox";
-                cb.className = "mr-2 mt-1";
-                cb.dataset.optionSetId = optSet.setId;
-                cb.dataset.uid = candidate.name;
-                
-                // Check if already selected
-                const selectionKey = `ExplicitOption:${optSet.setId}:${candidate.name}`;
-                if (selectedOptionalFeatures.has(selectionKey)) {
-                    cb.checked = true;
-                }
-
-                // Enforce selection limit dynamically and add to selected list
-                cb.addEventListener("change", () => {
-                    const checkedCount = wrapper.querySelectorAll(`input[type="checkbox"]:checked`).length;
-                    if (cb.checked) {
-                        if (checkedCount > optSet.count) {
-                            cb.checked = false; // Prevent exceeding the count
-                        } else {
-                            selectedOptionalFeatures.add(selectionKey);
-                            // We also add the raw name so that downstream code handles spells/features cleanly
-                            selectedOptionalFeatures.add(candidate.name);
-                        }
-                    } else {
-                        selectedOptionalFeatures.delete(selectionKey);
-                        selectedOptionalFeatures.delete(candidate.name);
-                    }
-                    renderClassFeatures(true); // Re-evaluate prerequisites & spells silently
-                });
-
-                const txtDiv = document.createElement("div");
-                txtDiv.innerHTML = `<strong>${candidate.name}</strong>`;
-                
-                lbl.appendChild(cb);
-                lbl.appendChild(txtDiv);
-                wrapper.appendChild(lbl);
-            });
-
-            parentElement.appendChild(wrapper);
-        });
-    }
-
     function renderClassFeatures(suppressToast = false) {
         if (!selectedClass) return;
         const className = selectedClass;
         const container = document.getElementById('creator-class-features');
         
         // Move container below subclass container if possible to reduce clutter
-        // In new layout, features are already below.
         const subContainer = document.getElementById('subclass-container');
-        if (false && container && subContainer && container.parentNode === subContainer.parentNode) {
+        if (container && subContainer && container.parentNode === subContainer.parentNode) {
              // Check for label BEFORE moving container
              const label = container.previousElementSibling;
              const isLabel = label && label.tagName === 'LABEL' && label.textContent.includes("Features");
@@ -962,19 +814,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        if (container) container.innerHTML = '';
-        const spellsContainer = document.getElementById('spells-container-target');
-        if (spellsContainer) spellsContainer.innerHTML = '';
-        
-        const choicesContainer = document.getElementById('creator-feature-choices');
-        if (choicesContainer) {
-            choicesContainer.innerHTML = '<h3 style="margin-top:0; font-size: 1.1em; color: var(--red-dark);">Feature Choices</h3>';
-            choicesContainer.style.display = 'none';
-        }
+        container.innerHTML = '';
         
         if (allClassFeatures.length === 0) {
-            if (container) container.innerHTML = '<div style="color:var(--red);">No class data found. Please upload data in the main sheet.</div>';
-            if (spellsContainer) spellsContainer.innerHTML = '<div style="color:var(--text-muted);">No class data.</div>';
+            container.innerHTML = '<div style="color:var(--red);">No class data found. Please upload data in the main sheet.</div>';
             return;
         }
 
@@ -1009,7 +852,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (uniqueFeatures.length === 0) {
-            if (container) container.innerHTML = '<div>No features found for this class.</div>';
+            container.innerHTML = '<div>No features found for this class.</div>';
             return;
         }
 
@@ -1085,65 +928,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Use contentDiv as the parent for interactive elements
             const targetParent = contentDiv;
-            let hasInteractiveContent = false;
-            let hasChoices = false;
             
-            // 1. Check for structured "type: options" (e.g., Eldritch Invocations, Metamagics)
-            const optionSets = extractOptionSets(f.entries || f.entry);
-            console.log(optionSets)
-
-            // Extract feature types dynamically from {@filter} tags
-            const entriesStr = JSON.stringify(f.entries || f.entry);
-            const optFeatureRegex = /{@filter\s+[^|]+\|\s*optionalfeatures\s*\|(?:[^}]*?)featuretype=([^}|]+)/gi;
-            let optMatch;
-            const foundFeatureTypes = [];
-            while ((optMatch = optFeatureRegex.exec(entriesStr)) !== null) {
-                const types = optMatch[1].split(';').map(t => t.trim());
-                foundFeatureTypes.push(...types);
-            }
-
             // Append Spells if this feature grants them
             if (f.name.includes("Spellcasting") || f.name === "Pact Magic") {
-                renderSpellsForFeature(spellsContainer, selectedClass, selectedLevel, selectedSubclass);
+                renderSpellsForFeature(targetParent, selectedClass, selectedLevel, selectedSubclass);
             } else if (f.name.includes("Mystic Arcanum")) {
                 // Extract level for Mystic Arcanum (e.g. "Mystic Arcanum (6th level)")
                 const match = f.name.match(/(\d+)(?:st|nd|rd|th)\s+level/i);
                 if (match) {
-                    renderSpellsForFeature(spellsContainer, selectedClass, selectedLevel, selectedSubclass, parseInt(match[1]));
+                    renderSpellsForFeature(targetParent, selectedClass, selectedLevel, selectedSubclass, parseInt(match[1]));
                 }
-            } else if (optionSets.length > 0) {
-                // Render specific options extracted from the class feature entries
-                renderExplicitOptions(targetParent, optionSets, selectedClass, selectedLevel, selectedSubclass);
-                hasChoices = true;
-            } else if (foundFeatureTypes.length > 0) {
-                // Dynamic optional feature rendering based on @filter tags
-                renderOptionalFeatures(targetParent, foundFeatureTypes, selectedClass, selectedLevel, selectedSubclass);
-                hasChoices = true;
-            } else if (f.name.includes("Eldritch Invocation")) {
-                // Fallback for older data
+            } else if (f.name.includes("Eldritch Invocations")) {
                 renderOptionalFeatures(targetParent, ["EI"], selectedClass, selectedLevel, selectedSubclass);
-                hasChoices = true;
-            } else if (f.name.includes("Pact Boon")) {
-                renderOptionalFeatures(targetParent, ["PB"], selectedClass, selectedLevel, selectedSubclass);
-                hasChoices = true;
-            } else if (f.name.includes("Elemental Discipline")) {
-                renderOptionalFeatures(targetParent, ["ED"], selectedClass, selectedLevel, selectedSubclass);
-                hasChoices = true;
-            } else if (f.name.includes("Artificer Infusion") || f.name.includes("Infuse Item")) {
-                renderOptionalFeatures(targetParent, ["AI"], selectedClass, selectedLevel, selectedSubclass);
-                hasChoices = true;
-            } else if (f.name.includes("Maneuver")) {
-                renderOptionalFeatures(targetParent, ["MV", "MV:B", "MV:C2-UA"], selectedClass, selectedLevel, selectedSubclass);
-                hasChoices = true;
-            } else if (f.name.includes("Arcane Shot")) {
-                renderOptionalFeatures(targetParent, ["AS", "AS:V1-UA", "AS:V2-UA"], selectedClass, selectedLevel, selectedSubclass);
-                hasChoices = true;
-            } else if (f.name.includes("Rune Carver") || f.name.includes("Rune Magic")) {
-                renderOptionalFeatures(targetParent, ["RN"], selectedClass, selectedLevel, selectedSubclass);
-                hasChoices = true;
-            } else if (f.name.includes("Alchemical Formula")) {
-                renderOptionalFeatures(targetParent, ["AF"], selectedClass, selectedLevel, selectedSubclass);
-                hasChoices = true;
             } else if (f.name.includes("Fighting Style")) {
                 const codes = ["FS"];
                 if (selectedClass === "Fighter") codes.push("FS:F");
@@ -1151,24 +947,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (selectedClass === "Paladin") codes.push("FS:P");
                 if (selectedClass === "Bard") codes.push("FS:B");
                 renderOptionalFeatures(targetParent, codes, selectedClass, f.level, selectedSubclass);
-                hasChoices = true;
-            } else if (f.name.includes("Metamagic")) {
+            } else if (f.name === "Metamagic") {
                 if (f.level <= 3) {
                     let limit = 2;
                     if (selectedLevel >= 10) limit = 4;
                     if (selectedLevel >= 17) limit = 6;
                     renderOptionalFeatures(targetParent, ["MM"], selectedClass, f.level, selectedSubclass, limit);
-                    hasChoices = true;
                 }
-            } else if (f.name.includes("Weapon Mastery")) {
+            } else if (f.name === "Weapon Mastery") {
                 renderWeaponMasteryChoices(targetParent, f, selectedClass, f.level);
-                hasChoices = true;
             } else if (f.name === "Divine Order") {
                 renderDivineOrderChoice(targetParent, f);
-                hasChoices = true;
             } else if (f.name === "Ability Score Improvement") {
                 renderFeatSelection(targetParent, f, selectedClass, f.level);
-                hasChoices = true;
                 
                 // Render selected feat description if any
                 const selectionKey = `ASI Level ${f.level}`;
@@ -1291,7 +1082,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 renderFeatSelection(targetParent, f, selectedClass, f.level);
-                hasChoices = true;
 
                 if (selectedFeatName) {
                     const candidates = allFeats.filter(ft => ft.name === selectedFeatName);
@@ -1409,81 +1199,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         pkDiv.appendChild(select);
                         targetParent.appendChild(pkDiv);
-                        hasInteractiveContent = true;
                     }
                 }
             }
 
             // Check for Feats in entries and render them
             // Skip for ASI feature as we handle it dynamically
-            if (f.name !== "Ability Score Improvement" && f.name !== "Epic Boon") {
-                const featsInFeature = new Set();
-                const scanForFeats = (obj) => {
-                    if (!obj) return;
-                    if (typeof obj === 'string') {
-                        const matches = obj.matchAll(/{@feat ([^}|]+)/g);
-                        for (const m of matches) featsInFeature.add(m[1].toLowerCase().trim());
-                    } else if (Array.isArray(obj)) {
-                        obj.forEach(scanForFeats);
-                    } else if (typeof obj === 'object') {
-                        Object.values(obj).forEach(scanForFeats);
-                    }
-                };
-                scanForFeats(f.entries);
-
-                if (featsInFeature.size > 0) {
-                    featsInFeature.forEach(featName => {
-                        const candidates = allFeats.filter(ft => ft.name.toLowerCase() === featName);
-                        let feat = candidates.find(ft => ft.source === 'XPHB') || candidates.find(ft => ft.source === 'PHB') || candidates[0];
-
-                        if (feat && (!feat.entries || (feat.entries.length === 1 && typeof feat.entries[0] === 'string')) && feat._copy) {
-                            const copyName = feat._copy.name;
-                            const copySource = feat._copy.source || feat.source;
-                            const original = allFeats.find(ft => ft.name === copyName && (ft.source === copySource || !feat._copy.source));
-                            if (original && original.entries) feat = { ...original, ...feat, entries: original.entries };
-                        }
-
-                        if (feat) {
-                            const featDiv = document.createElement('div');
-                            featDiv.className = "mt-2 p-2 border rounded";
-                            featDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
-                            
-                            let featDesc = processEntries(feat.entries);
-                            featDesc = formatDescription(featDesc);
-
-                            featDiv.innerHTML = `
-                                <div class="font-bold text-red-dark border-bottom pb-1 mb-1">Feat: ${feat.name}</div>
-                                <div class="text-small text-ink" style="line-height:1.4;">${featDesc}</div>
-                            `;
-                            targetParent.appendChild(featDiv);
-                        }
-                    });
-                    hasInteractiveContent = true;
+            if (f.name !== "Ability Score Improvement") {
+            const featsInFeature = new Set();
+            const scanForFeats = (obj) => {
+                if (!obj) return;
+                if (typeof obj === 'string') {
+                    const matches = obj.matchAll(/{@feat ([^}|]+)/g);
+                    for (const m of matches) featsInFeature.add(m[1].toLowerCase().trim());
+                } else if (Array.isArray(obj)) {
+                    obj.forEach(scanForFeats);
+                } else if (typeof obj === 'object') {
+                    Object.values(obj).forEach(scanForFeats);
                 }
+            };
+            scanForFeats(f.entries);
+
+            if (featsInFeature.size > 0) {
+                featsInFeature.forEach(featName => {
+                    const candidates = allFeats.filter(ft => ft.name.toLowerCase() === featName);
+                    let feat = candidates.find(ft => ft.source === 'XPHB');
+                    if (!feat) feat = candidates.find(ft => ft.source === 'PHB');
+                    if (!feat) feat = candidates[0];
+
+                    if (feat && (!feat.entries || (feat.entries.length === 1 && typeof feat.entries[0] === 'string')) && feat._copy) {
+                        const copyName = feat._copy.name;
+                        const copySource = feat._copy.source || feat.source;
+                        const original = allFeats.find(f => f.name === copyName && (f.source === copySource || !feat._copy.source));
+                        if (original && original.entries) feat = { ...original, ...feat, entries: original.entries };
+                    }
+
+                    if (feat) {
+                        const featDiv = document.createElement('div');
+                        featDiv.className = "mt-2 p-2 border rounded";
+                        featDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
+                        
+                        let featDesc = processEntries(feat.entries);
+                        featDesc = formatDescription(featDesc);
+
+                        featDiv.innerHTML = `
+                            <div class="font-bold text-red-dark border-bottom pb-1 mb-1">Feat: ${feat.name}</div>
+                            <div class="text-small text-ink" style="line-height:1.4;">${featDesc}</div>
+                        `;
+                        targetParent.appendChild(featDiv);
+                    }
+                });
             }
-            
-            if (hasChoices && choicesContainer) {
-                choicesContainer.style.display = 'flex';
             }
 
-            if (hasInteractiveContent && container) {
-                container.style.display = 'flex';
-                const header = document.createElement('h4');
-                header.innerHTML = `${f.name} <span style="font-size:0.8em; color:var(--ink-light);">(Level ${f.level})</span>`;
-                header.style.marginTop = '10px';
-                header.style.marginBottom = '5px';
-                header.style.fontSize = '1em';
-                container.appendChild(header);
-                
-                container.appendChild(targetParent);
-            }
-
-            if (container) container.appendChild(div);
+            container.appendChild(div);
         });
-        
         if (!suppressToast) checkNewFeats();
         renderGrantedSpells();
-        updateSpellProgressionTable();
     }
 
     function renderDivineOrderChoice(parentElement, feature) {
@@ -1612,13 +1384,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderCoreTraits() {
-        // In new layout, we might render this into the 'equipment-container-target' or separate
-        // The original code rendered into `creator-class-table` or `creator-class-preview`.
-        
         let container = document.getElementById('creator-class-table');
-        const equipContainer = document.getElementById('equipment-container-target');
 
-        if (equipContainer) equipContainer.innerHTML = '';
+        // Fix: Remove wrapping .field container if it exists (removes "Class Table" label)
+        if (container && container.parentElement && container.parentElement.classList.contains('field')) {
+            const parent = container.parentElement;
+            parent.parentNode.insertBefore(container, parent);
+            parent.remove();
+        }
 
         let isFallback = false;
         if (!container) {
@@ -1642,8 +1415,8 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         let html = `<div style="padding: 10px;">`;
-        html += `<div style="font-size: 0.9rem; line-height: 1.6; color:#ddd;">`;
-        html += `<div style="font-size: 0.9rem; line-height: 1.6; color:var(--text-main);">`;
+        html += `<h3 style="margin-top:0; color:var(--red-dark); border-bottom:1px solid var(--gold); padding-bottom:5px; font-family:'Cinzel',serif;">Core Traits</h3>`;
+        html += `<div style="font-size: 0.9rem; line-height: 1.6; color:var(--ink);">`;
 
         // Primary Ability
         if (clsObj.primaryAbility) {
@@ -1731,7 +1504,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Starting Equipment
         if (clsObj.startingEquipment) {
-             // logic for equip...
+             console.log("Class Starting Equipment Data:", clsObj.startingEquipment);
              let equipItems = [];
              if (clsObj.startingEquipment.default) {
                  equipItems = clsObj.startingEquipment.default;
@@ -1750,14 +1523,13 @@ document.addEventListener('DOMContentLoaded', () => {
              const splitRegex = /(?:choose|option).*?\(a\)\s*(.*?)(?:;?\s*(?:or|and)?\s*\(b\)\s*)(.*)/i;
              const match = fullText.match(splitRegex);
              
-             // Render equipment into the Equipment Tab container if possible
-             let equipHtml = "";
-             equipHtml += `<div style="margin-bottom:15px;">`;
+             html += `<div style="margin-bottom:15px;">`;
+             html += `<h4 style="margin:10px 0 8px 0; color:var(--red-dark); font-family:'Cinzel',serif;">Starting Equipment</h4>`;
              
              if (choiceLines.length > 0) {
                  // Complex choice mode (dropdowns)
-                 equipHtml += `<div class="equip-selection-container" style="display:flex; flex-direction:column; gap:10px;">`;
-                 equipHtml += `<div style="font-style:italic; font-size:0.9rem; margin-bottom:5px;">Select your equipment:</div>`;
+                 html += `<div class="equip-selection-container" style="display:flex; flex-direction:column; gap:10px;">`;
+                 html += `<div style="font-style:italic; font-size:0.9rem; margin-bottom:5px;">Select your equipment:</div>`;
                  
                  equipItems.forEach((itemStr, idx) => {
                      const cleanItem = clean(itemStr);
@@ -1771,49 +1543,49 @@ document.addEventListener('DOMContentLoaded', () => {
                          }
                          
                          if (options.length >= 2) {
-                             equipHtml += `<div style="background:rgba(255,255,255,0.5); padding:8px; border:1px solid var(--gold); border-radius:4px;">`;
-                             equipHtml += `<select class="styled-select class-equip-dropdown" data-idx="${idx}" style="width:100%;">`;
+                             html += `<div style="background:white; padding:8px; border:1px solid var(--gold); border-radius:4px;">`;
+                             html += `<select class="styled-select class-equip-dropdown" data-idx="${idx}" style="width:100%;">`;
                              options.forEach(opt => {
-                                 equipHtml += `<option value="${opt.text.replace(/"/g, '&quot;')}">${opt.text}</option>`;
+                                 html += `<option value="${opt.text.replace(/"/g, '&quot;')}">${opt.text}</option>`;
                              });
-                             equipHtml += `</select>`;
-                             equipHtml += `</div>`;
+                             html += `</select>`;
+                             html += `</div>`;
                          } else {
-                             equipHtml += `<div style="padding:5px; color:var(--ink);">${cleanItem}</div>`;
-                             equipHtml += `<input type="hidden" class="class-equip-fixed" value="${cleanItem.replace(/"/g, '&quot;')}">`;
+                             html += `<div style="padding:5px;">${cleanItem}</div>`;
+                             html += `<input type="hidden" class="class-equip-fixed" value="${cleanItem.replace(/"/g, '&quot;')}">`;
                          }
                      } else {
-                         equipHtml += `<div style="padding:5px; font-weight:bold; color:var(--ink);">${cleanItem}</div>`;
-                         equipHtml += `<input type="hidden" class="class-equip-fixed" value="${cleanItem.replace(/"/g, '&quot;')}">`;
+                         html += `<div style="padding:5px; font-weight:bold; color:var(--ink);">${cleanItem}</div>`;
+                         html += `<input type="hidden" class="class-equip-fixed" value="${cleanItem.replace(/"/g, '&quot;')}">`;
                      }
                  });
-                 equipHtml += `<input type="radio" name="class_equip_choice" value="custom_list" checked style="display:none;">`;
-                 equipHtml += `</div>`;
+                 html += `<input type="radio" name="class_equip_choice" value="custom_list" checked style="display:none;">`;
+                 html += `</div>`;
              } else {
-                 equipHtml += `<div class="equip-selection-container d-flex flex-wrap" style="gap:15px; display:flex;">`;
+                 html += `<div class="equip-selection-container d-flex flex-wrap" style="gap:15px;">`;
                  if (match) {
                  const optA = clean(match[1]);
                  const optB = clean(match[2]);
 
                  // Option A
-                 equipHtml += `
-                 <label class="equip-option-box selected d-flex flex-column" style="flex:1; min-width:250px; border:2px solid var(--gold); background:var(--parchment-dark); padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
+                 html += `
+                 <label class="equip-option-box selected d-flex flex-column" style="flex:1; min-width:250px; border:2px solid var(--red); background:var(--parchment); padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
                     <input type="radio" name="class_equip_choice" value="equipment_a" checked style="display:none;" onchange="window.updateEquipSelection(this)">
                     <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
                         <span style="font-weight:bold; color:var(--red-dark); font-size:1.05rem;">Option A</span>
-                        <span class="check-indicator" style="color:var(--accent); font-weight:bold; font-size:1.2rem;">✓</span>
+                        <span class="check-indicator" style="color:var(--red); font-weight:bold; font-size:1.2rem;">✓</span>
                     </div>
                     <div style="font-size:0.9rem; color:var(--ink); line-height:1.4; flex-grow:1;">${optA}</div>
                     <input type="hidden" id="equip-opt-a-val" value="${optA.replace(/"/g, '&quot;')}">
                  </label>`;
 
                  // Option B
-                 equipHtml += `
-                 <label class="equip-option-box d-flex flex-column" style="flex:1; min-width:250px; border:1px solid var(--gold); background:rgba(255,255,255,0.5); padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
+                 html += `
+                 <label class="equip-option-box d-flex flex-column" style="flex:1; min-width:250px; border:1px solid var(--gold); background:white; padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
                     <input type="radio" name="class_equip_choice" value="equipment_b" style="display:none;" onchange="window.updateEquipSelection(this)">
                     <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
-                        <span style="font-weight:bold; color:var(--ink); font-size:1.05rem;">Option B</span>
-                        <span class="check-indicator" style="display:none; color:var(--accent); font-weight:bold; font-size:1.2rem;">✓</span>
+                        <span style="font-weight:bold; color:var(--red-dark); font-size:1.05rem;">Option B</span>
+                        <span class="check-indicator" style="display:none; color:var(--red); font-weight:bold; font-size:1.2rem;">✓</span>
                     </div>
                     <div style="font-size:0.9rem; color:var(--ink); line-height:1.4; flex-grow:1;">${optB}</div>
                     <input type="hidden" id="equip-opt-b-val" value="${optB.replace(/"/g, '&quot;')}">
@@ -1830,20 +1602,17 @@ document.addEventListener('DOMContentLoaded', () => {
                      equipListHtml = "See class description.";
                  }
 
-                 equipHtml += `
-                 <label class="equip-option-box selected d-flex flex-column" style="flex:1; min-width:250px; border:2px solid var(--gold); background:var(--parchment-dark); padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
+                 html += `
+                 <label class="equip-option-box selected d-flex flex-column" style="flex:1; min-width:250px; border:2px solid var(--red); background:var(--parchment); padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
                     <input type="radio" name="class_equip_choice" value="equipment" checked style="display:none;" onchange="window.updateEquipSelection(this)">
                     <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
                         <span style="font-weight:bold; color:var(--red-dark); font-size:1.05rem;">Standard Equipment</span>
-                        <span class="check-indicator" style="color:var(--accent); font-weight:bold; font-size:1.2rem;">✓</span>
+                        <span class="check-indicator" style="color:var(--red); font-weight:bold; font-size:1.2rem;">✓</span>
                     </div>
                     <div style="font-size:0.9rem; color:var(--ink); line-height:1.4; flex-grow:1;">${equipListHtml}</div>
                  </label>`;
              }
-             equipHtml += `</div>`;
-             equipHtml += `</div>`;
-             
-             if (equipContainer) equipContainer.innerHTML = equipHtml;
+             html += `</div>`;
              }
 
              html += `</div>`;
@@ -1987,9 +1756,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderClassTable() {
         let container = document.getElementById('creator-class-table-dynamic');
-        // Container is now fixed in HTML
-        if (!container) return;
-        
+        if (!container) {
+            const step2 = document.getElementById('step-2-section');
+            if (step2 && step2.parentNode) {
+                container = document.createElement('div');
+                container.id = 'creator-class-table-dynamic';
+                container.style.marginTop = "20px";
+                container.style.marginBottom = "20px";
+                step2.parentNode.insertBefore(container, step2);
+            } else {
+                container = document.getElementById('creator-class-preview');
+            }
+        }
         if (!container || !selectedClass) return;
         container.innerHTML = '';
         
@@ -2291,7 +2069,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateStyle();
                     renderGrantedSpells();
                     renderClassFeatures(true);
-                    renderSpellDescription(s);
                 };
 
                 grid.appendChild(spellDiv);
@@ -2301,104 +2078,15 @@ document.addEventListener('DOMContentLoaded', () => {
         parentElement.appendChild(container);
     }
 
-    function renderSpellDescription(spell) {
-        const container = document.getElementById('spell-detail-view');
-        if (!container) return;
-        
-        let desc = processEntries(spell.entries);
-        desc = formatDescription(desc);
-        
-        let metaHtml = "";
-        if (spell.level !== undefined) metaHtml += `<div><strong>Level:</strong> ${spell.level === 0 ? "Cantrip" : spell.level}</div>`;
-        if (spell.school) metaHtml += `<div><strong>School:</strong> ${spell.school}</div>`;
-        if (spell.time) {
-            const timeStr = spell.time.map(t => `${t.number} ${t.unit}`).join(", ");
-            metaHtml += `<div><strong>Casting Time:</strong> ${timeStr}</div>`;
-        }
-        if (spell.range) {
-            const rangeStr = spell.range.distance ? `${spell.range.distance.amount} ${spell.range.distance.type}` : spell.range.type;
-            metaHtml += `<div><strong>Range:</strong> ${rangeStr}</div>`;
-        }
-        if (spell.components) {
-            const comps = [];
-            if (spell.components.v) comps.push("V");
-            if (spell.components.s) comps.push("S");
-            if (spell.components.m) comps.push(`M (${typeof spell.components.m === 'string' ? spell.components.m : spell.components.m.text || ""})`);
-            metaHtml += `<div><strong>Components:</strong> ${comps.join(", ")}</div>`;
-        }
-        if (spell.duration) {
-             const durStr = spell.duration.map(d => d.type === "instant" ? "Instantaneous" : `${d.duration ? d.duration.amount + " " + d.duration.type : d.type}${d.concentration ? " (Concentration)" : ""}`).join(", ");
-             metaHtml += `<div><strong>Duration:</strong> ${durStr}</div>`;
-        }
-
-        container.innerHTML = `
-            <div style="background:rgba(255,255,255,0.5); padding:15px; border:1px solid var(--gold); border-radius:4px;">
-                <h3 style="color:var(--red-dark); border-bottom:1px solid var(--gold); margin-top:0;">${spell.name}</h3>
-                <div style="font-size:0.9rem; color:var(--ink-light); margin-bottom:10px; border-bottom:1px dashed var(--gold); padding-bottom:10px;">${metaHtml}</div>
-                <div style="line-height:1.6;">${desc}</div>
-            </div>
-        `;
-    }
-
-    function updateSpellProgressionTable() {
-        if (!selectedClass) return;
-        const clsObj = allClasses.find(c => c.name === selectedClass && c.source === currentClassSource);
-        
-        // Clear table
-        for (let i = 1; i <= 20; i++) {
-            document.getElementById(`spell-row-${i}-cantrip`).textContent = "-";
-            document.getElementById(`spell-row-${i}-prepared`).textContent = "-";
-            const row = document.getElementById(`spell-row-${i}-cantrip`).parentElement;
-            row.style.backgroundColor = (i === selectedLevel) ? "rgba(201, 173, 106, 0.3)" : "transparent";
-        }
-
-        if (!clsObj || !clsObj.classTableGroups) return;
-
-        let colIndices = { cantrip: -1, prepared: -1 };
-
-        clsObj.classTableGroups.forEach(group => {
-            if (!group.colLabels) return;
-            group.colLabels.forEach((label, idx) => {
-                const l = label.toLowerCase();
-                // Cantrips
-                if (l.includes("cantrip")) colIndices.cantrip = idx;
-                // Prepared / Known
-                else if (l.includes("spells known") || l.includes("prepared")) colIndices.prepared = idx;
-                // Slots (Slot Level for Warlock, or maybe we aggregate slots for others if needed, but request asked for "slot level")
-                else if (l.includes("slot level")) colIndices.slot = idx;
-            });
-
-            if (group.rows) {
-                group.rows.forEach((row, rIdx) => {
-                    const level = rIdx + 1;
-                    if (level > 20) return;
-                    
-                    if (colIndices.cantrip !== -1 && row[colIndices.cantrip] !== undefined) {
-                        let val = row[colIndices.cantrip];
-                        if (typeof val === 'object' && val !== null) val = val.value;
-                        document.getElementById(`spell-row-${level}-cantrip`).textContent = val || "-";
-                    }
-                    if (colIndices.prepared !== -1 && row[colIndices.prepared] !== undefined) {
-                        let val = row[colIndices.prepared];
-                        if (typeof val === 'object' && val !== null) val = val.value;
-                        document.getElementById(`spell-row-${level}-prepared`).textContent = val || "-";
-                    }
-                });
-            }
-        });
-    }
-
     function renderOptionalFeatures(parentElement, featureTypes, className, charLevel, subclass, limit = null) {
         if (!allOptionalFeatures.length) return;
-
-        const featureTypesLower = featureTypes.map(t => String(t).toLowerCase());
 
         // 1. Filter by Feature Type & Group by Name
         const candidates = new Map();
         allOptionalFeatures.forEach(opt => {
             if (!opt.featureType || !opt.name) return;
             const types = Array.isArray(opt.featureType) ? opt.featureType : [opt.featureType];
-            if (types.some(t => featureTypesLower.includes(String(t).toLowerCase()))) {
+            if (types.some(t => featureTypes.includes(t))) {
                 if (!candidates.has(opt.name)) candidates.set(opt.name, []);
                 candidates.get(opt.name).push(opt);
             }
@@ -2427,10 +2115,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (req.level.class && req.level.class.name && className) {
                                 if (req.level.class.name.toLowerCase() !== className.toLowerCase()) return false;
                             }
-                            // Check subclass restriction
-                            if (req.level.subclass && req.level.subclass.name && subclass) {
-                                if (!subclass.toLowerCase().includes(req.level.subclass.name.toLowerCase())) return false;
-                            }
                         }
                         if (cLvl < reqLvl) return false;
                     }
@@ -2441,9 +2125,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         let hasPact = false;
                         for (const selected of selectedOptionalFeatures) {
                             if (selected.toLowerCase().includes(pactName.toLowerCase())) { hasPact = true; break; }
-                        }
-                        if (!hasPact && className) {
-                            hasPact = allClassFeatures.some(cf => cf.className && cf.className.toLowerCase() === className.toLowerCase() && cf.level <= cLvl && cf.name.toLowerCase().includes(pactName.toLowerCase()));
                         }
                         if (!hasPact) return false;
                     }
@@ -2458,47 +2139,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             return false;
                         });
                         if (!hasFeat) return false;
-                    }
-
-                    // Feature Check
-                    if (req.feature) {
-                        const hasClassFeat = req.feature.some(f => {
-                            const clean = (typeof f === 'string' ? f : f.name || "").split('|')[0].toLowerCase();
-                            for (const selected of selectedOptionalFeatures) {
-                                if (selected.toLowerCase().includes(clean)) return true;
-                            }
-                            // Also check if the class itself grants it automatically!
-                            if (className) {
-                                const autoGranted = allClassFeatures.some(cf => cf.className && cf.className.toLowerCase() === className.toLowerCase() && cf.level <= cLvl && cf.name.toLowerCase().includes(clean));
-                                if (autoGranted) return true;
-
-                                // And subclass features
-                                if (subclass) {
-                                    const autoSubGranted = allSubclassFeatures.some(sf => sf.className && sf.className.toLowerCase() === className.toLowerCase() && sf.subclassShortName && sf.subclassShortName.toLowerCase() === subclass.toLowerCase() && sf.level <= cLvl && sf.name.toLowerCase().includes(clean));
-                                    if (autoSubGranted) return true;
-                                }
-                            }
-                            return false;
-                        });
-                        if (!hasClassFeat) return false;
-                    }
-
-                    // Patron Check
-                    if (req.patron) {
-                        let hasPatron = false;
-                        const subclassLower = (subclass || "").toLowerCase();
-                        if (subclassLower) {
-                            const checkPatron = p => {
-                                let clean = p.toLowerCase().replace(/^the\s+/, "");
-                                return subclassLower.includes(clean);
-                            };
-                            if (typeof req.patron === 'string') {
-                                hasPatron = checkPatron(req.patron);
-                            } else if (Array.isArray(req.patron)) {
-                                hasPatron = req.patron.some(checkPatron);
-                            }
-                        }
-                        if (!hasPatron) return false;
                     }
 
                     // Spell Check
@@ -2553,31 +2193,9 @@ document.addEventListener('DOMContentLoaded', () => {
         title.style.color = "var(--ink)";
         title.style.borderBottom = "1px solid var(--gold-dark)";
         container.appendChild(title);
-        
-        const searchInput = document.createElement('input');
-        searchInput.type = 'text';
-        searchInput.className = 'form-control';
-        searchInput.placeholder = 'Search options...';
-        searchInput.style.width = '100%';
-        searchInput.style.marginBottom = '8px';
-        searchInput.style.padding = '4px';
-        searchInput.style.border = '1px solid var(--gold)';
-        searchInput.style.borderRadius = '4px';
-        container.appendChild(searchInput);
 
         const list = document.createElement('div');
         list.className = "d-flex flex-column gap-1";
-        list.style.maxHeight = "400px";
-        list.style.overflowY = "auto";
-        list.style.paddingRight = "4px";
-
-        searchInput.oninput = () => {
-            const term = searchInput.value.toLowerCase();
-            list.querySelectorAll('.checklist-item').forEach(item => {
-                const text = item.querySelector('.opt-title').textContent.toLowerCase();
-                item.style.display = text.includes(term) ? 'flex' : 'none';
-            });
-        };
 
         available.forEach(opt => {
             const div = document.createElement('div');
@@ -2587,9 +2205,6 @@ document.addEventListener('DOMContentLoaded', () => {
             div.style.cursor = "pointer";
             div.style.flexDirection = "column";
             div.style.alignItems = "flex-start";
-            div.style.border = "1px solid var(--gold-light)";
-            div.style.borderRadius = "4px";
-            div.style.marginBottom = "4px";
             
             let prereqText = "";
             if (opt.prerequisite) {
@@ -2610,14 +2225,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Pact
                     if (req.pact) groupReqs.push(`Pact: ${req.pact}`);
                     
-                    // Patron
-                    if (req.patron) groupReqs.push(`Patron: ${typeof req.patron === 'string' ? req.patron : req.patron.join('/')}`);
-
-                    // Feature
-                    if (req.feature) {
-                        req.feature.forEach(f => groupReqs.push(`Feature: ${(typeof f === 'string' ? f : f.name || "").split('|')[0]}`));
-                    }
-
                     // Spells
                     if (req.spell) {
                         req.spell.forEach(s => {
@@ -2646,24 +2253,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (groupTexts.length) prereqText = ` <div style="color:var(--red); font-size:0.8rem; margin-top:2px;">Requires: ${groupTexts.join(' OR ')}</div>`;
             }
 
-            const headerDiv = document.createElement('div');
-            headerDiv.style.display = "flex";
-            headerDiv.style.alignItems = "center";
-            headerDiv.style.width = "100%";
-            headerDiv.style.justifyContent = "space-between";
-
             const titleDiv = document.createElement('div');
-            titleDiv.className = "opt-title";
             titleDiv.style.fontWeight = 'bold';
             titleDiv.innerHTML = `${opt.name}${prereqText}`;
-            
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.style.pointerEvents = 'none';
-
-            headerDiv.appendChild(titleDiv);
-            headerDiv.appendChild(checkbox);
-            div.appendChild(headerDiv);
+            div.appendChild(titleDiv);
             
             let desc = processEntries(opt.entries || opt.entry);
             desc = formatDescription(desc);
@@ -2675,27 +2268,16 @@ document.addEventListener('DOMContentLoaded', () => {
             descDiv.innerHTML = desc;
             div.appendChild(descDiv);
 
-            const updateSelectionState = () => {
-                const isSelected = selectedOptionalFeatures.has(opt.name);
-                checkbox.checked = isSelected;
-                if (isSelected) {
-                    div.style.background = 'var(--red)';
-                    div.style.color = 'white';
-                    div.style.borderColor = 'var(--red-dark)';
-                    descDiv.style.color = "rgba(255, 255, 255, 0.9)";
-                    const prereqSpan = titleDiv.querySelector('span');
-                    if (prereqSpan) prereqSpan.style.color = "rgba(255, 255, 255, 0.8)";
-                } else {
-                    div.style.background = 'transparent';
-                    div.style.color = 'var(--ink)';
-                    div.style.borderColor = 'var(--gold-light)';
-                    descDiv.style.color = "var(--ink-light)";
-                    const prereqSpan = titleDiv.querySelector('span');
-                    if (prereqSpan) prereqSpan.style.color = "var(--ink-light)";
-                }
-            };
-            
-            updateSelectionState();
+            if (selectedOptionalFeatures.has(opt.name)) {
+                div.style.background = 'var(--red)';
+                div.style.color = 'white';
+                div.style.borderColor = 'var(--red-dark)';
+                
+                // Fix text colors for readability when selected
+                descDiv.style.color = "rgba(255, 255, 255, 0.9)";
+                const prereqSpan = titleDiv.querySelector('span');
+                if (prereqSpan) prereqSpan.style.color = "rgba(255, 255, 255, 0.8)";
+            }
 
             div.onclick = () => {
                 if (selectedOptionalFeatures.has(opt.name)) selectedOptionalFeatures.delete(opt.name);
@@ -2712,7 +2294,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     selectedOptionalFeatures.add(opt.name);
                 }
-                updateSelectionState();
                 renderClassFeatures();
             };
 
@@ -3895,11 +3476,34 @@ document.addEventListener('DOMContentLoaded', () => {
         wrapper.style.display = hasContent ? 'block' : 'none';
     }
 
-    // NEW: List Renderers for Sidebars
-    
-    function renderBackgroundList() {
-        const list = document.getElementById('backgroundList');
-        if (!list) return;
+    // Background Logic (Modal Picker)
+    window.openBackgroundPicker = function() {
+        let modal = document.getElementById('backgroundPickerModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'backgroundPickerModal';
+            modal.className = 'info-modal-overlay';
+            modal.innerHTML = `
+                <div class="info-modal-content" style="max-width: 500px; max-height: 80vh; display: flex; flex-direction: column;">
+                    <button class="close-modal-btn" onclick="document.getElementById('backgroundPickerModal').style.display='none'">&times;</button>
+                    <h3 class="info-modal-title" style="text-align: center">Select Background</h3>
+                    <div style="margin-bottom: 10px;">
+                        <input type="text" id="bgSearchInput" placeholder="Search backgrounds..." style="border: 1px solid var(--gold); padding: 8px; border-radius: 4px; width: 100%;">
+                    </div>
+                    <div id="backgroundPickerList" class="checklist-grid" style="grid-template-columns: 1fr; flex: 1; overflow-y: auto; gap: 8px;"></div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            document.getElementById('bgSearchInput').addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase();
+                document.querySelectorAll('#backgroundPickerList .checklist-item').forEach(item => {
+                    item.style.display = item.textContent.toLowerCase().includes(term) ? 'flex' : 'none';
+                });
+            });
+        }
+        
+        const list = document.getElementById('backgroundPickerList');
         list.innerHTML = '';
         
         const uniqueMap = new Map();
@@ -3916,48 +3520,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
         sortedBackgrounds.forEach(b => {
             const div = document.createElement('div');
-            div.className = 'list-item';
+            div.className = 'checklist-item';
             div.textContent = b.name;
-            
-            if (b.source) {
-                const meta = document.createElement('span');
-                meta.className = 'list-item-meta';
-                meta.textContent = `[${b.source}]`;
-                div.appendChild(meta);
-            }
-
             div.onclick = () => {
-                document.querySelectorAll('#backgroundList .list-item').forEach(i => i.classList.remove('selected'));
-                div.classList.add('selected');
                 console.log("Selected Background:", b.name);
                 selectedBackground = b.name;
+                const btn = document.getElementById('creator-background-btn');
+                if(btn) btn.textContent = b.name;
                 renderBackgroundInfo();
+                modal.style.display = 'none';
             };
             list.appendChild(div);
         });
 
-        // Filter logic
-        const searchInput = document.getElementById('bgSearchInput');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                const term = e.target.value.toLowerCase();
-                document.querySelectorAll('#backgroundList .list-item').forEach(item => {
-                    item.style.display = item.textContent.toLowerCase().includes(term) ? 'block' : 'none';
-                });
-            });
+        modal.style.display = 'flex';
+        document.getElementById('bgSearchInput').focus();
+    };
+
+    // Bind initial button if exists
+    const initialBgBtn = document.getElementById('creator-background-btn');
+    if (initialBgBtn) initialBgBtn.onclick = window.openBackgroundPicker;
+
+    function renderBackgroundOptions() {
+        // Ensure UI exists (Fix for mobile visibility if step 3 was hidden)
+        let bgBtn = document.getElementById('creator-background-btn');
+        if (!bgBtn) {
+            const step3 = document.getElementById('step-3-section');
+            const container = document.createElement('div');
+            container.innerHTML = `
+                <h3 class="section-title" style="margin-top:0;">Select Background</h3>
+                <div class="field" style="margin-bottom: 20px;">
+                    <span class="field-label">Background</span>
+                    <button id="creator-background-btn" class="styled-select" style="width: 100%; text-align: left;">Select Background</button>
+                </div>
+                <div id="creator-background-info" style="background: rgba(255,255,255,0.5); padding: 15px; border-radius: 4px; border: 1px dashed var(--gold);">
+                    <em style="color:var(--ink-light);">Select a background to view details...</em>
+                </div>
+            `;
+            step3.insertBefore(container, step3.firstChild);
+            bgBtn = document.getElementById('creator-background-btn');
+            bgBtn.onclick = window.openBackgroundPicker;
         }
     }
 
     function renderBackgroundInfo() {
         const container = document.getElementById('creator-background-info');
-        const bgEquipContainer = document.getElementById('bg-equipment-container-target');
         container.innerHTML = '';
-        if (bgEquipContainer) bgEquipContainer.innerHTML = '';
         
-        if (!selectedBackground) {
-            if (bgEquipContainer) bgEquipContainer.innerHTML = '<em style="color: var(--text-muted);">Please select a Background first to see starting equipment options.</em>';
-            return;
-        }
+        if (!selectedBackground) return;
 
         // Find the background object (using the same logic as options to ensure match)
         // Since we populated options from uniqueMap, we can just find by name in allBackgrounds 
@@ -4387,11 +3997,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             html += `</div>`;
             equipDiv.innerHTML = html;
-            if (bgEquipContainer) {
-                bgEquipContainer.appendChild(equipDiv);
-            } else {
-                container.appendChild(equipDiv);
-            }
+            container.appendChild(equipDiv);
         }
     }
 
@@ -4490,10 +4096,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const div = document.createElement('div');
             div.className = 'checklist-item';
             div.style.justifyContent = 'space-between';
-            div.style.background = 'rgba(255,255,255,0.5)';
-            div.style.border = '1px solid var(--gold)';
-            div.style.color = 'var(--ink)';
-            div.style.padding = '8px';
             
             let meta = "";
             if (d.pantheon) meta += d.pantheon + " ";
@@ -4504,7 +4106,7 @@ document.addEventListener('DOMContentLoaded', () => {
             div.onclick = () => {
                 selectedDeity = d.name;
                 selectedDeitySource = d.source;
-                document.getElementById('creator-deity-btn').textContent = `${d.name} [${d.source}]`;
+                document.getElementById('creator-deity-input').value = `${d.name} [${d.source}]`;
                 renderDeityInfo();
                 modal.style.display = 'none';
             };
@@ -4512,16 +4114,40 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (sorted.length === 0) {
-            list.innerHTML = '<div style="padding:10px; text-align:center; color:#aaa;">No deities found.</div>';
+            list.innerHTML = '<div style="padding:10px; text-align:center; color:var(--ink-light);">No deities found.</div>';
         }
 
         modal.style.display = 'flex';
         document.getElementById('deitySearchInput').focus();
     };
 
-    function renderSpeciesList() {
-        const list = document.getElementById('speciesList');
-        if (!list) return;
+    window.openSpeciesPicker = function() {
+        let modal = document.getElementById('speciesPickerModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'speciesPickerModal';
+            modal.className = 'info-modal-overlay';
+            modal.innerHTML = `
+                <div class="info-modal-content" style="max-width: 500px; max-height: 80vh; display: flex; flex-direction: column;">
+                    <button class="close-modal-btn" onclick="document.getElementById('speciesPickerModal').style.display='none'">&times;</button>
+                    <h3 class="info-modal-title" style="text-align: center">Select Species</h3>
+                    <div style="margin-bottom: 10px;">
+                        <input type="text" id="speciesSearchInput" placeholder="Search species..." style="border: 1px solid var(--gold); padding: 8px; border-radius: 4px; width: 100%;">
+                    </div>
+                    <div id="speciesPickerList" class="checklist-grid" style="grid-template-columns: 1fr; flex: 1; overflow-y: auto; gap: 8px;"></div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            document.getElementById('speciesSearchInput').addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase();
+                document.querySelectorAll('#speciesPickerList .checklist-item').forEach(item => {
+                    item.style.display = item.textContent.toLowerCase().includes(term) ? 'flex' : 'none';
+                });
+            });
+        }
+        
+        const list = document.getElementById('speciesPickerList');
         list.innerHTML = '';
         
         const uniqueMap = new Map();
@@ -4538,37 +4164,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const sorted = Array.from(uniqueMap.values()).sort((a, b) => a.name.localeCompare(b.name));
         sorted.forEach(r => {
             const div = document.createElement('div');
-            div.className = 'list-item';
+            div.className = 'checklist-item';
             div.textContent = r.name;
-            
-            if (r.source) {
-                const meta = document.createElement('span');
-                meta.className = 'list-item-meta';
-                meta.textContent = `[${r.source}]`;
-                div.appendChild(meta);
-            }
-
             div.onclick = () => {
-                document.querySelectorAll('#speciesList .list-item').forEach(i => i.classList.remove('selected'));
-                div.classList.add('selected');
                 selectedSpecies = r.name;
+                document.getElementById('creator-species-btn').textContent = r.name;
                 renderSpeciesInfo();
                 renderClassFeatures(); // Re-check feat prerequisites
+                modal.style.display = 'none';
             };
             list.appendChild(div);
         });
-        
-        // Filter logic
-        const searchInput = document.getElementById('speciesSearchInput');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                const term = e.target.value.toLowerCase();
-                document.querySelectorAll('#speciesList .list-item').forEach(item => {
-                    item.style.display = item.textContent.toLowerCase().includes(term) ? 'block' : 'none';
-                });
-            });
-        }
-    }
+
+        modal.style.display = 'flex';
+        document.getElementById('speciesSearchInput').focus();
+    };
 
     function renderSpeciesInfo() {
         const container = document.getElementById('creator-species-info');
@@ -4823,19 +4433,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderAbilityScoreSection() {
-        const container = document.getElementById('creator-abilities');
-        if (!container || container.childElementCount > 0) return;
+        const step3 = document.getElementById('step-3-section');
+        if (document.getElementById('creator-abilities')) return;
+
+        const container = document.createElement('div');
+        container.style.marginTop = "30px";
+        container.style.borderTop = "2px solid var(--gold)";
+        container.style.paddingTop = "20px";
+        container.id = 'creator-abilities';
         
         container.innerHTML = `
+            <h3 class="section-title" style="margin-top:0;">Ability Scores</h3>
             <div style="margin-bottom: 15px;">
                 <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
                     <button id="btn-method-standard" class="btn" style="flex:1; min-width:120px; font-size:0.8rem;">Standard Array</button>
                     <button id="btn-method-pointbuy" class="btn btn-secondary" style="flex:1; min-width:120px; font-size:0.8rem;">Point Buy</button>
                     <button id="btn-method-random" class="btn btn-secondary" style="flex:1; min-width:120px; font-size:0.8rem;">Random</button>
                 </div>
-                <div id="ability-score-content" style="background:rgba(0,0,0,0.2); padding:15px; border-radius:4px; border:1px solid #555;"></div>
+                <div id="ability-score-content" style="background:rgba(255,255,255,0.5); padding:15px; border-radius:4px; border:1px solid var(--gold);"></div>
             </div>
         `;
+        
+        step3.appendChild(container);
 
         const setMethod = (method) => {
             ['standard', 'pointbuy', 'random'].forEach(m => {
@@ -4843,12 +4462,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (m === method) {
                     btn.classList.remove('btn-secondary');
                     btn.classList.add('btn');
-                    btn.classList.add('btn-primary');
                 } else {
                     btn.classList.add('btn-secondary');
                     btn.classList.remove('btn');
-                    btn.classList.remove('btn-primary');
-                    btn.classList.add('btn'); // basic style
                 }
             });
             if (method === 'standard') renderStandardArray();
@@ -5043,13 +4659,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderReviewSection() {
-        const container = document.getElementById('step-4-review');
+        const step3 = document.getElementById('step-3-section');
         
         let currentName = "";
-        const nameInput = document.querySelector('#step-4-review input');
+        const nameInput = document.getElementById('creator-char-name');
         if (nameInput) currentName = nameInput.value;
-        
-        container.innerHTML = '';
+
+        const existing = document.getElementById('step-4-review');
+        if (existing) existing.remove();
+
+        const container = document.createElement('div');
+        container.id = 'step-4-review';
+        container.style.marginTop = "30px";
+        container.style.borderTop = "2px solid var(--gold)";
+        container.style.paddingTop = "20px";
         
         const scores = getFinalAbilityScores();
         const scoreStr = Object.entries(scores).map(([k, v]) => `<strong>${k.slice(0,3)}:</strong> ${v}`).join(', ');
@@ -5180,10 +4803,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         container.innerHTML = `
-            <h2 style="margin-top:0;">Review Character</h2>
+            <h3 class="section-title" style="margin-top:0;">Review Character</h3>
             <div class="field" style="margin-bottom: 20px;">
                 <span class="field-label">Character Name</span>
-                <input type="text" id="creator-char-name" placeholder="Enter Name" value="${currentName.replace(/"/g, '&quot;')}" style="font-weight:bold; color:var(--ink); background:var(--bg-input); border:1px solid var(--gold); padding:8px; font-size:1.2rem; width:100%;">
+                <input type="text" id="creator-char-name" placeholder="Enter Name" value="${currentName.replace(/"/g, '&quot;')}" style="font-weight:bold; color:var(--red-dark); font-size:1.2rem;">
             </div>
             
             <div style="background:rgba(255,255,255,0.5); padding:15px; border-radius:4px; border:1px solid var(--gold); margin-bottom:20px; line-height:1.6;">
@@ -5196,9 +4819,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${spellsHtml}
             </div>
 
-            <button id="create-char-btn" class="btn btn-primary" style="width:100%; font-size:1.2rem; padding:15px;">Create Character Sheet</button>
+            <button id="create-char-btn" class="btn" style="width:100%; font-size:1.2rem; padding:15px;">Create Character</button>
         `;
         
+        step3.parentNode.appendChild(container);
+        container.scrollIntoView({ behavior: 'smooth' });
+
         document.getElementById('create-char-btn').addEventListener('click', createCharacter);
     }
 
@@ -6220,9 +5846,3 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = 'index.html';
     }
 });
-
-// - move abilities tab after background tab
-// - add manual assignment to abilities as a option
-// - 
-// - add a feats tab before review
-// - move deity selector to a tab calleed background (extra), which also has a languages selector
