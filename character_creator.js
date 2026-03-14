@@ -29,6 +29,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let allItems = [];
     let lastAvailableFeatNames = null;
 
+    const skillAbilities = {
+        'Acrobatics': 'Dex', 'Animal Handling': 'Wis', 'Arcana': 'Int', 'Athletics': 'Str',
+        'Deception': 'Cha', 'History': 'Int', 'Insight': 'Wis', 'Intimidation': 'Cha',
+        'Investigation': 'Int', 'Medicine': 'Wis', 'Nature': 'Int', 'Perception': 'Wis',
+        'Performance': 'Cha', 'Persuasion': 'Cha', 'Religion': 'Int', 'Sleight of Hand': 'Dex',
+        'Stealth': 'Dex', 'Survival': 'Wis'
+    };
+
     // Helper for Equipment Selection UI
     window.updateEquipSelection = function(radio) {
         const container = radio.closest('.equip-selection-container');
@@ -1474,7 +1482,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             html += `<select class="styled-select skill-select-dropdown" id="core-skill-${skillDropdownIndex++}" style="font-size:0.9rem; padding:2px 4px;">`;
                             html += `<option value="" disabled selected>Select Skill</option>`;
                             options.forEach(opt => {
-                                html += `<option value="${opt}">${opt}</option>`;
+                                const stat = skillAbilities[opt] ? ` (${skillAbilities[opt]})` : '';
+                                html += `<option value="${opt}">${opt}${stat}</option>`;
                             });
                             html += `</select>`;
                         }
