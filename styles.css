@@ -982,6 +982,141 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
 @media (max-width: 900px) {
   .character-sheet { width: 100%; border-radius: 0; margin: 0; box-shadow: none; }
   .grid-3, .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .stat-block { grid-template-columns: repeat(2, 1fr); }
+
+  /* Compress Character Details on Mobile/Tablet */
+  body:not(.dense-mode) .grid.grid-4:has(#charName) {
+    grid-template-columns: 70px 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  body:not(.dense-mode) .grid.grid-4:has(#charName) > .field:has(#charName),
+  body:not(.dense-mode) .grid.grid-4:has(#charName) > .field:has(#charClass) {
+    grid-column: 1 / -1;
+  }
+
+  body:not(.dense-mode) .grid.grid-4:has(#race) {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  body:not(.dense-mode) .grid.grid-4:has(#charName) .field,
+  body:not(.dense-mode) .grid.grid-4:has(#race) .field { padding: 6px 10px; }
+  
+  body:not(.dense-mode) .grid.grid-4:has(#charName) .field-label,
+  body:not(.dense-mode) .grid.grid-4:has(#race) .field-label { font-size: 0.65rem; margin-bottom: 0px; }
+
+  body:not(.dense-mode) .grid.grid-4:has(#charName) input,
+  body:not(.dense-mode) .grid.grid-4:has(#race) input { font-size: 1rem; min-height: 24px; padding: 2px 0; }
+
+  body:not(.dense-mode) div:has(> .field > #heroicInspiration) { margin-bottom: 16px !important; }
+  body:not(.dense-mode) .field:has(#heroicInspiration) { padding: 6px 12px !important; }
+  body:not(.dense-mode) .field:has(#heroicInspiration) .field-label { font-size: 0.75rem; }
+
+  /* Redesign Ability Scores and Skills for Mobile/Tablet */
+  body:not(.dense-mode) .stat-card { 
+    flex-direction: row; 
+    align-items: stretch; 
+    background: var(--parchment-dark); 
+    border-radius: 8px; 
+    box-shadow: 0 2px 8px var(--shadow);
+    border: 1px solid var(--gold);
+    gap: 0;
+  }
+  body:not(.dense-mode) .stat { flex: 0 0 90px; padding: 12px 4px; justify-content: center; border-radius: 7px 0 0 7px; box-shadow: none; }
+  body:not(.dense-mode) .stat-skills { flex: 1; min-width: 0; justify-content: center; gap: 4px; padding: 6px 8px; }
+  
+  body:not(.dense-mode) .stat-value, 
+  body:not(.dense-mode) .stat input.stat-value { font-size: 2rem; }
+  body:not(.dense-mode) .stat-name { font-size: 0.8rem; margin-bottom: 2px; }
+  body:not(.dense-mode) .stat-modifier input { font-size: 1.1rem; margin-bottom: 0; }
+  
+  body.swap-scores:not(.dense-mode) .stat-modifier input { font-size: 2rem !important; }
+  body.swap-scores:not(.dense-mode) .stat-value { font-size: 1rem !important; }
+
+  body:not(.dense-mode) .skill-item { padding: 4px 6px; gap: 6px; border-color: rgba(0,0,0,0.1); background: white; box-shadow: 0 1px 2px rgba(0,0,0,0.05); min-height: 32px; }
+  body:not(.dense-mode) .skill-name { font-size: 0.85rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body:not(.dense-mode) .skill-mod { font-size: 0.9rem; min-width: 24px; }
+  body:not(.dense-mode) .skill-checkbox { width: 16px; height: 16px; border-radius: 3px; border-width: 1px; }
+  body:not(.dense-mode) .checkmark { font-size: 0.8rem; }
+  body:not(.dense-mode) .adv-toggle { width: 18px; height: 18px; font-size: 0.6rem; margin-right: 2px; }
+  body:not(.dense-mode) .skill-info-btn { width: 18px; height: 18px; font-size: 0.7rem; }
+
+  /* Compress Hit Points & Death Saves on Mobile/Tablet */
+  body:not(.dense-mode) .hp-death-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  body:not(.dense-mode) .hp-death-grid .combat-stat { padding: 8px 4px; }
+  body:not(.dense-mode) .hp-death-grid .death-saves-box { grid-column: 1 / -1; padding: 10px; }
+  body:not(.dense-mode) .hp-death-grid .combat-stat-label,
+  body:not(.dense-mode) .hp-death-grid .death-saves-label { font-size: 0.7rem; margin-bottom: 4px; }
+  body:not(.dense-mode) .hp-death-grid input.combat-stat-value { font-size: 1.4rem; height: 32px; width: 45px !important; }
+  body:not(.dense-mode) .hp-death-grid #hitDice { width: 100% !important; }
+  body:not(.dense-mode) .hp-controls { gap: 4px; }
+  body:not(.dense-mode) .hp-controls .hp-btn { width: 22px; height: 22px; font-size: 0.85rem; flex-shrink: 0; }
+  body:not(.dense-mode) .death-save-row { margin-bottom: 4px; }
+  body:not(.dense-mode) .save-label { font-size: 0.8rem; min-width: 60px; }
+  body:not(.dense-mode) .death-save-check { width: 22px; height: 22px; }
+  body:not(.dense-mode) .death-save-check.checked::after { font-size: 0.9rem; }
+  
+  /* Compress DDB HP Box on Mobile/Tablet */
+  body:not(.dense-mode) .ddb-hp-box { min-height: 80px; margin-bottom: 12px; }
+  body:not(.dense-mode) .ddb-content { padding: 8px 10px 10px; }
+  body:not(.dense-mode) .ddb-label { font-size: 0.7rem; margin-bottom: 4px; }
+  body:not(.dense-mode) .ddb-current-val { font-size: 1.8rem; width: 60px; }
+  body:not(.dense-mode) .ddb-small-val { font-size: 1.2rem; width: 40px; }
+  body:not(.dense-mode) .ddb-separator { font-size: 1.5rem; }
+  body:not(.dense-mode) .ddb-btn { font-size: 0.65rem; padding: 4px 6px; }
+  body:not(.dense-mode) .ddb-input { width: 50px; font-size: 0.9rem; }
+
+  /* Compress Combat Stats (AC, Init, Speed) on Mobile/Tablet */
+  body:not(.dense-mode) .combat-stats { grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  body:not(.dense-mode) .combat-stats .combat-stat { padding: 8px 4px; }
+  body:not(.dense-mode) .combat-stats .combat-stat-label { font-size: 0.65rem; margin-bottom: 4px; }
+  body:not(.dense-mode) .combat-stats input.combat-stat-value,
+  body:not(.dense-mode) .combat-stats select.combat-stat-value { font-size: 1.4rem; height: 32px; min-height: 32px; padding: 0; }
+  body:not(.dense-mode) .combat-stats .combat-stat:has(#charSize) > div { flex-wrap: wrap; gap: 2px !important; }
+  body:not(.dense-mode) #sizeFt { font-size: 1.2rem !important; width: 35px !important; height: 30px !important; min-height: 30px; }
+  body:not(.dense-mode) #shieldEquipped + label { font-size: 0.65rem !important; }
+
+  /* Compress Proficiencies & Defenses on Mobile/Tablet */
+  body:not(.dense-mode) .grid.grid-3:has(#armorLight) { gap: 8px; margin-bottom: 12px; }
+  body:not(.dense-mode) .grid.grid-3:has(#armorLight) .field,
+  body:not(.dense-mode) .field:has(#defenses) { padding: 8px 10px; }
+  body:not(.dense-mode) .grid.grid-3:has(#armorLight) .field-label,
+  body:not(.dense-mode) .field:has(#defenses) .field-label { font-size: 0.7rem; margin-bottom: 4px; }
+  body:not(.dense-mode) .grid.grid-3:has(#armorLight) > .field:first-child > div { margin-top: 4px !important; gap: 4px !important; padding-left: 0 !important; font-size: 0.8rem; }
+  body:not(.dense-mode) #weaponProfsDisplay { min-height: 32px; padding: 6px 8px; font-size: 0.85rem; gap: 4px; }
+  body:not(.dense-mode) #toolProfs, body:not(.dense-mode) #defenses { min-height: 40px !important; height: 40px !important; font-size: 0.95rem; }
+  body:not(.dense-mode) .combat-stat:has(#activeConditionsInput) { min-height: auto !important; padding: 8px 10px; justify-content: flex-start; }
+  body:not(.dense-mode) .combat-stat:has(#activeConditionsInput) input { font-size: 0.9rem !important; font-weight: normal !important; color: var(--ink) !important; height: 28px !important; min-height: 28px; padding: 0; }
+  body:not(.dense-mode) #conditionsDisplay { padding: 4px; font-size: 0.95rem; }
+
+  /* Compress Class Resources on Mobile/Tablet */
+  body:not(.dense-mode) #resourcesContainer { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  body:not(.dense-mode) .resource-item { padding: 8px 6px; margin-bottom: 0; }
+  body:not(.dense-mode) .resource-header { flex-wrap: wrap; gap: 4px; margin-bottom: 6px; padding-bottom: 6px; }
+  body:not(.dense-mode) .resource-name { font-size: 0.95rem; flex: 1 1 100%; min-height: 24px; height: 24px; padding: 0; }
+  body:not(.dense-mode) .resource-controls { flex: 1 1 100%; justify-content: space-between; gap: 2px; }
+  body:not(.dense-mode) .resource-max { font-size: 1.1rem; height: 24px; min-height: 24px; padding: 0; width: 35px !important; }
+  body:not(.dense-mode) .resource-slot { width: 22px; height: 22px; }
+
+  /* Compress Spell Slots on Mobile/Tablet */
+  body:not(.dense-mode) #spellSlotsContainer { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  body:not(.dense-mode) .slot-level-container { padding: 8px; margin-bottom: 0; }
+  body:not(.dense-mode) .slot-controls { margin-bottom: 4px; padding-bottom: 4px; font-size: 0.85rem; flex-wrap: wrap; gap: 4px; }
+  body:not(.dense-mode) .spell-slot { width: 24px; height: 24px; border-width: 1px; }
+  body:not(.dense-mode) .spell-slot.used::after { font-size: 1rem; }
+  body:not(.dense-mode) .spell-slot-tracker { gap: 4px; margin-top: 4px; }
+  body:not(.dense-mode) .slot-btn-small { width: 22px; height: 22px; font-size: 0.8rem; }
+
+  /* Compress Weapon Attacks on Mobile/Tablet */
+  body:not(.dense-mode) .weapon-item { padding: 8px !important; padding-right: 32px !important; margin-bottom: 8px; }
+  body:not(.dense-mode) .weapon-item > div { gap: 6px !important; }
+  body:not(.dense-mode) .weapon-item .grid-3 { grid-template-columns: 1fr 55px 85px !important; gap: 6px !important; }
+  body:not(.dense-mode) .weapon-item .field { padding: 6px 8px; }
+  body:not(.dense-mode) .weapon-item .field-label { font-size: 0.65rem; margin-bottom: 2px; }
+  body:not(.dense-mode) .weapon-item input { font-size: 1rem; min-height: 24px; height: 24px; padding: 0; }
+  body:not(.dense-mode) .weapon-item .delete-feature-btn { top: 6px !important; right: 4px !important; width: 24px !important; }
 }
 
 @media (max-width: 768px) {
@@ -991,9 +1126,8 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
 
   /* Collapse Grids */
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
-  .stat-block { grid-template-columns: repeat(2, 1fr); }
-  .hp-death-grid { grid-template-columns: 1fr; }
   .attunement-grid { grid-template-columns: 1fr; }
+
 
   /* Inventory Mobile Layout */
   .inventory-header { display: none; }
@@ -1021,29 +1155,30 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
   .spell-list-header { display: none; }
   .spell-row {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr;
+    grid-template-columns: 32px 1fr 1fr 1fr 32px;
     grid-template-areas:
-      "name name name lvl"
-      "time time range range"
-      "prep ritual conc mat"
-      "info drag drag del";
-    gap: 12px;
-    padding: 16px;
+      "drag name name name del"
+      "lvl time time range range"
+      "prep ritual conc mat info";
+    gap: 6px;
+    padding: 8px;
     align-items: center;
     background: white;
     border: 1px solid var(--gold);
-    border-radius: 8px;
+    border-radius: 6px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    margin-bottom: 12px;
+    margin-bottom: 8px;
   }
 
   .spell-row .spell-name { 
       grid-area: name; 
-      font-size: 1.1rem; 
+      font-size: 1.05rem; 
       font-weight: 700; 
       color: var(--red-dark);
       border-bottom: 1px solid var(--parchment-dark);
-      padding-bottom: 4px;
+      padding-bottom: 2px;
+      height: 28px;
+      min-height: 28px;
   }
   
   .spell-row .spell-lvl { 
@@ -1052,12 +1187,15 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
       font-weight: bold;
       background: var(--parchment);
       border-radius: 4px;
-      height: 32px;
+      height: 28px;
+      min-height: 28px;
+      font-size: 0.95rem;
       border: 1px solid var(--gold);
+      padding: 0;
   }
 
-  .spell-row .spell-time { grid-area: time; font-size: 0.9rem; color: var(--ink-light); }
-  .spell-row .spell-range { grid-area: range; font-size: 0.9rem; text-align: right; color: var(--ink-light); }
+  .spell-row .spell-time { grid-area: time; font-size: 0.85rem; height: 28px; min-height: 28px; color: var(--ink-light); }
+  .spell-row .spell-range { grid-area: range; font-size: 0.85rem; height: 28px; min-height: 28px; text-align: right; color: var(--ink-light); }
 
   .spell-row .spell-col-prep, 
   .spell-row .spell-col-ritual, 
@@ -1068,8 +1206,9 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
       align-items: center; 
       justify-content: center; 
       background: var(--parchment-dark);
-      border-radius: 6px;
-      padding: 6px 2px;
+      border-radius: 4px;
+      padding: 4px 2px;
+      gap: 2px;
       height: 100%;
   }
   
@@ -1078,26 +1217,28 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
   .spell-row .spell-col-conc { grid-area: conc; }
   .spell-row .spell-col-mat { grid-area: mat; }
 
-  .spell-row .skill-info-btn { grid-area: info; width: 32px; height: 32px; font-size: 1rem; background: var(--parchment); justify-self: start; }
-  .spell-row .delete-feature-btn { grid-area: del; justify-self: end; font-size: 1.6rem; color: var(--red); padding: 0 8px; }
-  .spell-row .drag-handle { grid-area: drag; justify-self: center; font-size: 1.4rem; color: var(--gold-dark); padding: 8px; }
+  .spell-row .spell-check { width: 14px; height: 14px; }
+
+  .spell-row .note-btn,
+  .spell-row .skill-info-btn { grid-area: info; justify-self: center; width: 28px; height: 28px; font-size: 1rem; background: var(--parchment); border-radius: 4px; border: 1px solid var(--gold-dark); display: flex; align-items: center; justify-content: center; padding: 0; }
+  .spell-row .delete-feature-btn { grid-area: del; justify-self: center; font-size: 1.4rem; color: var(--red); padding: 0; }
+  .spell-row .drag-handle { grid-area: drag; justify-self: center; font-size: 1.2rem; color: var(--gold-dark); padding: 0; }
   
   .mobile-label { 
       display: block; 
-      font-size: 0.65rem; 
+      font-size: 0.6rem; 
       color: var(--ink); 
-      margin-bottom: 4px; 
+      margin-bottom: 0; 
       font-weight: bold; 
       text-transform: uppercase;
   }
 
   .spell-row.cantrip-row {
-    grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr;
+    grid-template-columns: 32px 1fr 1fr 1fr 32px;
     grid-template-areas:
-      "name name name name name lvl"
-      "time time time range range range"
-      "ritual ritual conc conc mat mat"
-      "info drag drag drag drag del";
+      "drag name name name del"
+      "lvl time time range range"
+      "ritual ritual conc mat info";
   }
   .spell-row.cantrip-row .spell-col-prep { display: none !important; }
 
@@ -1126,6 +1267,17 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
 
 @media (max-width: 480px) {
   .stat-block { grid-template-columns: 1fr; }
+  
+  /* Further shrink ability scores for very small phones */
+  body:not(.dense-mode) .stat { flex: 0 0 80px; padding: 8px 4px; }
+  body:not(.dense-mode) .stat-value, body:not(.dense-mode) .stat input.stat-value { font-size: 1.8rem; }
+  body:not(.dense-mode) .stat-name { font-size: 0.75rem; }
+  body.swap-scores:not(.dense-mode) .stat-modifier input { font-size: 1.8rem !important; }
+  body.swap-scores:not(.dense-mode) .stat-value { font-size: 0.9rem !important; }
+  body:not(.dense-mode) .skill-item { padding: 4px; gap: 4px; }
+  body:not(.dense-mode) .skill-name { font-size: 0.8rem; }
+  body:not(.dense-mode) .skill-mod { font-size: 0.85rem; min-width: 20px; }
+
   .dice-rolls-buckets { grid-template-columns: repeat(3, 1fr) !important; }
   
   .tabs { flex-direction: column; }

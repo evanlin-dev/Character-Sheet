@@ -3749,6 +3749,21 @@ window.toggleDenseMode = function () {
   }
 };
 
+// Dynamically shorten Ability Score names on mobile or dense mode
+window.updateResponsiveStatNames = function() {
+    const isMobile = window.matchMedia('(max-width: 900px)').matches;
+    const isDense = document.body.classList.contains('dense-mode');
+    document.querySelectorAll('.stat-name').forEach(el => {
+        if (!el.dataset.originalText) el.dataset.originalText = el.textContent.trim();
+        if (isMobile || isDense) {
+            el.textContent = el.dataset.originalText.substring(0, 3).toUpperCase();
+        } else {
+            el.textContent = el.dataset.originalText;
+        }
+    });
+};
+window.addEventListener('resize', window.updateResponsiveStatNames);
+
 window.enableDenseLayout = function() {
     if (document.getElementById('dense-layout-root')) return;
     const sheet = document.querySelector('.character-sheet');
@@ -3873,6 +3888,7 @@ window.enableDenseLayout = function() {
         if (!el.dataset.originalText) el.dataset.originalText = el.textContent;
         el.textContent = el.textContent.substring(0, 3).toUpperCase();
     });
+    window.updateResponsiveStatNames();
 
     // 1. Move Stats (Top) & Skills (Left)
     document.querySelectorAll('.stat-card').forEach(card => {
@@ -4060,6 +4076,7 @@ window.disableDenseLayout = function() {
             delete el.dataset.originalText;
         }
     });
+    window.updateResponsiveStatNames();
 
     const charNameInput = document.getElementById('charName');
     if (charNameInput) {
@@ -4507,6 +4524,9 @@ document.addEventListener("DOMContentLoaded", () => {
   
   // Inject DDB HP Box
   if (window.injectDDBHPBox) window.injectDDBHPBox();
+
+  // Apply responsive stat names automatically on initial load
+  if (window.updateResponsiveStatNames) window.updateResponsiveStatNames();
 
   // Guard clause: Only run initialization if we are on the character sheet (checking for charName input)
   if (!document.getElementById("charName")) return;
