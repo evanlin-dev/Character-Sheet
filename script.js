@@ -3415,8 +3415,14 @@ window.saveCharacter = function () {
     currentTheme: document.body.className,
     activeTab: document.querySelector(".tab-content.active")?.id,
     featuresFilter: window._featuresFilter || 'all',
+    attacksPerAction: document.getElementById('attacksPerAction')?.value || '1',
   };
   localStorage.setItem("dndCharacter", JSON.stringify(characterData));
+
+  // Refresh auto-spell entries in mobile actions view
+  if (window._currentMobileView === 'view-actions' && window.refreshSpellsInActionsView) {
+      window.refreshSpellsInActionsView();
+  }
 
   // Update Dense Header if active
   const denseHeader = document.getElementById('dense-header');
@@ -3726,6 +3732,13 @@ window.createSidebarMenu = function () {
     });
     actionsDiv.style.display = "none";
   }
+
+  // Help & Guide button
+  const helpBtn = document.createElement('button');
+  helpBtn.className = 'sidebar-btn';
+  helpBtn.innerText = 'Help & Guide';
+  helpBtn.onclick = () => { window.openHelpPage(); window.toggleSidebar(); };
+  sidebarContent.appendChild(helpBtn);
 };
 
 window.injectCombatActions = function (actionsData) {
@@ -4250,6 +4263,129 @@ window.toggleSidebar = function () {
   }
 };
 
+window.openHelpPage = function() {
+    let modal = document.getElementById('helpModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'helpModal';
+        modal.className = 'info-modal-overlay';
+        modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+        modal.innerHTML = `
+            <div class="help-modal-content">
+                <div class="help-modal-header">
+                    <h2 style="margin:0;font-family:'Cinzel',serif;font-size:1.2rem;color:var(--red-dark);">Character Sheet Guide</h2>
+                    <button onclick="document.getElementById('helpModal').style.display='none'" style="background:none;border:none;font-size:1.8rem;cursor:pointer;color:var(--ink);line-height:1;padding:0;">&times;</button>
+                </div>
+                <div class="help-modal-body">${window._buildHelpContent()}</div>
+            </div>`;
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'flex';
+};
+
+window._buildHelpContent = function() {
+    const sections = [
+        {
+            icon: '🖥️',
+            title: 'Desktop vs Mobile Layout',
+            desc: '<b>Full Sheet (Desktop/Normal Mode):</b> All sections are visible at once in a multi-column layout — ability scores, combat stats, spells, inventory, and more side by side. Best for desktops and large screens.<br><b>Mobile / Tablet:</b> The sheet is still accessible but a <b>nav button (⊞)</b> appears in the bottom-right corner. Tap it to switch between focused views (Stats, Actions, Spells, etc.) for easier one-handed use.<br><br><b>⚠️ Some edits can only be done in the full sheet view.</b> The mobile nav views are optimized for reference and quick updates during play. For things like adding new features, editing weapon stats, managing spell details, or configuring armor training, switch back to Full Sheet using the nav button.',
+        },
+        {
+            icon: '📐',
+            title: 'Dense Mode vs Normal Mode',
+            desc: '<b>Normal Mode:</b> Full layout with large fonts, spacious sections, and an expanded sidebar. Great for reading and editing at a desk.<br><b>Dense Mode:</b> A compact header bar replaces the top of the sheet, showing your character name, race/class, and level. Sections are tighter. Toggle via <b>Menu → Toggle Dense View</b>.',
+            example: 'Dense: header shows "Thorn Brightblade — Half-Elf Ranger Lv 8" at the top, freeing vertical space.'
+        },
+        {
+            icon: '🎲',
+            title: 'Ability Scores',
+            desc: 'The 6 core stats (STR, DEX, CON, INT, WIS, CHA). Type a score in the box — the modifier is calculated automatically. On mobile/tablet, use the <b>Stats</b> nav view.',
+            example: 'STR 18 → modifier +4. Used for melee attacks, athletics, and strength saves.'
+        },
+        {
+            icon: '🛡️',
+            title: 'Saving Throws',
+            desc: 'Click the checkbox next to a save to mark proficiency. Proficiency adds your Prof Bonus to that save. Shown in the Stats nav view on mobile.',
+            example: 'WIS Save (proficient, Prof +3): WIS mod +2 + Prof +3 = +5 total.'
+        },
+        {
+            icon: '🎯',
+            title: 'Skills',
+            desc: 'Click the checkbox to mark proficiency. The circular button cycles advantage/disadvantage. Modifier is shown on the right. On tablet, skills display in 2 columns; on mobile, 1 column.',
+            example: 'Stealth (DEX prof): +2 DEX mod + +3 prof = +5. Advantage shown with ↑.'
+        },
+        {
+            icon: '⚔️',
+            title: 'Combat Stats',
+            desc: 'Track AC, Initiative (auto-calculated from DEX), Speed, HP, Temp HP, Hit Dice, size, and proficiency bonus. Click ⚡ to open the HP manager for healing/damage. <b>Attacks / Action</b> sets how many attacks you can make.',
+            example: 'Fighter Lv 5: HP 44/52, AC 18, Speed 30, Attacks/Action: 2.'
+        },
+        {
+            icon: '🗡️',
+            title: 'Weapon Attacks',
+            desc: 'Add weapons with attack bonus and damage. Click ? next to the section title for weapon mastery info. Weapons appear in the Attacks section of the full sheet.',
+            example: 'Longsword: +6 to hit, 1d8+4 slashing. Rapier: +6 to hit, 1d8+4 piercing.'
+        },
+        {
+            icon: '✨',
+            title: 'Class Resources',
+            desc: 'Track named resources (Ki, Bardic Inspiration, Lay on Hands, etc.). Click slots to use/restore them. Use +/- to change the max. Visible in the <b>Actions</b> nav view on mobile.',
+            example: 'Bardic Inspiration (d8): ●●●○○ — 3 used, 2 remaining.'
+        },
+        {
+            icon: '⚡',
+            title: 'Action Economy',
+            desc: 'Add your actions, bonus actions, and reactions manually. <b>Spells with matching casting times appear automatically</b> (e.g. a spell with "1 action" shows under Actions). Tap a spell to expand its description. Set <b>Attacks / Action</b> in Combat Stats to display it in the mobile view.',
+            example: 'Actions: Attack ×2, Misty Step (spell). Bonus: Cunning Action. Reaction: Shield (spell).'
+        },
+        {
+            icon: '📚',
+            title: 'Features & Traits',
+            desc: 'Add class features, species traits, background features, and feats. Filter by type using the pill buttons at the top. In the mobile Features view, the same filter applies.',
+            example: 'Class: Second Wind, Action Surge. Species: Darkvision. Feat: Alert.'
+        },
+        {
+            icon: '🔮',
+            title: 'Spells',
+            desc: 'Add spells with level, casting time, range, and description. Check <b>Prep</b> to move a spell to your prepared list. Cantrips go in the Cantrips list. Track spell slots with the visual slot tracker. Filter prepared spells by level in the mobile Spells nav view.',
+            example: 'Fireball: Lv 3, 1 action, 150 ft. Slots: Lv3 ●●○ (1 used).'
+        },
+        {
+            icon: '🎒',
+            title: 'Inventory',
+            desc: 'Track equipped items and backpack contents. Enter name, qty, weight. Check the equip box to move an item to Equipped. Click 📝 for a description. On mobile, rows are compact single-line entries.',
+            example: 'Equipped: Chain Mail (55 lbs). Backpack: Rope 50ft x1 (2 lbs), Potion of Healing x3.'
+        },
+        {
+            icon: '🧭',
+            title: 'Defenses (Mobile Nav)',
+            desc: 'The <b>Defenses</b> nav view shows your Speed and three defense fields: Resistances, Immunities, and Vulnerabilities. Edit these to reflect damage types your character is affected by.',
+            example: 'Resistances: Fire, Poison. Immunities: Charmed. Vulnerabilities: Cold.'
+        },
+        {
+            icon: '📋',
+            title: 'Proficiencies (Mobile Nav)',
+            desc: 'The <b>Proficiencies</b> nav view shows Proficiency Bonus, Armor Training checkboxes, Weapon Proficiency tags, Tool Proficiencies, and Languages — all in one place.',
+            example: 'Prof Bonus: +4. Armor: Light, Medium, Shields. Weapons: Simple, Martial.'
+        },
+        {
+            icon: '📝',
+            title: 'Notes',
+            desc: 'Record personality traits, ideals, bonds, flaws, deity, and general notes. Auto-saved. Accessible via the <b>Notes</b> nav view on mobile.',
+            example: 'Personality: Bold and direct. Flaw: Overconfident. Notes: Met Queen Miranel in session 4.'
+        },
+    ];
+
+    return sections.map(s => `
+        <div class="help-section">
+            <div class="help-section-title">${s.icon} ${s.title}</div>
+            <div class="help-section-desc">${s.desc}</div>
+            ${s.example ? `<div class="help-section-example">Example: ${s.example}</div>` : ''}
+            ${s.items ? `<ul class="help-section-list">${s.items.map(i => `<li>${i}</li>`).join('')}</ul>` : ''}
+        </div>
+    `).join('');
+};
+
 window.initQuickNav = function () {
   if (document.getElementById("view-selection-modal")) return;
 
@@ -4524,9 +4660,39 @@ window.mountSpellView = function() {
 
 window.unmountSpellView = function() { /* rebuilt on each mount */ };
 
+window._syncAtkBadge = function() {
+    const badge = document.getElementById('act-atk-badge');
+    if (badge) badge.textContent = document.getElementById('attacksPerAction')?.value || '1';
+};
+
 window.mountActionsView = function() {
     const view = document.getElementById('view-actions');
     if (!view) return;
+
+    // Inject attacks-per-action header
+    if (!document.getElementById('act-view-header')) {
+        const atkVal = parseInt(document.getElementById('attacksPerAction')?.value) || 1;
+        const hdr = document.createElement('div');
+        hdr.id = 'act-view-header';
+        hdr.className = 'act-view-header';
+        hdr.innerHTML = `Attacks per Action: <strong id="act-atk-badge">${atkVal}</strong>`;
+        view.insertBefore(hdr, view.firstChild);
+        const atkInput = document.getElementById('attacksPerAction');
+        if (atkInput) atkInput.addEventListener('input', window._syncAtkBadge);
+    }
+
+    // Move class resources section
+    const resSec = document.getElementById('resourcesContainer')?.closest('.sheet-section');
+    if (resSec && !resSec.dataset.actMoved) {
+        const ph = document.createElement('div');
+        ph.id = 'ph-act-res';
+        ph.style.display = 'none';
+        resSec.parentNode.insertBefore(ph, resSec);
+        resSec.dataset.actMoved = 'ph-act-res';
+        view.appendChild(resSec);
+    }
+
+    // Move actions, bonus actions, reactions sections
     ['actionsContainer', 'bonusActionsContainer', 'reactionsContainer'].forEach((id, i) => {
         const container = document.getElementById(id);
         if (!container) return;
@@ -4539,14 +4705,88 @@ window.mountActionsView = function() {
         section.dataset.actMoved = ph.id;
         view.appendChild(section);
     });
+
+    // Inject auto-spell entries from prepared spells / cantrips
+    window.refreshSpellsInActionsView();
 };
 
 window.unmountActionsView = function() {
+    // Remove injected header
+    document.getElementById('act-view-header')?.remove();
+    const atkInput = document.getElementById('attacksPerAction');
+    if (atkInput) atkInput.removeEventListener('input', window._syncAtkBadge);
+
+    // Remove auto-spell containers
+    ['auto-act-spells', 'auto-bonus-spells', 'auto-react-spells'].forEach(id => {
+        document.getElementById(id)?.remove();
+    });
+
+    // Restore moved sections
     document.querySelectorAll('[data-act-moved]').forEach(el => {
         const ph = document.getElementById(el.dataset.actMoved);
         if (ph) { ph.parentNode.insertBefore(el, ph); ph.remove(); }
         delete el.dataset.actMoved;
     });
+};
+
+window.refreshSpellsInActionsView = function() {
+    if (window._currentMobileView !== 'view-actions') return;
+
+    const classify = (time) => {
+        if (!time) return null;
+        const t = time.toLowerCase().trim();
+        if (t.includes('bonus action')) return 'bonus';
+        if (t.includes('action')) return 'action';
+        if (t.includes('reaction')) return 'reaction';
+        return null;
+    };
+
+    const allRows = [
+        ...Array.from(document.querySelectorAll('#preparedSpellsList .spell-row')),
+        ...Array.from(document.querySelectorAll('#cantripList .spell-row'))
+    ];
+
+    const groups = { action: [], bonus: [], reaction: [] };
+    allRows.forEach(row => {
+        const time = row.querySelector('.spell-time')?.value || '';
+        const name = row.querySelector('.spell-name')?.value || '';
+        if (!name) return;
+        const desc = row.querySelector('.spell-desc')?.value || '';
+        const lvl = parseInt(row.querySelector('.spell-lvl')?.value) || 0;
+        const lvlLabel = lvl === 0 ? 'Cantrip' : `Lv ${lvl}`;
+        const cat = classify(time);
+        if (cat) groups[cat].push({ name, desc, lvlLabel });
+    });
+
+    const inject = (containerId, spells, autoId) => {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        let autoDiv = document.getElementById(autoId);
+        if (!autoDiv) {
+            autoDiv = document.createElement('div');
+            autoDiv.id = autoId;
+            container.parentElement.insertBefore(autoDiv, container);
+        }
+        if (spells.length === 0) { autoDiv.innerHTML = ''; return; }
+        const labelHtml = `<div class="auto-spells-label">From Spells</div>`;
+        const itemsHtml = spells.map((s, idx) => {
+            const descHtml = s.desc
+                ? s.desc.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                : '';
+            return `<div class="auto-spell-item">
+                <div class="auto-spell-header" onclick="var d=document.getElementById('${autoId}-d-${idx}');if(d)d.classList.toggle('open')">
+                    <span class="auto-spell-name">${s.name}</span>
+                    <span class="auto-spell-lvl">${s.lvlLabel}</span>
+                </div>
+                ${descHtml ? `<div class="auto-spell-desc" id="${autoId}-d-${idx}">${descHtml}</div>` : ''}
+            </div>`;
+        }).join('');
+        autoDiv.innerHTML = labelHtml + itemsHtml;
+    };
+
+    inject('actionsContainer', groups.action, 'auto-act-spells');
+    inject('bonusActionsContainer', groups.bonus, 'auto-bonus-spells');
+    inject('reactionsContainer', groups.reaction, 'auto-react-spells');
 };
 
 // ===== DEFENSES VIEW (Mobile) =====

@@ -15,6 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedOptionalFeatures = new Set();
     let selectedSpells = new Set();
     let allBackgrounds = [];
+    let allBackgroundFluff = [];
+    let allRaceFluff = [];
     let selectedBackground = null;
     let allSpecies = [];
     let allDeities = [];
@@ -29,13 +31,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let allItems = [];
     let lastAvailableFeatNames = null;
 
-    const skillAbilities = {
-        'Acrobatics': 'Dex', 'Animal Handling': 'Wis', 'Arcana': 'Int', 'Athletics': 'Str',
-        'Deception': 'Cha', 'History': 'Int', 'Insight': 'Wis', 'Intimidation': 'Cha',
-        'Investigation': 'Int', 'Medicine': 'Wis', 'Nature': 'Int', 'Perception': 'Wis',
-        'Performance': 'Cha', 'Persuasion': 'Cha', 'Religion': 'Int', 'Sleight of Hand': 'Dex',
-        'Stealth': 'Dex', 'Survival': 'Wis'
-    };
+    // Tabs Configuration
+    const tabs = ['class', 'race', 'abilities', 'background', 'bgextra', 'equipment', 'spells', 'feats', 'review'];
+    let currentTabIndex = 0;
 
     // Helper for Equipment Selection UI
     window.updateEquipSelection = function(radio) {
@@ -423,8 +421,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (json.background && Array.isArray(json.background)) {
                             for (const b of json.background) allBackgrounds.push(b);
                         }
+                        if (json.backgroundFluff && Array.isArray(json.backgroundFluff)) {
+                            // Tag as inline if same file also has background data (same-source-file fluff)
+                            const isInline = !!(json.background && json.background.length > 0);
+                            for (const f of json.backgroundFluff) allBackgroundFluff.push({ ...f, _inline: isInline });
+                        }
                         if (json.race && Array.isArray(json.race)) {
                             for (const r of json.race) allSpecies.push(r);
+                        }
+                        if (json.raceFluff && Array.isArray(json.raceFluff)) {
+                            const isInline = !!(json.race && json.race.length > 0);
+                            for (const f of json.raceFluff) allRaceFluff.push({ ...f, _inline: isInline });
                         }
                         if (json.subrace && Array.isArray(json.subrace)) {
                             for (const s of json.subrace) allSubraces.push(s);
@@ -570,6 +577,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     } catch (e) {}
                 });
                 renderClassList();
+                renderSpeciesList();
+                renderBackgroundList();
                 console.log("All Optional Features:", allOptionalFeatures);
             }
         } catch (e) { console.error("Error loading DB:", e); }
@@ -586,92 +595,102 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderClassList() {
+        // Replaces original grid card logic with dropdown
         classList.innerHTML = '';
-        classList.className = 'creator-class-grid';
         
         if (allClasses.length === 0) {
-            classList.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:var(--ink-light);">Loading classes... (Please upload data)</div>';
+            classList.innerHTML = '<div style="padding:10px; text-align:center; color:var(--ink-light);">Loading classes... (Please upload data)</div>';
             return;
         }
 
         const validClasses = allClasses.filter(c => !c.isSidekick && (!c.name || !c.name.toLowerCase().includes('sidekick')));
         const uniqueClasses = [...new Set(validClasses.map(c => c.name))].sort();
         
+        const select = document.createElement('select');
+        select.className = 'styled-select';
+        select.style.width = 'calc(100% - 20px)';
+        select.style.margin = '10px';
+        select.style.fontSize = '1.1em';
+
+        const defaultOption = document.createElement('option');
+        defaultOption.text = "Select Class...";
+        defaultOption.value = "";
+        defaultOption.disabled = true;
+        defaultOption.selected = !selectedClass;
+        select.appendChild(defaultOption);
+
         uniqueClasses.forEach(c => {
-            const div = document.createElement('div');
-            div.className = 'creator-class-card';
+            const option = document.createElement('option');
+            option.value = c;
             
-            // Get metadata from data
             let clsObj = validClasses.find(cl => cl.name === c && cl.source === 'XPHB');
             if (!clsObj && c === 'Artificer') clsObj = validClasses.find(cl => cl.name === c && cl.source === 'EFA');
             if (!clsObj) clsObj = validClasses.find(cl => cl.name === c && cl.source === 'PHB');
             if (!clsObj) clsObj = validClasses.find(cl => cl.name === c);
             
-            let metaHtml = "";
-            if (clsObj) {
-                metaHtml += `<div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; line-height:1.1;">`;
-                if (clsObj.hd) {
-                    const hd = clsObj.hd.faces || clsObj.hd;
-                    metaHtml += `<div style="font-size:0.75rem; color:var(--ink-light);">HD: d${hd}</div>`;
-                }
-                if (clsObj.source) {
-                    metaHtml += `<div style="font-size:0.65rem; color:var(--gold-dark); font-style:italic;">${clsObj.source}</div>`;
-                }
-                metaHtml += `</div>`;
-            }
-
-            div.innerHTML = `<span class="creator-class-name">${c}</span>${metaHtml}`;
-            
-            div.onclick = () => {
-                document.querySelectorAll('.creator-class-card').forEach(item => item.classList.remove('selected'));
-                console.log("Selected Class:", c);
-                selectedClass = c;
-                div.classList.add('selected');
-                
-                // Determine Source (Prefer XPHB, then PHB)
-                const sources = validClasses.filter(cls => cls.name === c).map(cls => cls.source);
-                if (sources.length === 0) {
-                    const featureSources = new Set(allClassFeatures.filter(f => f.className === c).map(f => f.source));
-                    sources.push(...featureSources);
-                }
-                if (c === 'Artificer' && sources.includes('EFA')) currentClassSource = 'EFA';
-                else if (sources.includes('XPHB')) currentClassSource = 'XPHB';
-                else if (sources.includes('PHB')) currentClassSource = 'PHB';
-                else currentClassSource = sources[0] || 'PHB';
-
-                // Reset Level/Subclass on class change
-                selectedLevel = 1;
-                levelSelect.value = 1;
-                selectedSubclass = null;
-                selectedSubclassSource = null;
-                selectedOptionalFeatures.clear();
-                selectedSpells.clear();
-                updateSubclassOptions(c);
-                updateUIState();
-                renderClassPreview();
-                renderCoreTraits();
-                renderClassTable();
-                renderClassFeatures();
-            };
-            
-            classList.appendChild(div);
+            option.textContent = `${c}${clsObj && clsObj.source ? ` [${clsObj.source}]` : ''}`;
+            if (selectedClass === c) option.selected = true;
+            select.appendChild(option);
         });
+
+        select.addEventListener('change', (e) => {
+            const c = e.target.value;
+            if (!c) return;
+            
+            console.log("Selected Class:", c);
+            selectedClass = c;
+            
+            // Determine Source (Prefer XPHB, then PHB)
+            const sources = validClasses.filter(cls => cls.name === c).map(cls => cls.source);
+            if (sources.length === 0) {
+                const featureSources = new Set(allClassFeatures.filter(f => f.className === c).map(f => f.source));
+                sources.push(...featureSources);
+            }
+            if (c === 'Artificer' && sources.includes('EFA')) currentClassSource = 'EFA';
+            else if (sources.includes('XPHB')) currentClassSource = 'XPHB';
+            else if (sources.includes('PHB')) currentClassSource = 'PHB';
+            else currentClassSource = sources[0] || 'PHB';
+
+            // Reset Level/Subclass on class change
+            selectedLevel = 1;
+            levelSelect.value = 1;
+            selectedSubclass = null;
+            selectedSubclassSource = null;
+            selectedOptionalFeatures.clear();
+            selectedSpells.clear();
+            updateSubclassOptions(c);
+            
+            renderClassPreview();
+            renderCoreTraits();
+            renderClassTable();
+            renderClassFeatures();
+        });
+
+        classList.appendChild(select);
     }
 
     // Level Change
     levelSelect.addEventListener('change', () => {
         selectedLevel = parseInt(levelSelect.value);
-        updateUIState();
         renderClassFeatures(true); // Suppress toast on level change
         renderClassFeatures(); // Allow toast
     });
 
     function updateSubclassOptions(className) {
         const subclassList = document.getElementById('creator-subclass-list');
+        const subContainer = document.getElementById('subclass-container');
         subclassList.innerHTML = '';
-        console.log(`[Creator] Updating subclasses for ${className}`);
+        
         const targetClass = className.trim().toLowerCase();
         const available = allSubclasses.filter(s => s.className && s.className.trim().toLowerCase() === targetClass);
+        
+        if (available.length === 0) {
+            subContainer.style.display = 'none';
+            selectedSubclass = null;
+            return;
+        }
+        subContainer.style.display = 'flex';
+
         console.log(`[Creator] Available subclasses:`, available);
         
         // Deduplicate preferring XPHB
@@ -690,75 +709,91 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const unique = Array.from(uniqueMap.values()).sort((a,b) => a.name.localeCompare(b.name));
 
-        unique.forEach(s => {
-            const div = document.createElement('div');
-            div.className = 'checklist-item';
-            div.textContent = s.name;
-            const sourceHtml = s.source ? `<span style="font-size:0.75rem; color:var(--ink-light);">[${s.source}]</span>` : '';
-            div.innerHTML = `<span>${s.name}</span>${sourceHtml}`;
-            div.style.justifyContent = 'center';
-            div.onclick = () => {
-                document.querySelectorAll('#creator-subclass-list .checklist-item').forEach(item => {
-                    item.style.background = 'white';
-                    item.style.color = 'var(--ink)';
-                    const src = item.querySelector('span:nth-child(2)');
-                    if (src) src.style.color = 'var(--ink-light)';
-                });
-                div.style.background = 'var(--red)';
-                div.style.color = 'white';
-                const src = div.querySelector('span:nth-child(2)');
-                if (src) src.style.color = 'rgba(255,255,255,0.8)';
-                selectedSubclass = s.shortName || s.name;
-                selectedSubclassSource = s.source;
-                renderClassFeatures();
-                // Re-render features when subclass changes to update available options
-            };
-            subclassList.appendChild(div);
-        });
-    }
-
-    function updateUIState() {
-        const step2 = document.getElementById('step-2-section');
-        const subContainer = document.getElementById('subclass-container');
+        const select = document.createElement('select');
+        select.className = 'styled-select';
+        select.style.width = '100%';
         
-        if (selectedClass) {
-            step2.style.display = 'block';
-        } else {
-            step2.style.display = 'none';
-        }
+        const defaultOption = document.createElement('option');
+        defaultOption.text = "Select Subclass...";
+        defaultOption.value = "";
+        defaultOption.disabled = true;
+        defaultOption.selected = !selectedSubclass;
+        select.appendChild(defaultOption);
 
-        if (selectedLevel >= 3) {
-            subContainer.style.display = 'block';
-        } else {
-            subContainer.style.display = 'none';
-            selectedSubclass = null; // Reset subclass if level drops below 3
-        }
+        unique.forEach((s, idx) => {
+            const option = document.createElement('option');
+            option.value = idx;
+            option.textContent = `${s.name}${s.source ? ` [${s.source}]` : ''}`;
+            if (selectedSubclass === (s.shortName || s.name)) option.selected = true;
+            select.appendChild(option);
+        });
+
+        select.addEventListener('change', (e) => {
+            const idx = e.target.value;
+            if (idx === "") return;
+            const s = unique[idx];
+            selectedSubclass = s.shortName || s.name;
+            selectedSubclassSource = s.source;
+            renderClassFeatures();
+        });
+
+        subclassList.appendChild(select);
     }
 
-    // Next Step Handler
-    const nextBtn = document.getElementById('next-step-btn');
-    nextBtn.addEventListener('click', () => {
-        if (!selectedClass) {
-            alert("Please select a class.");
+    // Navigation Logic
+    function switchTab(index) {
+        if (index < 0 || index >= tabs.length) return;
+        
+        // Validate before moving from Class tab
+        if (currentTabIndex === 0 && index > 0 && !selectedClass) {
+            alert("Please select a class first.");
             return;
         }
+        
+        currentTabIndex = index;
+        const tabId = tabs[index];
 
-        const step3 = document.getElementById('step-3-section');
-        const step4 = document.getElementById('step-4-review');
+        // Update Tabs UI
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(`.nav-tab[data-tab="${tabId}"]`).classList.add('active');
 
-        if (step3.style.display === 'none') {
-            step3.style.display = 'block';
-            renderBackgroundOptions();
-            renderSpeciesSection();
-            renderDeitySection();
+        // Update Pane Visibility
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        document.getElementById(`tab-${tabId}`).classList.add('active');
+
+        // Update Footer Buttons
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        
+        btnPrev.style.display = index === 0 ? 'none' : 'block';
+        btnNext.textContent = index === tabs.length - 1 ? 'Create Character' : 'Next';
+
+        // Specific Tab Init Logic
+        if (tabId === 'abilities') {
             renderAbilityScoreSection();
-            step3.scrollIntoView({ behavior: 'smooth' });
-            nextBtn.textContent = "Review & Finish";
-        } else {
-            renderReviewSection();
-            nextBtn.textContent = "Update Review";
         }
-        // Future steps will go here
+        if (tabId === 'bgextra') {
+            renderBgExtraTab();
+        }
+        if (tabId === 'feats') {
+            renderFeatsTab();
+        }
+        if (tabId === 'review') {
+            renderReviewSection();
+        }
+    }
+
+    document.querySelectorAll('.nav-tab').forEach((tab, index) => {
+        tab.addEventListener('click', () => switchTab(index));
+    });
+
+    document.getElementById('btn-prev').addEventListener('click', () => switchTab(currentTabIndex - 1));
+    document.getElementById('btn-next').addEventListener('click', () => {
+        if (currentTabIndex === tabs.length - 1) {
+            createCharacter();
+        } else {
+            switchTab(currentTabIndex + 1);
+        }
     });
 
     const getReferencedClassFeatures = (className, source) => {
@@ -778,14 +813,135 @@ document.addEventListener('DOMContentLoaded', () => {
         return refs;
     };
 
+    // Recursively walk through a feature's entries to find `type: "options"` 
+    // and extract the selectable feature references.
+    function extractOptionSets(entries) {
+        const optionSets = [];
+        
+        function walk(obj) {
+            if (!obj || typeof obj !== "object") return;
+            if (Array.isArray(obj)) {
+                obj.forEach(walk);
+            } else {
+                if (obj.type === "options") {
+                    const count = obj.count != null ? obj.count : 1;
+                    const choices = [];
+                    
+                    if (obj.entries) {
+                        obj.entries.forEach(ent => {
+                            if (ent.type === "refOptionalfeature") {
+                                choices.push({ type: "optionalfeature", uid: ent.optionalfeature });
+                            } else if (ent.type === "refClassFeature") {
+                                choices.push({ type: "classFeature", uid: ent.classFeature });
+                            } else if (ent.type === "refSubclassFeature") {
+                                choices.push({ type: "subclassFeature", uid: ent.subclassFeature });
+                            } else if (ent.name) {
+                                // Fallback for inline text/feature choices
+                                choices.push({ type: "entries", name: ent.name, entries: ent.entries });
+                            }
+                        });
+                    }
+                    
+                    if (choices.length > 0) {
+                        optionSets.push({ count, choices, setId: Math.random().toString(36).substring(7) });
+                    }
+                }
+                Object.values(obj).forEach(walk);
+            }
+        }
+        
+        walk(entries);
+        return optionSets;
+    }
+
+    // Resolves the parsed UIDs into actual feature objects and renders the UI
+    function renderExplicitOptions(parentElement, optionSets, className, charLevel, subclass) {
+        optionSets.forEach(optSet => {
+            const wrapper = document.createElement("div");
+            wrapper.className = "feature-options-wrapper mt-2 p-2 border rounded";
+            wrapper.style.backgroundColor = "rgba(255, 255, 255, 0.5)";
+            wrapper.innerHTML = `<div style="font-weight:bold; margin-bottom:4px; border-bottom:1px solid var(--gold-dark);">Choose ${optSet.count} option(s):</div>`;
+            
+            // Resolve the features from the global data pools based on UID
+            const candidates = [];
+            optSet.choices.forEach(choice => {
+                if (choice.type === "optionalfeature" && typeof allOptionalFeatures !== "undefined") {
+                    const [name, source] = choice.uid.split("|");
+                    const found = allOptionalFeatures.find(opt => 
+                        opt.name.toLowerCase() === name.toLowerCase() && 
+                        (source ? opt.source.toLowerCase() === source.toLowerCase() : true)
+                    );
+                    if (found) candidates.push(found);
+                } else if (choice.type === "classFeature" && typeof allClassFeatures !== "undefined") {
+                    const [name, cName, cSource, level, source] = choice.uid.split("|");
+                    const found = allClassFeatures.find(cf => 
+                        cf.name.toLowerCase() === name.toLowerCase() && 
+                        cf.className.toLowerCase() === cName.toLowerCase() && 
+                        cf.level === Number(level)
+                    );
+                    if (found) candidates.push(found);
+                } else if (choice.type === "entries") {
+                    candidates.push(choice);
+                }
+            });
+
+            // Render checkboxes for the choices
+            candidates.forEach(candidate => {
+                const lbl = document.createElement("label");
+                lbl.className = "d-flex align-items-start mt-1";
+                lbl.style.cursor = "pointer";
+                
+                const cb = document.createElement("input");
+                cb.type = "checkbox";
+                cb.className = "mr-2 mt-1";
+                cb.dataset.optionSetId = optSet.setId;
+                cb.dataset.uid = candidate.name;
+                
+                // Check if already selected
+                const selectionKey = `ExplicitOption:${optSet.setId}:${candidate.name}`;
+                if (selectedOptionalFeatures.has(selectionKey)) {
+                    cb.checked = true;
+                }
+
+                // Enforce selection limit dynamically and add to selected list
+                cb.addEventListener("change", () => {
+                    const checkedCount = wrapper.querySelectorAll(`input[type="checkbox"]:checked`).length;
+                    if (cb.checked) {
+                        if (checkedCount > optSet.count) {
+                            cb.checked = false; // Prevent exceeding the count
+                        } else {
+                            selectedOptionalFeatures.add(selectionKey);
+                            // We also add the raw name so that downstream code handles spells/features cleanly
+                            selectedOptionalFeatures.add(candidate.name);
+                        }
+                    } else {
+                        selectedOptionalFeatures.delete(selectionKey);
+                        selectedOptionalFeatures.delete(candidate.name);
+                    }
+                    renderClassFeatures(true); // Re-evaluate prerequisites & spells silently
+                });
+
+                const txtDiv = document.createElement("div");
+                txtDiv.innerHTML = `<strong>${candidate.name}</strong>`;
+                
+                lbl.appendChild(cb);
+                lbl.appendChild(txtDiv);
+                wrapper.appendChild(lbl);
+            });
+
+            parentElement.appendChild(wrapper);
+        });
+    }
+
     function renderClassFeatures(suppressToast = false) {
         if (!selectedClass) return;
         const className = selectedClass;
         const container = document.getElementById('creator-class-features');
         
         // Move container below subclass container if possible to reduce clutter
+        // In new layout, features are already below.
         const subContainer = document.getElementById('subclass-container');
-        if (container && subContainer && container.parentNode === subContainer.parentNode) {
+        if (false && container && subContainer && container.parentNode === subContainer.parentNode) {
              // Check for label BEFORE moving container
              const label = container.previousElementSibling;
              const isLabel = label && label.tagName === 'LABEL' && label.textContent.includes("Features");
@@ -822,10 +978,19 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        container.innerHTML = '';
+        if (container) container.innerHTML = '';
+        const spellsContainer = document.getElementById('spells-container-target');
+        if (spellsContainer) spellsContainer.innerHTML = '';
+        
+        const choicesContainer = document.getElementById('creator-feature-choices');
+        if (choicesContainer) {
+            choicesContainer.innerHTML = '<h3 style="margin-top:0; font-size: 1.1em; color: var(--red-dark);">Feature Choices</h3>';
+            choicesContainer.style.display = 'none';
+        }
         
         if (allClassFeatures.length === 0) {
-            container.innerHTML = '<div style="color:var(--red);">No class data found. Please upload data in the main sheet.</div>';
+            if (container) container.innerHTML = '<div style="color:var(--red);">No class data found. Please upload data in the main sheet.</div>';
+            if (spellsContainer) spellsContainer.innerHTML = '<div style="color:var(--text-muted);">No class data.</div>';
             return;
         }
 
@@ -860,7 +1025,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (uniqueFeatures.length === 0) {
-            container.innerHTML = '<div>No features found for this class.</div>';
+            if (container) container.innerHTML = '<div>No features found for this class.</div>';
             return;
         }
 
@@ -936,18 +1101,65 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Use contentDiv as the parent for interactive elements
             const targetParent = contentDiv;
+            let hasInteractiveContent = false;
+            let hasChoices = false;
             
+            // 1. Check for structured "type: options" (e.g., Eldritch Invocations, Metamagics)
+            const optionSets = extractOptionSets(f.entries || f.entry);
+            console.log(optionSets)
+
+            // Extract feature types dynamically from {@filter} tags
+            const entriesStr = JSON.stringify(f.entries || f.entry);
+            const optFeatureRegex = /{@filter\s+[^|]+\|\s*optionalfeatures\s*\|(?:[^}]*?)featuretype=([^}|]+)/gi;
+            let optMatch;
+            const foundFeatureTypes = [];
+            while ((optMatch = optFeatureRegex.exec(entriesStr)) !== null) {
+                const types = optMatch[1].split(';').map(t => t.trim());
+                foundFeatureTypes.push(...types);
+            }
+
             // Append Spells if this feature grants them
             if (f.name.includes("Spellcasting") || f.name === "Pact Magic") {
-                renderSpellsForFeature(targetParent, selectedClass, selectedLevel, selectedSubclass);
+                renderSpellsForFeature(spellsContainer, selectedClass, selectedLevel, selectedSubclass);
             } else if (f.name.includes("Mystic Arcanum")) {
                 // Extract level for Mystic Arcanum (e.g. "Mystic Arcanum (6th level)")
                 const match = f.name.match(/(\d+)(?:st|nd|rd|th)\s+level/i);
                 if (match) {
-                    renderSpellsForFeature(targetParent, selectedClass, selectedLevel, selectedSubclass, parseInt(match[1]));
+                    renderSpellsForFeature(spellsContainer, selectedClass, selectedLevel, selectedSubclass, parseInt(match[1]));
                 }
-            } else if (f.name.includes("Eldritch Invocations")) {
+            } else if (optionSets.length > 0) {
+                // Render specific options extracted from the class feature entries
+                renderExplicitOptions(targetParent, optionSets, selectedClass, selectedLevel, selectedSubclass);
+                hasChoices = true;
+            } else if (foundFeatureTypes.length > 0) {
+                // Dynamic optional feature rendering based on @filter tags
+                renderOptionalFeatures(targetParent, foundFeatureTypes, selectedClass, selectedLevel, selectedSubclass);
+                hasChoices = true;
+            } else if (f.name.includes("Eldritch Invocation")) {
+                // Fallback for older data
                 renderOptionalFeatures(targetParent, ["EI"], selectedClass, selectedLevel, selectedSubclass);
+                hasChoices = true;
+            } else if (f.name.includes("Pact Boon")) {
+                renderOptionalFeatures(targetParent, ["PB"], selectedClass, selectedLevel, selectedSubclass);
+                hasChoices = true;
+            } else if (f.name.includes("Elemental Discipline")) {
+                renderOptionalFeatures(targetParent, ["ED"], selectedClass, selectedLevel, selectedSubclass);
+                hasChoices = true;
+            } else if (f.name.includes("Artificer Infusion") || f.name.includes("Infuse Item")) {
+                renderOptionalFeatures(targetParent, ["AI"], selectedClass, selectedLevel, selectedSubclass);
+                hasChoices = true;
+            } else if (f.name.includes("Maneuver")) {
+                renderOptionalFeatures(targetParent, ["MV", "MV:B", "MV:C2-UA"], selectedClass, selectedLevel, selectedSubclass);
+                hasChoices = true;
+            } else if (f.name.includes("Arcane Shot")) {
+                renderOptionalFeatures(targetParent, ["AS", "AS:V1-UA", "AS:V2-UA"], selectedClass, selectedLevel, selectedSubclass);
+                hasChoices = true;
+            } else if (f.name.includes("Rune Carver") || f.name.includes("Rune Magic")) {
+                renderOptionalFeatures(targetParent, ["RN"], selectedClass, selectedLevel, selectedSubclass);
+                hasChoices = true;
+            } else if (f.name.includes("Alchemical Formula")) {
+                renderOptionalFeatures(targetParent, ["AF"], selectedClass, selectedLevel, selectedSubclass);
+                hasChoices = true;
             } else if (f.name.includes("Fighting Style")) {
                 const codes = ["FS"];
                 if (selectedClass === "Fighter") codes.push("FS:F");
@@ -955,19 +1167,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (selectedClass === "Paladin") codes.push("FS:P");
                 if (selectedClass === "Bard") codes.push("FS:B");
                 renderOptionalFeatures(targetParent, codes, selectedClass, f.level, selectedSubclass);
-            } else if (f.name === "Metamagic") {
+                hasChoices = true;
+            } else if (f.name.includes("Metamagic")) {
                 if (f.level <= 3) {
                     let limit = 2;
                     if (selectedLevel >= 10) limit = 4;
                     if (selectedLevel >= 17) limit = 6;
                     renderOptionalFeatures(targetParent, ["MM"], selectedClass, f.level, selectedSubclass, limit);
+                    hasChoices = true;
                 }
-            } else if (f.name === "Weapon Mastery") {
+            } else if (f.name.includes("Weapon Mastery")) {
                 renderWeaponMasteryChoices(targetParent, f, selectedClass, f.level);
+                hasChoices = true;
             } else if (f.name === "Divine Order") {
                 renderDivineOrderChoice(targetParent, f);
+                hasChoices = true;
             } else if (f.name === "Ability Score Improvement") {
                 renderFeatSelection(targetParent, f, selectedClass, f.level);
+                hasChoices = true;
                 
                 // Render selected feat description if any
                 const selectionKey = `ASI Level ${f.level}`;
@@ -1090,6 +1307,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 renderFeatSelection(targetParent, f, selectedClass, f.level);
+                hasChoices = true;
 
                 if (selectedFeatName) {
                     const candidates = allFeats.filter(ft => ft.name === selectedFeatName);
@@ -1207,63 +1425,81 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         pkDiv.appendChild(select);
                         targetParent.appendChild(pkDiv);
+                        hasInteractiveContent = true;
                     }
                 }
             }
 
             // Check for Feats in entries and render them
             // Skip for ASI feature as we handle it dynamically
-            if (f.name !== "Ability Score Improvement") {
-            const featsInFeature = new Set();
-            const scanForFeats = (obj) => {
-                if (!obj) return;
-                if (typeof obj === 'string') {
-                    const matches = obj.matchAll(/{@feat ([^}|]+)/g);
-                    for (const m of matches) featsInFeature.add(m[1].toLowerCase().trim());
-                } else if (Array.isArray(obj)) {
-                    obj.forEach(scanForFeats);
-                } else if (typeof obj === 'object') {
-                    Object.values(obj).forEach(scanForFeats);
+            if (f.name !== "Ability Score Improvement" && f.name !== "Epic Boon") {
+                const featsInFeature = new Set();
+                const scanForFeats = (obj) => {
+                    if (!obj) return;
+                    if (typeof obj === 'string') {
+                        const matches = obj.matchAll(/{@feat ([^}|]+)/g);
+                        for (const m of matches) featsInFeature.add(m[1].toLowerCase().trim());
+                    } else if (Array.isArray(obj)) {
+                        obj.forEach(scanForFeats);
+                    } else if (typeof obj === 'object') {
+                        Object.values(obj).forEach(scanForFeats);
+                    }
+                };
+                scanForFeats(f.entries);
+
+                if (featsInFeature.size > 0) {
+                    featsInFeature.forEach(featName => {
+                        const candidates = allFeats.filter(ft => ft.name.toLowerCase() === featName);
+                        let feat = candidates.find(ft => ft.source === 'XPHB') || candidates.find(ft => ft.source === 'PHB') || candidates[0];
+
+                        if (feat && (!feat.entries || (feat.entries.length === 1 && typeof feat.entries[0] === 'string')) && feat._copy) {
+                            const copyName = feat._copy.name;
+                            const copySource = feat._copy.source || feat.source;
+                            const original = allFeats.find(ft => ft.name === copyName && (ft.source === copySource || !feat._copy.source));
+                            if (original && original.entries) feat = { ...original, ...feat, entries: original.entries };
+                        }
+
+                        if (feat) {
+                            const featDiv = document.createElement('div');
+                            featDiv.className = "mt-2 p-2 border rounded";
+                            featDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
+                            
+                            let featDesc = processEntries(feat.entries);
+                            featDesc = formatDescription(featDesc);
+
+                            featDiv.innerHTML = `
+                                <div class="font-bold text-red-dark border-bottom pb-1 mb-1">Feat: ${feat.name}</div>
+                                <div class="text-small text-ink" style="line-height:1.4;">${featDesc}</div>
+                            `;
+                            targetParent.appendChild(featDiv);
+                        }
+                    });
+                    hasInteractiveContent = true;
                 }
-            };
-            scanForFeats(f.entries);
-
-            if (featsInFeature.size > 0) {
-                featsInFeature.forEach(featName => {
-                    const candidates = allFeats.filter(ft => ft.name.toLowerCase() === featName);
-                    let feat = candidates.find(ft => ft.source === 'XPHB');
-                    if (!feat) feat = candidates.find(ft => ft.source === 'PHB');
-                    if (!feat) feat = candidates[0];
-
-                    if (feat && (!feat.entries || (feat.entries.length === 1 && typeof feat.entries[0] === 'string')) && feat._copy) {
-                        const copyName = feat._copy.name;
-                        const copySource = feat._copy.source || feat.source;
-                        const original = allFeats.find(f => f.name === copyName && (f.source === copySource || !feat._copy.source));
-                        if (original && original.entries) feat = { ...original, ...feat, entries: original.entries };
-                    }
-
-                    if (feat) {
-                        const featDiv = document.createElement('div');
-                        featDiv.className = "mt-2 p-2 border rounded";
-                        featDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
-                        
-                        let featDesc = processEntries(feat.entries);
-                        featDesc = formatDescription(featDesc);
-
-                        featDiv.innerHTML = `
-                            <div class="font-bold text-red-dark border-bottom pb-1 mb-1">Feat: ${feat.name}</div>
-                            <div class="text-small text-ink" style="line-height:1.4;">${featDesc}</div>
-                        `;
-                        targetParent.appendChild(featDiv);
-                    }
-                });
             }
+            
+            if (hasChoices && choicesContainer) {
+                choicesContainer.style.display = 'flex';
             }
 
-            container.appendChild(div);
+            if (hasInteractiveContent && container) {
+                container.style.display = 'flex';
+                const header = document.createElement('h4');
+                header.innerHTML = `${f.name} <span style="font-size:0.8em; color:var(--ink-light);">(Level ${f.level})</span>`;
+                header.style.marginTop = '10px';
+                header.style.marginBottom = '5px';
+                header.style.fontSize = '1em';
+                container.appendChild(header);
+                
+                container.appendChild(targetParent);
+            }
+
+            if (container) container.appendChild(div);
         });
+        
         if (!suppressToast) checkNewFeats();
         renderGrantedSpells();
+        updateSpellProgressionTable();
     }
 
     function renderDivineOrderChoice(parentElement, feature) {
@@ -1392,14 +1628,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderCoreTraits() {
+        // In new layout, we might render this into the 'equipment-container-target' or separate
+        // The original code rendered into `creator-class-table` or `creator-class-preview`.
+        
         let container = document.getElementById('creator-class-table');
+        const equipContainer = document.getElementById('equipment-container-target');
 
-        // Fix: Remove wrapping .field container if it exists (removes "Class Table" label)
-        if (container && container.parentElement && container.parentElement.classList.contains('field')) {
-            const parent = container.parentElement;
-            parent.parentNode.insertBefore(container, parent);
-            parent.remove();
-        }
+        if (equipContainer) equipContainer.innerHTML = '';
 
         let isFallback = false;
         if (!container) {
@@ -1423,8 +1658,8 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         let html = `<div style="padding: 10px;">`;
-        html += `<h3 style="margin-top:0; color:var(--red-dark); border-bottom:1px solid var(--gold); padding-bottom:5px; font-family:'Cinzel',serif;">Core Traits</h3>`;
-        html += `<div style="font-size: 0.9rem; line-height: 1.6; color:var(--ink);">`;
+        html += `<div style="font-size: 0.9rem; line-height: 1.6; color:#ddd;">`;
+        html += `<div style="font-size: 0.9rem; line-height: 1.6; color:var(--text-main);">`;
 
         // Primary Ability
         if (clsObj.primaryAbility) {
@@ -1482,8 +1717,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             html += `<select class="styled-select skill-select-dropdown" id="core-skill-${skillDropdownIndex++}" style="font-size:0.9rem; padding:2px 4px;">`;
                             html += `<option value="" disabled selected>Select Skill</option>`;
                             options.forEach(opt => {
-                                const stat = skillAbilities[opt] ? ` (${skillAbilities[opt]})` : '';
-                                html += `<option value="${opt}">${opt}${stat}</option>`;
+                                html += `<option value="${opt}">${opt}</option>`;
                             });
                             html += `</select>`;
                         }
@@ -1513,7 +1747,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Starting Equipment
         if (clsObj.startingEquipment) {
-             console.log("Class Starting Equipment Data:", clsObj.startingEquipment);
+             // logic for equip...
              let equipItems = [];
              if (clsObj.startingEquipment.default) {
                  equipItems = clsObj.startingEquipment.default;
@@ -1532,13 +1766,14 @@ document.addEventListener('DOMContentLoaded', () => {
              const splitRegex = /(?:choose|option).*?\(a\)\s*(.*?)(?:;?\s*(?:or|and)?\s*\(b\)\s*)(.*)/i;
              const match = fullText.match(splitRegex);
              
-             html += `<div style="margin-bottom:15px;">`;
-             html += `<h4 style="margin:10px 0 8px 0; color:var(--red-dark); font-family:'Cinzel',serif;">Starting Equipment</h4>`;
+             // Render equipment into the Equipment Tab container if possible
+             let equipHtml = "";
+             equipHtml += `<div style="margin-bottom:15px;">`;
              
              if (choiceLines.length > 0) {
                  // Complex choice mode (dropdowns)
-                 html += `<div class="equip-selection-container" style="display:flex; flex-direction:column; gap:10px;">`;
-                 html += `<div style="font-style:italic; font-size:0.9rem; margin-bottom:5px;">Select your equipment:</div>`;
+                 equipHtml += `<div class="equip-selection-container" style="display:flex; flex-direction:column; gap:10px;">`;
+                 equipHtml += `<div style="font-style:italic; font-size:0.9rem; margin-bottom:5px;">Select your equipment:</div>`;
                  
                  equipItems.forEach((itemStr, idx) => {
                      const cleanItem = clean(itemStr);
@@ -1552,49 +1787,49 @@ document.addEventListener('DOMContentLoaded', () => {
                          }
                          
                          if (options.length >= 2) {
-                             html += `<div style="background:white; padding:8px; border:1px solid var(--gold); border-radius:4px;">`;
-                             html += `<select class="styled-select class-equip-dropdown" data-idx="${idx}" style="width:100%;">`;
+                             equipHtml += `<div style="background:rgba(255,255,255,0.5); padding:8px; border:1px solid var(--gold); border-radius:4px;">`;
+                             equipHtml += `<select class="styled-select class-equip-dropdown" data-idx="${idx}" style="width:100%;">`;
                              options.forEach(opt => {
-                                 html += `<option value="${opt.text.replace(/"/g, '&quot;')}">${opt.text}</option>`;
+                                 equipHtml += `<option value="${opt.text.replace(/"/g, '&quot;')}">${opt.text}</option>`;
                              });
-                             html += `</select>`;
-                             html += `</div>`;
+                             equipHtml += `</select>`;
+                             equipHtml += `</div>`;
                          } else {
-                             html += `<div style="padding:5px;">${cleanItem}</div>`;
-                             html += `<input type="hidden" class="class-equip-fixed" value="${cleanItem.replace(/"/g, '&quot;')}">`;
+                             equipHtml += `<div style="padding:5px; color:var(--ink);">${cleanItem}</div>`;
+                             equipHtml += `<input type="hidden" class="class-equip-fixed" value="${cleanItem.replace(/"/g, '&quot;')}">`;
                          }
                      } else {
-                         html += `<div style="padding:5px; font-weight:bold; color:var(--ink);">${cleanItem}</div>`;
-                         html += `<input type="hidden" class="class-equip-fixed" value="${cleanItem.replace(/"/g, '&quot;')}">`;
+                         equipHtml += `<div style="padding:5px; font-weight:bold; color:var(--ink);">${cleanItem}</div>`;
+                         equipHtml += `<input type="hidden" class="class-equip-fixed" value="${cleanItem.replace(/"/g, '&quot;')}">`;
                      }
                  });
-                 html += `<input type="radio" name="class_equip_choice" value="custom_list" checked style="display:none;">`;
-                 html += `</div>`;
+                 equipHtml += `<input type="radio" name="class_equip_choice" value="custom_list" checked style="display:none;">`;
+                 equipHtml += `</div>`;
              } else {
-                 html += `<div class="equip-selection-container d-flex flex-wrap" style="gap:15px;">`;
+                 equipHtml += `<div class="equip-selection-container d-flex flex-wrap" style="gap:15px; display:flex;">`;
                  if (match) {
                  const optA = clean(match[1]);
                  const optB = clean(match[2]);
 
                  // Option A
-                 html += `
-                 <label class="equip-option-box selected d-flex flex-column" style="flex:1; min-width:250px; border:2px solid var(--red); background:var(--parchment); padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
+                 equipHtml += `
+                 <label class="equip-option-box selected d-flex flex-column" style="flex:1; min-width:250px; border:2px solid var(--gold); background:var(--parchment-dark); padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
                     <input type="radio" name="class_equip_choice" value="equipment_a" checked style="display:none;" onchange="window.updateEquipSelection(this)">
                     <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
                         <span style="font-weight:bold; color:var(--red-dark); font-size:1.05rem;">Option A</span>
-                        <span class="check-indicator" style="color:var(--red); font-weight:bold; font-size:1.2rem;">✓</span>
+                        <span class="check-indicator" style="color:var(--accent); font-weight:bold; font-size:1.2rem;">✓</span>
                     </div>
                     <div style="font-size:0.9rem; color:var(--ink); line-height:1.4; flex-grow:1;">${optA}</div>
                     <input type="hidden" id="equip-opt-a-val" value="${optA.replace(/"/g, '&quot;')}">
                  </label>`;
 
                  // Option B
-                 html += `
-                 <label class="equip-option-box d-flex flex-column" style="flex:1; min-width:250px; border:1px solid var(--gold); background:white; padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
+                 equipHtml += `
+                 <label class="equip-option-box d-flex flex-column" style="flex:1; min-width:250px; border:1px solid var(--gold); background:rgba(255,255,255,0.5); padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
                     <input type="radio" name="class_equip_choice" value="equipment_b" style="display:none;" onchange="window.updateEquipSelection(this)">
                     <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
-                        <span style="font-weight:bold; color:var(--red-dark); font-size:1.05rem;">Option B</span>
-                        <span class="check-indicator" style="display:none; color:var(--red); font-weight:bold; font-size:1.2rem;">✓</span>
+                        <span style="font-weight:bold; color:var(--ink); font-size:1.05rem;">Option B</span>
+                        <span class="check-indicator" style="display:none; color:var(--accent); font-weight:bold; font-size:1.2rem;">✓</span>
                     </div>
                     <div style="font-size:0.9rem; color:var(--ink); line-height:1.4; flex-grow:1;">${optB}</div>
                     <input type="hidden" id="equip-opt-b-val" value="${optB.replace(/"/g, '&quot;')}">
@@ -1611,17 +1846,20 @@ document.addEventListener('DOMContentLoaded', () => {
                      equipListHtml = "See class description.";
                  }
 
-                 html += `
-                 <label class="equip-option-box selected d-flex flex-column" style="flex:1; min-width:250px; border:2px solid var(--red); background:var(--parchment); padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
+                 equipHtml += `
+                 <label class="equip-option-box selected d-flex flex-column" style="flex:1; min-width:250px; border:2px solid var(--gold); background:var(--parchment-dark); padding:15px; border-radius:6px; cursor:pointer; transition:all 0.2s; position:relative;">
                     <input type="radio" name="class_equip_choice" value="equipment" checked style="display:none;" onchange="window.updateEquipSelection(this)">
                     <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
                         <span style="font-weight:bold; color:var(--red-dark); font-size:1.05rem;">Standard Equipment</span>
-                        <span class="check-indicator" style="color:var(--red); font-weight:bold; font-size:1.2rem;">✓</span>
+                        <span class="check-indicator" style="color:var(--accent); font-weight:bold; font-size:1.2rem;">✓</span>
                     </div>
                     <div style="font-size:0.9rem; color:var(--ink); line-height:1.4; flex-grow:1;">${equipListHtml}</div>
                  </label>`;
              }
-             html += `</div>`;
+             equipHtml += `</div>`;
+             equipHtml += `</div>`;
+             
+             if (equipContainer) equipContainer.innerHTML = equipHtml;
              }
 
              html += `</div>`;
@@ -1765,18 +2003,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderClassTable() {
         let container = document.getElementById('creator-class-table-dynamic');
-        if (!container) {
-            const step2 = document.getElementById('step-2-section');
-            if (step2 && step2.parentNode) {
-                container = document.createElement('div');
-                container.id = 'creator-class-table-dynamic';
-                container.style.marginTop = "20px";
-                container.style.marginBottom = "20px";
-                step2.parentNode.insertBefore(container, step2);
-            } else {
-                container = document.getElementById('creator-class-preview');
-            }
-        }
+        // Container is now fixed in HTML
+        if (!container) return;
+        
         if (!container || !selectedClass) return;
         container.innerHTML = '';
         
@@ -2078,6 +2307,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateStyle();
                     renderGrantedSpells();
                     renderClassFeatures(true);
+                    renderSpellDescription(s);
                 };
 
                 grid.appendChild(spellDiv);
@@ -2087,15 +2317,104 @@ document.addEventListener('DOMContentLoaded', () => {
         parentElement.appendChild(container);
     }
 
+    function renderSpellDescription(spell) {
+        const container = document.getElementById('spell-detail-view');
+        if (!container) return;
+        
+        let desc = processEntries(spell.entries);
+        desc = formatDescription(desc);
+        
+        let metaHtml = "";
+        if (spell.level !== undefined) metaHtml += `<div><strong>Level:</strong> ${spell.level === 0 ? "Cantrip" : spell.level}</div>`;
+        if (spell.school) metaHtml += `<div><strong>School:</strong> ${spell.school}</div>`;
+        if (spell.time) {
+            const timeStr = spell.time.map(t => `${t.number} ${t.unit}`).join(", ");
+            metaHtml += `<div><strong>Casting Time:</strong> ${timeStr}</div>`;
+        }
+        if (spell.range) {
+            const rangeStr = spell.range.distance ? `${spell.range.distance.amount} ${spell.range.distance.type}` : spell.range.type;
+            metaHtml += `<div><strong>Range:</strong> ${rangeStr}</div>`;
+        }
+        if (spell.components) {
+            const comps = [];
+            if (spell.components.v) comps.push("V");
+            if (spell.components.s) comps.push("S");
+            if (spell.components.m) comps.push(`M (${typeof spell.components.m === 'string' ? spell.components.m : spell.components.m.text || ""})`);
+            metaHtml += `<div><strong>Components:</strong> ${comps.join(", ")}</div>`;
+        }
+        if (spell.duration) {
+             const durStr = spell.duration.map(d => d.type === "instant" ? "Instantaneous" : `${d.duration ? d.duration.amount + " " + d.duration.type : d.type}${d.concentration ? " (Concentration)" : ""}`).join(", ");
+             metaHtml += `<div><strong>Duration:</strong> ${durStr}</div>`;
+        }
+
+        container.innerHTML = `
+            <div style="background:rgba(255,255,255,0.5); padding:15px; border:1px solid var(--gold); border-radius:4px;">
+                <h3 style="color:var(--red-dark); border-bottom:1px solid var(--gold); margin-top:0;">${spell.name}</h3>
+                <div style="font-size:0.9rem; color:var(--ink-light); margin-bottom:10px; border-bottom:1px dashed var(--gold); padding-bottom:10px;">${metaHtml}</div>
+                <div style="line-height:1.6;">${desc}</div>
+            </div>
+        `;
+    }
+
+    function updateSpellProgressionTable() {
+        if (!selectedClass) return;
+        const clsObj = allClasses.find(c => c.name === selectedClass && c.source === currentClassSource);
+        
+        // Clear table
+        for (let i = 1; i <= 20; i++) {
+            document.getElementById(`spell-row-${i}-cantrip`).textContent = "-";
+            document.getElementById(`spell-row-${i}-prepared`).textContent = "-";
+            const row = document.getElementById(`spell-row-${i}-cantrip`).parentElement;
+            row.style.backgroundColor = (i === selectedLevel) ? "rgba(201, 173, 106, 0.3)" : "transparent";
+        }
+
+        if (!clsObj || !clsObj.classTableGroups) return;
+
+        let colIndices = { cantrip: -1, prepared: -1 };
+
+        clsObj.classTableGroups.forEach(group => {
+            if (!group.colLabels) return;
+            group.colLabels.forEach((label, idx) => {
+                const l = label.toLowerCase();
+                // Cantrips
+                if (l.includes("cantrip")) colIndices.cantrip = idx;
+                // Prepared / Known
+                else if (l.includes("spells known") || l.includes("prepared")) colIndices.prepared = idx;
+                // Slots (Slot Level for Warlock, or maybe we aggregate slots for others if needed, but request asked for "slot level")
+                else if (l.includes("slot level")) colIndices.slot = idx;
+            });
+
+            if (group.rows) {
+                group.rows.forEach((row, rIdx) => {
+                    const level = rIdx + 1;
+                    if (level > 20) return;
+                    
+                    if (colIndices.cantrip !== -1 && row[colIndices.cantrip] !== undefined) {
+                        let val = row[colIndices.cantrip];
+                        if (typeof val === 'object' && val !== null) val = val.value;
+                        document.getElementById(`spell-row-${level}-cantrip`).textContent = val || "-";
+                    }
+                    if (colIndices.prepared !== -1 && row[colIndices.prepared] !== undefined) {
+                        let val = row[colIndices.prepared];
+                        if (typeof val === 'object' && val !== null) val = val.value;
+                        document.getElementById(`spell-row-${level}-prepared`).textContent = val || "-";
+                    }
+                });
+            }
+        });
+    }
+
     function renderOptionalFeatures(parentElement, featureTypes, className, charLevel, subclass, limit = null) {
         if (!allOptionalFeatures.length) return;
+
+        const featureTypesLower = featureTypes.map(t => String(t).toLowerCase());
 
         // 1. Filter by Feature Type & Group by Name
         const candidates = new Map();
         allOptionalFeatures.forEach(opt => {
             if (!opt.featureType || !opt.name) return;
             const types = Array.isArray(opt.featureType) ? opt.featureType : [opt.featureType];
-            if (types.some(t => featureTypes.includes(t))) {
+            if (types.some(t => featureTypesLower.includes(String(t).toLowerCase()))) {
                 if (!candidates.has(opt.name)) candidates.set(opt.name, []);
                 candidates.get(opt.name).push(opt);
             }
@@ -2124,6 +2443,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (req.level.class && req.level.class.name && className) {
                                 if (req.level.class.name.toLowerCase() !== className.toLowerCase()) return false;
                             }
+                            // Check subclass restriction
+                            if (req.level.subclass && req.level.subclass.name && subclass) {
+                                if (!subclass.toLowerCase().includes(req.level.subclass.name.toLowerCase())) return false;
+                            }
                         }
                         if (cLvl < reqLvl) return false;
                     }
@@ -2134,6 +2457,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         let hasPact = false;
                         for (const selected of selectedOptionalFeatures) {
                             if (selected.toLowerCase().includes(pactName.toLowerCase())) { hasPact = true; break; }
+                        }
+                        if (!hasPact && className) {
+                            hasPact = allClassFeatures.some(cf => cf.className && cf.className.toLowerCase() === className.toLowerCase() && cf.level <= cLvl && cf.name.toLowerCase().includes(pactName.toLowerCase()));
                         }
                         if (!hasPact) return false;
                     }
@@ -2148,6 +2474,47 @@ document.addEventListener('DOMContentLoaded', () => {
                             return false;
                         });
                         if (!hasFeat) return false;
+                    }
+
+                    // Feature Check
+                    if (req.feature) {
+                        const hasClassFeat = req.feature.some(f => {
+                            const clean = (typeof f === 'string' ? f : f.name || "").split('|')[0].toLowerCase();
+                            for (const selected of selectedOptionalFeatures) {
+                                if (selected.toLowerCase().includes(clean)) return true;
+                            }
+                            // Also check if the class itself grants it automatically!
+                            if (className) {
+                                const autoGranted = allClassFeatures.some(cf => cf.className && cf.className.toLowerCase() === className.toLowerCase() && cf.level <= cLvl && cf.name.toLowerCase().includes(clean));
+                                if (autoGranted) return true;
+
+                                // And subclass features
+                                if (subclass) {
+                                    const autoSubGranted = allSubclassFeatures.some(sf => sf.className && sf.className.toLowerCase() === className.toLowerCase() && sf.subclassShortName && sf.subclassShortName.toLowerCase() === subclass.toLowerCase() && sf.level <= cLvl && sf.name.toLowerCase().includes(clean));
+                                    if (autoSubGranted) return true;
+                                }
+                            }
+                            return false;
+                        });
+                        if (!hasClassFeat) return false;
+                    }
+
+                    // Patron Check
+                    if (req.patron) {
+                        let hasPatron = false;
+                        const subclassLower = (subclass || "").toLowerCase();
+                        if (subclassLower) {
+                            const checkPatron = p => {
+                                let clean = p.toLowerCase().replace(/^the\s+/, "");
+                                return subclassLower.includes(clean);
+                            };
+                            if (typeof req.patron === 'string') {
+                                hasPatron = checkPatron(req.patron);
+                            } else if (Array.isArray(req.patron)) {
+                                hasPatron = req.patron.some(checkPatron);
+                            }
+                        }
+                        if (!hasPatron) return false;
                     }
 
                     // Spell Check
@@ -2202,9 +2569,31 @@ document.addEventListener('DOMContentLoaded', () => {
         title.style.color = "var(--ink)";
         title.style.borderBottom = "1px solid var(--gold-dark)";
         container.appendChild(title);
+        
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.className = 'form-control';
+        searchInput.placeholder = 'Search options...';
+        searchInput.style.width = '100%';
+        searchInput.style.marginBottom = '8px';
+        searchInput.style.padding = '4px';
+        searchInput.style.border = '1px solid var(--gold)';
+        searchInput.style.borderRadius = '4px';
+        container.appendChild(searchInput);
 
         const list = document.createElement('div');
         list.className = "d-flex flex-column gap-1";
+        list.style.maxHeight = "400px";
+        list.style.overflowY = "auto";
+        list.style.paddingRight = "4px";
+
+        searchInput.oninput = () => {
+            const term = searchInput.value.toLowerCase();
+            list.querySelectorAll('.checklist-item').forEach(item => {
+                const text = item.querySelector('.opt-title').textContent.toLowerCase();
+                item.style.display = text.includes(term) ? 'flex' : 'none';
+            });
+        };
 
         available.forEach(opt => {
             const div = document.createElement('div');
@@ -2214,6 +2603,9 @@ document.addEventListener('DOMContentLoaded', () => {
             div.style.cursor = "pointer";
             div.style.flexDirection = "column";
             div.style.alignItems = "flex-start";
+            div.style.border = "1px solid var(--gold-light)";
+            div.style.borderRadius = "4px";
+            div.style.marginBottom = "4px";
             
             let prereqText = "";
             if (opt.prerequisite) {
@@ -2234,6 +2626,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Pact
                     if (req.pact) groupReqs.push(`Pact: ${req.pact}`);
                     
+                    // Patron
+                    if (req.patron) groupReqs.push(`Patron: ${typeof req.patron === 'string' ? req.patron : req.patron.join('/')}`);
+
+                    // Feature
+                    if (req.feature) {
+                        req.feature.forEach(f => groupReqs.push(`Feature: ${(typeof f === 'string' ? f : f.name || "").split('|')[0]}`));
+                    }
+
                     // Spells
                     if (req.spell) {
                         req.spell.forEach(s => {
@@ -2262,10 +2662,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (groupTexts.length) prereqText = ` <div style="color:var(--red); font-size:0.8rem; margin-top:2px;">Requires: ${groupTexts.join(' OR ')}</div>`;
             }
 
+            const headerDiv = document.createElement('div');
+            headerDiv.style.display = "flex";
+            headerDiv.style.alignItems = "center";
+            headerDiv.style.width = "100%";
+            headerDiv.style.justifyContent = "space-between";
+
             const titleDiv = document.createElement('div');
+            titleDiv.className = "opt-title";
             titleDiv.style.fontWeight = 'bold';
             titleDiv.innerHTML = `${opt.name}${prereqText}`;
-            div.appendChild(titleDiv);
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.style.pointerEvents = 'none';
+
+            headerDiv.appendChild(titleDiv);
+            headerDiv.appendChild(checkbox);
+            div.appendChild(headerDiv);
             
             let desc = processEntries(opt.entries || opt.entry);
             desc = formatDescription(desc);
@@ -2277,16 +2691,27 @@ document.addEventListener('DOMContentLoaded', () => {
             descDiv.innerHTML = desc;
             div.appendChild(descDiv);
 
-            if (selectedOptionalFeatures.has(opt.name)) {
-                div.style.background = 'var(--red)';
-                div.style.color = 'white';
-                div.style.borderColor = 'var(--red-dark)';
-                
-                // Fix text colors for readability when selected
-                descDiv.style.color = "rgba(255, 255, 255, 0.9)";
-                const prereqSpan = titleDiv.querySelector('span');
-                if (prereqSpan) prereqSpan.style.color = "rgba(255, 255, 255, 0.8)";
-            }
+            const updateSelectionState = () => {
+                const isSelected = selectedOptionalFeatures.has(opt.name);
+                checkbox.checked = isSelected;
+                if (isSelected) {
+                    div.style.background = 'var(--red)';
+                    div.style.color = 'white';
+                    div.style.borderColor = 'var(--red-dark)';
+                    descDiv.style.color = "rgba(255, 255, 255, 0.9)";
+                    const prereqSpan = titleDiv.querySelector('span');
+                    if (prereqSpan) prereqSpan.style.color = "rgba(255, 255, 255, 0.8)";
+                } else {
+                    div.style.background = 'transparent';
+                    div.style.color = 'var(--ink)';
+                    div.style.borderColor = 'var(--gold-light)';
+                    descDiv.style.color = "var(--ink-light)";
+                    const prereqSpan = titleDiv.querySelector('span');
+                    if (prereqSpan) prereqSpan.style.color = "var(--ink-light)";
+                }
+            };
+            
+            updateSelectionState();
 
             div.onclick = () => {
                 if (selectedOptionalFeatures.has(opt.name)) selectedOptionalFeatures.delete(opt.name);
@@ -2303,6 +2728,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     selectedOptionalFeatures.add(opt.name);
                 }
+                updateSelectionState();
                 renderClassFeatures();
             };
 
@@ -3485,34 +3911,11 @@ document.addEventListener('DOMContentLoaded', () => {
         wrapper.style.display = hasContent ? 'block' : 'none';
     }
 
-    // Background Logic (Modal Picker)
-    window.openBackgroundPicker = function() {
-        let modal = document.getElementById('backgroundPickerModal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'backgroundPickerModal';
-            modal.className = 'info-modal-overlay';
-            modal.innerHTML = `
-                <div class="info-modal-content" style="max-width: 500px; max-height: 80vh; display: flex; flex-direction: column;">
-                    <button class="close-modal-btn" onclick="document.getElementById('backgroundPickerModal').style.display='none'">&times;</button>
-                    <h3 class="info-modal-title" style="text-align: center">Select Background</h3>
-                    <div style="margin-bottom: 10px;">
-                        <input type="text" id="bgSearchInput" placeholder="Search backgrounds..." style="border: 1px solid var(--gold); padding: 8px; border-radius: 4px; width: 100%;">
-                    </div>
-                    <div id="backgroundPickerList" class="checklist-grid" style="grid-template-columns: 1fr; flex: 1; overflow-y: auto; gap: 8px;"></div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-            
-            document.getElementById('bgSearchInput').addEventListener('input', (e) => {
-                const term = e.target.value.toLowerCase();
-                document.querySelectorAll('#backgroundPickerList .checklist-item').forEach(item => {
-                    item.style.display = item.textContent.toLowerCase().includes(term) ? 'flex' : 'none';
-                });
-            });
-        }
-        
-        const list = document.getElementById('backgroundPickerList');
+    // NEW: List Renderers for Sidebars
+    
+    function renderBackgroundList() {
+        const list = document.getElementById('backgroundList');
+        if (!list) return;
         list.innerHTML = '';
         
         const uniqueMap = new Map();
@@ -3529,54 +3932,71 @@ document.addEventListener('DOMContentLoaded', () => {
 
         sortedBackgrounds.forEach(b => {
             const div = document.createElement('div');
-            div.className = 'checklist-item';
+            div.className = 'list-item';
             div.textContent = b.name;
+            
+            if (b.source) {
+                const meta = document.createElement('span');
+                meta.className = 'list-item-meta';
+                meta.textContent = `[${b.source}]`;
+                div.appendChild(meta);
+            }
+
             div.onclick = () => {
+                document.querySelectorAll('#backgroundList .list-item').forEach(i => i.classList.remove('selected'));
+                div.classList.add('selected');
                 console.log("Selected Background:", b.name);
                 selectedBackground = b.name;
-                const btn = document.getElementById('creator-background-btn');
-                if(btn) btn.textContent = b.name;
                 renderBackgroundInfo();
-                modal.style.display = 'none';
             };
             list.appendChild(div);
         });
 
-        modal.style.display = 'flex';
-        document.getElementById('bgSearchInput').focus();
-    };
-
-    // Bind initial button if exists
-    const initialBgBtn = document.getElementById('creator-background-btn');
-    if (initialBgBtn) initialBgBtn.onclick = window.openBackgroundPicker;
-
-    function renderBackgroundOptions() {
-        // Ensure UI exists (Fix for mobile visibility if step 3 was hidden)
-        let bgBtn = document.getElementById('creator-background-btn');
-        if (!bgBtn) {
-            const step3 = document.getElementById('step-3-section');
-            const container = document.createElement('div');
-            container.innerHTML = `
-                <h3 class="section-title" style="margin-top:0;">Select Background</h3>
-                <div class="field" style="margin-bottom: 20px;">
-                    <span class="field-label">Background</span>
-                    <button id="creator-background-btn" class="styled-select" style="width: 100%; text-align: left;">Select Background</button>
-                </div>
-                <div id="creator-background-info" style="background: rgba(255,255,255,0.5); padding: 15px; border-radius: 4px; border: 1px dashed var(--gold);">
-                    <em style="color:var(--ink-light);">Select a background to view details...</em>
-                </div>
-            `;
-            step3.insertBefore(container, step3.firstChild);
-            bgBtn = document.getElementById('creator-background-btn');
-            bgBtn.onclick = window.openBackgroundPicker;
+        // Filter logic
+        const searchInput = document.getElementById('bgSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase();
+                document.querySelectorAll('#backgroundList .list-item').forEach(item => {
+                    item.style.display = item.textContent.toLowerCase().includes(term) ? 'block' : 'none';
+                });
+            });
         }
+    }
+
+    function renderFluffHtml(fluff, name, maxHeight) {
+        let html = '';
+        // Top-level img string on the fluff object itself
+        if (fluff.img) {
+            html += `<img src="${fluff.img}" alt="${name}" style="max-width:100%; max-height:${maxHeight}px; object-fit:cover; border:1px solid var(--border-color); border-radius:4px; margin-bottom:12px; display:block;">`;
+        }
+        if (fluff.images && fluff.images.length > 0) {
+            fluff.images.forEach(img => {
+                // Support href.url, href.path, img.url, img.path
+                const href = img.href?.url || img.href?.path || img.url || img.path || null;
+                if (href) {
+                    html += `<img src="${href}" alt="${name}" style="max-width:100%; max-height:${maxHeight}px; object-fit:cover; border:1px solid var(--border-color); border-radius:4px; margin-bottom:12px; display:block;">`;
+                }
+            });
+        }
+        if (fluff.entries) {
+            let desc = processEntries(fluff.entries);
+            desc = formatDescription(desc);
+            html += `<div style="margin-bottom:14px; color:var(--ink-light); font-style:italic;">${desc}</div>`;
+        }
+        return html;
     }
 
     function renderBackgroundInfo() {
         const container = document.getElementById('creator-background-info');
+        const bgEquipContainer = document.getElementById('bg-equipment-container-target');
         container.innerHTML = '';
+        if (bgEquipContainer) bgEquipContainer.innerHTML = '';
         
-        if (!selectedBackground) return;
+        if (!selectedBackground) {
+            if (bgEquipContainer) bgEquipContainer.innerHTML = '<em style="color: var(--text-muted);">Please select a Background first to see starting equipment options.</em>';
+            return;
+        }
 
         // Find the background object (using the same logic as options to ensure match)
         // Since we populated options from uniqueMap, we can just find by name in allBackgrounds 
@@ -3592,10 +4012,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (original && original.entries) bg = { ...original, ...bg, entries: original.entries };
             }
 
+            // Fluff: inline same-file → fluff-backgrounds.json → bg.fluff property
+            const bgFluff = allBackgroundFluff.find(f => f._inline && f.name === bg.name && f.source === bg.source)
+                || allBackgroundFluff.find(f => f._inline && f.name === bg.name)
+                || allBackgroundFluff.find(f => f.name === bg.name && f.source === bg.source)
+                || allBackgroundFluff.find(f => f.name === bg.name)
+                || bg.fluff || null;
+            if (bgFluff) {
+                container.innerHTML = renderFluffHtml(bgFluff, bg.name, 240);
+            }
+
             if (bg.entries) {
                 let desc = processEntries(bg.entries);
                 desc = formatDescription(desc);
-                container.innerHTML = desc;
+                container.innerHTML += desc;
 
                 // Ability Score Adjustment Logic
                 const allAbilities = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'];
@@ -4006,7 +4436,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             html += `</div>`;
             equipDiv.innerHTML = html;
-            container.appendChild(equipDiv);
+            if (bgEquipContainer) {
+                bgEquipContainer.appendChild(equipDiv);
+            } else {
+                container.appendChild(equipDiv);
+            }
         }
     }
 
@@ -4105,6 +4539,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const div = document.createElement('div');
             div.className = 'checklist-item';
             div.style.justifyContent = 'space-between';
+            div.style.background = 'rgba(255,255,255,0.5)';
+            div.style.border = '1px solid var(--gold)';
+            div.style.color = 'var(--ink)';
+            div.style.padding = '8px';
             
             let meta = "";
             if (d.pantheon) meta += d.pantheon + " ";
@@ -4115,7 +4553,7 @@ document.addEventListener('DOMContentLoaded', () => {
             div.onclick = () => {
                 selectedDeity = d.name;
                 selectedDeitySource = d.source;
-                document.getElementById('creator-deity-input').value = `${d.name} [${d.source}]`;
+                document.getElementById('creator-deity-btn').textContent = `${d.name} [${d.source}]`;
                 renderDeityInfo();
                 modal.style.display = 'none';
             };
@@ -4123,40 +4561,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (sorted.length === 0) {
-            list.innerHTML = '<div style="padding:10px; text-align:center; color:var(--ink-light);">No deities found.</div>';
+            list.innerHTML = '<div style="padding:10px; text-align:center; color:#aaa;">No deities found.</div>';
         }
 
         modal.style.display = 'flex';
         document.getElementById('deitySearchInput').focus();
     };
 
-    window.openSpeciesPicker = function() {
-        let modal = document.getElementById('speciesPickerModal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'speciesPickerModal';
-            modal.className = 'info-modal-overlay';
-            modal.innerHTML = `
-                <div class="info-modal-content" style="max-width: 500px; max-height: 80vh; display: flex; flex-direction: column;">
-                    <button class="close-modal-btn" onclick="document.getElementById('speciesPickerModal').style.display='none'">&times;</button>
-                    <h3 class="info-modal-title" style="text-align: center">Select Species</h3>
-                    <div style="margin-bottom: 10px;">
-                        <input type="text" id="speciesSearchInput" placeholder="Search species..." style="border: 1px solid var(--gold); padding: 8px; border-radius: 4px; width: 100%;">
-                    </div>
-                    <div id="speciesPickerList" class="checklist-grid" style="grid-template-columns: 1fr; flex: 1; overflow-y: auto; gap: 8px;"></div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-            
-            document.getElementById('speciesSearchInput').addEventListener('input', (e) => {
-                const term = e.target.value.toLowerCase();
-                document.querySelectorAll('#speciesPickerList .checklist-item').forEach(item => {
-                    item.style.display = item.textContent.toLowerCase().includes(term) ? 'flex' : 'none';
-                });
-            });
-        }
-        
-        const list = document.getElementById('speciesPickerList');
+    function renderSpeciesList() {
+        const list = document.getElementById('speciesList');
+        if (!list) return;
         list.innerHTML = '';
         
         const uniqueMap = new Map();
@@ -4173,21 +4587,37 @@ document.addEventListener('DOMContentLoaded', () => {
         const sorted = Array.from(uniqueMap.values()).sort((a, b) => a.name.localeCompare(b.name));
         sorted.forEach(r => {
             const div = document.createElement('div');
-            div.className = 'checklist-item';
+            div.className = 'list-item';
             div.textContent = r.name;
+            
+            if (r.source) {
+                const meta = document.createElement('span');
+                meta.className = 'list-item-meta';
+                meta.textContent = `[${r.source}]`;
+                div.appendChild(meta);
+            }
+
             div.onclick = () => {
+                document.querySelectorAll('#speciesList .list-item').forEach(i => i.classList.remove('selected'));
+                div.classList.add('selected');
                 selectedSpecies = r.name;
-                document.getElementById('creator-species-btn').textContent = r.name;
                 renderSpeciesInfo();
                 renderClassFeatures(); // Re-check feat prerequisites
-                modal.style.display = 'none';
             };
             list.appendChild(div);
         });
-
-        modal.style.display = 'flex';
-        document.getElementById('speciesSearchInput').focus();
-    };
+        
+        // Filter logic
+        const searchInput = document.getElementById('speciesSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase();
+                document.querySelectorAll('#speciesList .list-item').forEach(item => {
+                    item.style.display = item.textContent.toLowerCase().includes(term) ? 'block' : 'none';
+                });
+            });
+        }
+    }
 
     function renderSpeciesInfo() {
         const container = document.getElementById('creator-species-info');
@@ -4203,11 +4633,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (race && race._copy && !race.entries) { const orig = allSpecies.find(r => r.name === race._copy.name); if(orig) race = {...orig, ...race, entries: orig.entries}; }
         
         if (race) {
+            // 0. Fluff: inline same-file → fluff-races.json → race.fluff property → race.img
+            const raceFluff = allRaceFluff.find(f => f._inline && f.name === race.name && f.source === race.source)
+                || allRaceFluff.find(f => f._inline && f.name === race.name)
+                || allRaceFluff.find(f => f.name === race.name && f.source === race.source)
+                || allRaceFluff.find(f => f.name === race.name)
+                || race.fluff || null;
+            if (raceFluff) {
+                container.innerHTML = renderFluffHtml(raceFluff, race.name, 280);
+            } else if (race.img) {
+                const imgSrc = typeof race.img === 'string' ? race.img : (race.img?.url || race.img?.path || null);
+                if (imgSrc) container.innerHTML = `<img src="${imgSrc}" alt="${race.name}" style="max-width:100%; max-height:280px; object-fit:cover; border:1px solid var(--border-color); border-radius:4px; margin-bottom:12px; display:block;">`;
+            }
+
             // 1. Render Main Description
             if (race.entries) {
                 let desc = processEntries(race.entries);
                 desc = formatDescription(desc);
-                container.innerHTML = desc;
+                container.innerHTML += desc;
             }
 
             // 2. Check for Subraces (Legacy/2014)
@@ -4377,6 +4820,219 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Standard D&D 5e/2024 languages
+    const STANDARD_LANGUAGES = [
+        'Common', 'Common Sign Language', 'Dwarvish', 'Elvish', 'Giant', 'Gnomish',
+        'Goblin', 'Halfling', 'Orc', 'Abyssal', 'Celestial', 'Deep Speech',
+        'Draconic', 'Druidic', 'Infernal', 'Primordial', 'Sylvan', 'Thieves Cant',
+        'Undercommon'
+    ];
+
+    let selectedExtraLanguages = new Set();
+
+    function renderBgExtraTab() {
+        // Wire deity button (it lives in this tab now)
+        const deityBtn = document.getElementById('creator-deity-btn');
+        if (deityBtn && !deityBtn._wired) {
+            deityBtn.onclick = window.openDeityPicker;
+            deityBtn._wired = true;
+        }
+        renderDeityInfo();
+        renderLanguageSelector();
+    }
+
+    function renderLanguageSelector() {
+        const container = document.getElementById('creator-languages-container');
+        if (!container) return;
+
+        // Determine how many "free choice" language slots come from race/background
+        let freeSlots = 0;
+        const knownLanguages = new Set();
+
+        const speciesCandidates = allSpecies.filter(r => r.name === selectedSpecies);
+        const raceObj = speciesCandidates.find(r => r.source === 'XPHB') || speciesCandidates.find(r => r.source === 'PHB') || speciesCandidates[0];
+        if (raceObj && raceObj.languageProficiencies) {
+            raceObj.languageProficiencies.forEach(lp => {
+                Object.keys(lp).forEach(k => {
+                    if (k === 'anyStandard' || k === 'any') freeSlots += lp[k];
+                    else if (lp[k] === true) knownLanguages.add(k.charAt(0).toUpperCase() + k.slice(1));
+                });
+            });
+        }
+        if (selectedSubrace && selectedSubrace.languageProficiencies) {
+            selectedSubrace.languageProficiencies.forEach(lp => {
+                Object.keys(lp).forEach(k => {
+                    if (k === 'anyStandard' || k === 'any') freeSlots += lp[k];
+                    else if (lp[k] === true) knownLanguages.add(k.charAt(0).toUpperCase() + k.slice(1));
+                });
+            });
+        }
+        const bgObj = allBackgrounds.find(b => b.name === selectedBackground);
+        if (bgObj && bgObj.languageProficiencies) {
+            bgObj.languageProficiencies.forEach(lp => {
+                Object.keys(lp).forEach(k => {
+                    if (k === 'anyStandard' || k === 'any') freeSlots += lp[k];
+                    else if (lp[k] === true) knownLanguages.add(k.charAt(0).toUpperCase() + k.slice(1));
+                });
+            });
+        }
+
+        let html = '';
+        if (knownLanguages.size > 0) {
+            html += `<div style="margin-bottom:12px; padding:10px; background:rgba(255,255,255,0.4); border:1px solid var(--border-color); border-radius:4px;">
+                <strong>Known from Race/Background:</strong> ${Array.from(knownLanguages).join(', ')}
+            </div>`;
+        }
+
+        if (freeSlots > 0) {
+            html += `<div style="margin-bottom:8px; font-style:italic; color:var(--ink-light);">Choose ${freeSlots} additional language${freeSlots > 1 ? 's' : ''} from your race/background:</div>`;
+            for (let i = 0; i < freeSlots; i++) {
+                const saved = Array.from(selectedExtraLanguages)[i] || '';
+                html += `<div style="margin-bottom:8px;">
+                    <select class="styled-select extra-lang-select" style="width:100%;" data-slot="${i}">
+                        <option value="">-- Choose Language --</option>
+                        ${STANDARD_LANGUAGES.map(l => `<option value="${l}" ${l === saved ? 'selected' : ''}>${l}</option>`).join('')}
+                    </select>
+                </div>`;
+            }
+        }
+
+        html += `<div style="margin-top:16px;">
+            <div style="font-weight:bold; margin-bottom:8px;">Additional Languages <span style="font-weight:normal; color:var(--ink-light); font-size:0.85em;">(optional, e.g. from feats)</span></div>
+            <div id="extra-lang-extra" style="margin-bottom:8px;"></div>
+            <button id="btn-add-extra-lang" class="btn" style="font-size:0.85rem; padding:4px 14px;">+ Add Language</button>
+        </div>`;
+
+        container.innerHTML = html;
+
+        // Restore selectedExtraLanguages from selects (on re-render, preserve state)
+        container.querySelectorAll('.extra-lang-select').forEach(sel => {
+            sel.addEventListener('change', () => {
+                selectedExtraLanguages.clear();
+                container.querySelectorAll('.extra-lang-select').forEach(s => {
+                    if (s.value) selectedExtraLanguages.add(s.value);
+                });
+            });
+        });
+
+        // Extra optional lang rows
+        const extraDiv = document.getElementById('extra-lang-extra');
+        const addExtraLangRow = (val = '') => {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.gap = '6px';
+            row.style.marginBottom = '6px';
+            row.innerHTML = `
+                <select class="styled-select extra-lang-optional" style="flex:1;">
+                    <option value="">-- Choose Language --</option>
+                    ${STANDARD_LANGUAGES.map(l => `<option value="${l}" ${l === val ? 'selected' : ''}>${l}</option>`).join('')}
+                </select>
+                <button class="btn" style="padding:4px 10px; font-size:0.85rem; color:var(--red);" onclick="this.closest('div').remove()">✕</button>
+            `;
+            extraDiv.appendChild(row);
+        };
+        document.getElementById('btn-add-extra-lang').onclick = () => addExtraLangRow();
+    }
+
+    function renderFeatsTab() {
+        const container = document.getElementById('creator-feats-container');
+        if (!container) return;
+
+        if (allFeats.length === 0) {
+            container.innerHTML = '<em style="color:var(--text-muted);">No feat data loaded. Upload feat data in the main sheet first.</em>';
+            return;
+        }
+
+        const selectionKey = 'OriginFeat';
+        let currentFeatName = null;
+        for (const item of selectedOptionalFeatures) {
+            if (item.startsWith(selectionKey + ':')) {
+                currentFeatName = item.substring(selectionKey.length + 1);
+                break;
+            }
+        }
+
+        // Deduplicate feats by name (prefer XPHB > PHB > first)
+        const featMap = new Map();
+        allFeats.forEach(ft => {
+            if (!featMap.has(ft.name)) {
+                featMap.set(ft.name, ft);
+            } else {
+                const existing = featMap.get(ft.name);
+                const priority = (s) => s === 'XPHB' ? 2 : s === 'PHB' ? 1 : 0;
+                if (priority(ft.source) > priority(existing.source)) featMap.set(ft.name, ft);
+            }
+        });
+
+        // Show origin feats first, then all others
+        const originFeats = [...featMap.values()].filter(ft => ft.category === 'O' || ft.category === 'Origin');
+        const otherFeats = [...featMap.values()].filter(ft => ft.category !== 'O' && ft.category !== 'Origin');
+        const sorted = [
+            ...originFeats.sort((a, b) => a.name.localeCompare(b.name)),
+            ...otherFeats.sort((a, b) => a.name.localeCompare(b.name))
+        ];
+
+        container.innerHTML = `
+            <p style="color:var(--ink-light); font-style:italic; margin-bottom:12px;">
+                Select an <strong>Origin Feat</strong> (or any feat your DM allows at level 1).
+                This is stored separately from ASI feats chosen in the Class tab.
+            </p>
+            <input type="text" id="feat-tab-search" class="search-input" placeholder="Search feats..." style="margin-bottom:12px;">
+            <div id="feat-tab-list"></div>
+            <div id="feat-tab-detail" style="margin-top:20px; padding:15px; background:rgba(255,255,255,0.5); border:1px solid var(--border-color); border-radius:4px; display:none;"></div>
+        `;
+
+        const listDiv = document.getElementById('feat-tab-list');
+        const detailDiv = document.getElementById('feat-tab-detail');
+        const searchInput = document.getElementById('feat-tab-search');
+
+        const renderList = (filter = '') => {
+            const lc = filter.toLowerCase();
+            const visible = sorted.filter(ft => ft.name.toLowerCase().includes(lc));
+            listDiv.innerHTML = '';
+            visible.forEach(ft => {
+                const isOrigin = ft.category === 'O' || ft.category === 'Origin';
+                const isSelected = ft.name === currentFeatName;
+                const row = document.createElement('div');
+                row.className = 'list-item' + (isSelected ? ' selected' : '');
+                row.style.display = 'flex';
+                row.style.justifyContent = 'space-between';
+                row.style.alignItems = 'center';
+                row.innerHTML = `
+                    <span>${ft.name}</span>
+                    <span style="font-size:0.75rem; color:inherit; opacity:0.7;">${isOrigin ? 'Origin' : (ft.category || ft.source || '')}</span>
+                `;
+                row.onclick = () => {
+                    currentFeatName = ft.name;
+                    // Store in selectedOptionalFeatures
+                    for (const item of [...selectedOptionalFeatures]) {
+                        if (item.startsWith(selectionKey + ':')) selectedOptionalFeatures.delete(item);
+                    }
+                    selectedOptionalFeatures.add(`${selectionKey}:${ft.name}`);
+                    renderList(searchInput.value);
+                    // Show detail
+                    const desc = processEntries(ft.entries || ft.entry);
+                    detailDiv.style.display = 'block';
+                    detailDiv.innerHTML = `<h4 style="margin-top:0;">${ft.name}</h4>${formatDescription(desc)}`;
+                };
+                listDiv.appendChild(row);
+            });
+            if (visible.length === 0) listDiv.innerHTML = '<em style="color:var(--text-muted); padding:10px; display:block;">No feats match your search.</em>';
+        };
+
+        searchInput.oninput = () => renderList(searchInput.value);
+        renderList();
+
+        // If a feat was previously selected, show its detail
+        if (currentFeatName) {
+            const ft = featMap.get(currentFeatName);
+            if (ft) {
+                detailDiv.style.display = 'block';
+                detailDiv.innerHTML = `<h4 style="margin-top:0;">${ft.name}</h4>${formatDescription(processEntries(ft.entries || ft.entry))}`;
+            }
+        }
+    }
+
     function updateAbilityScoreBonuses() {
         const bonuses = { Strength: 0, Dexterity: 0, Constitution: 0, Intelligence: 0, Wisdom: 0, Charisma: 0 };
 
@@ -4438,53 +5094,59 @@ document.addEventListener('DOMContentLoaded', () => {
                 const totalEl = document.getElementById(`total-rnd-${ab}`);
                 if (totalEl) totalEl.textContent = base ? (base + bonus) : "-";
             }
+
+            const manualSpan = document.getElementById(`bonus-manual-${ab}`);
+            if (manualSpan) {
+                manualSpan.textContent = text;
+                const inp = document.querySelector(`.manual-input[data-ability="${ab}"]`);
+                const base = inp ? parseInt(inp.value) || 0 : 0;
+                const totalEl = document.getElementById(`total-manual-${ab}`);
+                if (totalEl) totalEl.textContent = base + bonus;
+            }
         });
     }
 
     function renderAbilityScoreSection() {
-        const step3 = document.getElementById('step-3-section');
-        if (document.getElementById('creator-abilities')) return;
-
-        const container = document.createElement('div');
-        container.style.marginTop = "30px";
-        container.style.borderTop = "2px solid var(--gold)";
-        container.style.paddingTop = "20px";
-        container.id = 'creator-abilities';
+        const container = document.getElementById('creator-abilities');
+        if (!container || container.childElementCount > 0) return;
         
         container.innerHTML = `
-            <h3 class="section-title" style="margin-top:0;">Ability Scores</h3>
             <div style="margin-bottom: 15px;">
                 <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
                     <button id="btn-method-standard" class="btn" style="flex:1; min-width:120px; font-size:0.8rem;">Standard Array</button>
                     <button id="btn-method-pointbuy" class="btn btn-secondary" style="flex:1; min-width:120px; font-size:0.8rem;">Point Buy</button>
                     <button id="btn-method-random" class="btn btn-secondary" style="flex:1; min-width:120px; font-size:0.8rem;">Random</button>
+                    <button id="btn-method-manual" class="btn btn-secondary" style="flex:1; min-width:120px; font-size:0.8rem;">Manual</button>
                 </div>
-                <div id="ability-score-content" style="background:rgba(255,255,255,0.5); padding:15px; border-radius:4px; border:1px solid var(--gold);"></div>
+                <div id="ability-score-content" style="background:rgba(0,0,0,0.2); padding:15px; border-radius:4px; border:1px solid #555;"></div>
             </div>
         `;
-        
-        step3.appendChild(container);
 
         const setMethod = (method) => {
-            ['standard', 'pointbuy', 'random'].forEach(m => {
+            ['standard', 'pointbuy', 'random', 'manual'].forEach(m => {
                 const btn = document.getElementById(`btn-method-${m}`);
                 if (m === method) {
                     btn.classList.remove('btn-secondary');
                     btn.classList.add('btn');
+                    btn.classList.add('btn-primary');
                 } else {
                     btn.classList.add('btn-secondary');
                     btn.classList.remove('btn');
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn'); // basic style
                 }
             });
             if (method === 'standard') renderStandardArray();
             if (method === 'pointbuy') renderPointBuy();
             if (method === 'random') renderRandomStats();
+            if (method === 'manual') renderManualStats();
         };
 
         document.getElementById('btn-method-standard').onclick = () => setMethod('standard');
         document.getElementById('btn-method-pointbuy').onclick = () => setMethod('pointbuy');
         document.getElementById('btn-method-random').onclick = () => setMethod('random');
-        
+        document.getElementById('btn-method-manual').onclick = () => setMethod('manual');
+
         renderStandardArray();
     }
 
@@ -4667,21 +5329,43 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAbilityScoreBonuses();
     }
 
+    function renderManualStats() {
+        const container = document.getElementById('ability-score-content');
+        const abilities = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'];
+        container.innerHTML = `
+            <div style="margin-bottom:10px; font-style:italic; color:var(--ink-light);">Enter scores manually (1–30). No restrictions enforced.</div>
+            <div id="manual-container" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;"></div>
+        `;
+        const manualContainer = document.getElementById('manual-container');
+        abilities.forEach(ab => {
+            const div = document.createElement('div');
+            div.innerHTML = `
+                <label style="font-weight:bold; font-size:0.9rem;">${ab}
+                    <span id="bonus-manual-${ab}" style="color:var(--red); font-size:0.8rem; margin-left:4px;"></span>
+                    <span id="total-manual-${ab}" class="ability-total-badge" title="Total Score">-</span>
+                </label>
+                <input type="number" class="styled-select manual-input" data-ability="${ab}"
+                    min="1" max="30" value="10" style="width:100%;">
+            `;
+            manualContainer.appendChild(div);
+        });
+        manualContainer.querySelectorAll('.manual-input').forEach(inp => {
+            inp.addEventListener('input', () => {
+                renderClassFeatures();
+                updateAbilityScoreBonuses();
+            });
+        });
+        updateAbilityScoreBonuses();
+    }
+
     function renderReviewSection() {
-        const step3 = document.getElementById('step-3-section');
+        const container = document.getElementById('step-4-review');
         
         let currentName = "";
-        const nameInput = document.getElementById('creator-char-name');
+        const nameInput = document.querySelector('#step-4-review input');
         if (nameInput) currentName = nameInput.value;
-
-        const existing = document.getElementById('step-4-review');
-        if (existing) existing.remove();
-
-        const container = document.createElement('div');
-        container.id = 'step-4-review';
-        container.style.marginTop = "30px";
-        container.style.borderTop = "2px solid var(--gold)";
-        container.style.paddingTop = "20px";
+        
+        container.innerHTML = '';
         
         const scores = getFinalAbilityScores();
         const scoreStr = Object.entries(scores).map(([k, v]) => `<strong>${k.slice(0,3)}:</strong> ${v}`).join(', ');
@@ -4812,10 +5496,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         container.innerHTML = `
-            <h3 class="section-title" style="margin-top:0;">Review Character</h3>
+            <h2 style="margin-top:0;">Review Character</h2>
             <div class="field" style="margin-bottom: 20px;">
                 <span class="field-label">Character Name</span>
-                <input type="text" id="creator-char-name" placeholder="Enter Name" value="${currentName.replace(/"/g, '&quot;')}" style="font-weight:bold; color:var(--red-dark); font-size:1.2rem;">
+                <input type="text" id="creator-char-name" placeholder="Enter Name" value="${currentName.replace(/"/g, '&quot;')}" style="font-weight:bold; color:var(--ink); background:var(--bg-input); border:1px solid var(--gold); padding:8px; font-size:1.2rem; width:100%;">
             </div>
             
             <div style="background:rgba(255,255,255,0.5); padding:15px; border-radius:4px; border:1px solid var(--gold); margin-bottom:20px; line-height:1.6;">
@@ -4828,12 +5512,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${spellsHtml}
             </div>
 
-            <button id="create-char-btn" class="btn" style="width:100%; font-size:1.2rem; padding:15px;">Create Character</button>
+            <button id="create-char-btn" class="btn btn-primary" style="width:100%; font-size:1.2rem; padding:15px;">Create Character Sheet</button>
         `;
         
-        step3.parentNode.appendChild(container);
-        container.scrollIntoView({ behavior: 'smooth' });
-
         document.getElementById('create-char-btn').addEventListener('click', createCharacter);
     }
 
@@ -4857,6 +5538,11 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (document.getElementById('btn-method-random').classList.contains('btn')) {
                 document.querySelectorAll('.random-select').forEach(sel => {
                     if (sel.value) scores[sel.dataset.ability] = parseInt(sel.value);
+                });
+            } else if (document.getElementById('btn-method-manual')?.classList.contains('btn')) {
+                document.querySelectorAll('.manual-input').forEach(inp => {
+                    const val = parseInt(inp.value);
+                    if (!isNaN(val)) scores[inp.dataset.ability] = val;
                 });
             }
         }
@@ -5841,7 +6527,7 @@ document.addEventListener('DOMContentLoaded', () => {
             armorLight, armorMedium, armorHeavy, armorShield,
             weaponProfs: weaponProfs.join(", "),
             toolProfs: toolProfs.join(", "),
-            languages: Array.from(languages).join(", "),
+            languages: [...Array.from(languages), ...Array.from(selectedExtraLanguages), ...Array.from(document.querySelectorAll('.extra-lang-optional')).map(s => s.value).filter(v => v)].join(", "),
             defenses: Array.from(defenses).join(", "),
             spellAbility,
             spellSlotsData,

@@ -8,76 +8,286 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-page: #111;
+            --parchment: #fdf6e3;
+            --parchment-dark: #eee0b6;
+            --ink: #1a1a1a;
+            --ink-light: #555;
+            --gold: #c9ad6a;
+            --gold-dark: #9e854b;
+            --red: #8a1c1c;
+            --red-dark: #5c0a0a;
+            
+            --bg-panel: var(--parchment);
+            --border-color: var(--gold);
+            --text-main: var(--ink);
+            --text-muted: var(--ink-light);
+            --accent: var(--red);
+            --bg-input: rgba(255, 255, 255, 0.8);
+        }
+        body { background: var(--bg-page); color: var(--text-main); font-family: 'Crimson Text', serif; font-size: 18px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; margin: 0; }
+        
+        /* Layout */
+        .app-window { display: flex; flex-direction: column; height: 100%; width: 100%; background: var(--parchment); margin: 0; box-shadow: none; }
+        .app-nav { display: flex; background: var(--parchment-dark); border-bottom: 1px solid var(--border-color); flex-shrink: 0; padding: 0 10px; }
+        .nav-tab { background: transparent; border: none; color: var(--text-muted); padding: 12px 20px; font-size: 16px; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; font-weight: bold; font-family: 'Cinzel', serif; }
+        .nav-tab:hover:not(:disabled) { color: var(--text-main); background: rgba(255,255,255,0.3); }
+        .nav-tab.active { color: var(--red-dark); border-bottom-color: var(--red); background: var(--parchment); }
+        .nav-tab:disabled { opacity: 0.5; cursor: default; }
+
+        .app-body { flex: 1; overflow: hidden; position: relative; background: var(--parchment); }
+        .tab-pane { display: none; height: 100%; width: 100%; }
+        .tab-pane.active { display: flex; }
+
+        .split-view { display: flex; width: 100%; height: 100%; }
+        .split-view.equal-split > .sidebar, .split-view.equal-split > .content-pane { width: 50%; flex: 0 0 50%; }
+        .sidebar { width: 300px; background: var(--parchment-dark); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-header { padding: 10px; border-bottom: 1px solid var(--border-color); background: rgba(0,0,0,0.05); }
+        .sidebar-list { flex: 1; overflow-y: auto; padding: 0; }
+        .search-input { width: 100%; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); padding: 6px; border-radius: 3px; font-family: inherit; font-size: inherit; }
+
+        .list-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--border-color); color: var(--text-main); font-size: 15px; transition: background 0.2s; }
+        .list-item:hover { background: rgba(255,255,255,0.5); color: var(--red); }
+        .list-item.selected { background: var(--red); color: #fff; border-color: var(--red-dark); }
+        .list-item-meta { font-size: 0.8em; color: inherit; opacity: 0.7; float: right; }
+
+        .content-pane { flex: 1; overflow-y: auto; padding: 20px; background: var(--parchment); color: var(--text-main); }
+        
+        /* Components */
+        h1, h2, h3, h4 { margin-top: 0; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; color: var(--red-dark); font-family: 'Cinzel', serif; font-weight: 700; }
+        
+        .app-footer { background: var(--parchment-dark); padding: 10px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; flex-shrink: 0; }
+        .btn { background: #fff; color: var(--ink); border: 1px solid var(--gold); padding: 8px 24px; border-radius: 3px; cursor: pointer; font-weight: bold; transition: background 0.2s; font-family: 'Cinzel', serif; font-size: 16px; }
+        .btn:hover { background: var(--parchment-dark); border-color: var(--gold-dark); }
+        .btn-primary { background: var(--red); border-color: var(--red-dark); color: #fff; }
+        .btn-primary:hover { background: var(--red-dark); border-color: #300; }
+
+        .feature-wrapper { background: rgba(255,255,255,0.5) !important; border: 1px solid var(--border-color) !important; color: var(--text-main) !important; margin-bottom: 8px; border-radius: 3px; }
+        .feature-wrapper .d-flex { background: rgba(0,0,0,0.03) !important; color: var(--text-main) !important; }
+        .feature-content { padding: 12px; font-size: 16px; line-height: 1.5; }
+        
+        .styled-select { background: var(--bg-input); color: var(--text-main); border: 1px solid var(--gold); padding: 6px; border-radius: 3px; font-family: inherit; font-size: inherit; }
+        .equip-option-box { background: #fff !important; border-color: var(--gold) !important; color: var(--text-main) !important; }
+        .equip-option-box.selected { border-color: var(--red) !important; background: var(--parchment-dark) !important; }
+
+        /* Modals */
+        .info-modal-overlay { background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1000; backdrop-filter: blur(2px); }
+        .info-modal-content { background: var(--parchment); border: 2px solid var(--gold); color: var(--text-main); padding: 20px; width: 600px; max-height: 80vh; overflow-y: auto; position: relative; border-radius: 5px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); }
+        .close-modal-btn { position: absolute; top: 10px; right: 10px; background: none; border: none; color: var(--ink-light); font-size: 20px; cursor: pointer; }
+        .close-modal-btn:hover { color: var(--red); }
+    </style>
 </head>
 <body>
-    <div class="character-sheet creator-mode" style="max-width: 100%; margin: 0; min-height: 100vh; border-radius: 0;">
-        <div class="header">
-            <h1>Character Creator</h1>
-            <div class="subtitle">Step 1: Choose Class</div>
-        </div>
+    <div class="app-window">
+        <nav class="app-nav">
+            <button class="nav-tab active" data-tab="class">1. Class</button>
+            <button class="nav-tab" data-tab="race">2. Species</button>
+            <button class="nav-tab" data-tab="abilities">3. Abilities</button>
+            <button class="nav-tab" data-tab="background">4. Background</button>
+            <button class="nav-tab" data-tab="bgextra">5. Bg. Extra</button>
+            <button class="nav-tab" data-tab="equipment">6. Equipment</button>
+            <button class="nav-tab" data-tab="spells">7. Spells</button>
+            <button class="nav-tab" data-tab="feats">8. Feats</button>
+            <button class="nav-tab" data-tab="review">9. Review</button>
+        </nav>
 
-        <div class="grid grid-3" style="align-items: start;">
-            <div class="field">
-                <label class="field-label">Class</label>
-                <div id="creator-class-list" class="checklist-grid" style="grid-template-columns: 1fr; max-height: none; overflow-y: visible;"></div>
-            </div>
-            <div class="field">
-                <label class="field-label">Class Overview (Levels 1-20)</label>
-                <div id="creator-class-preview" style="padding: 10px; font-size: 0.9rem; line-height: 1.4; border: 1px solid var(--gold); border-radius: 4px;">
-                    <em style="color: var(--ink-light);">Select a class to view overview...</em>
-                </div>
-            </div>
-            <div class="field">
-                <label class="field-label">Class Table</label>
-                <div id="creator-class-table" style="padding: 0; border: 1px solid var(--gold); border-radius: 4px; background: white;">
-                    <em style="color: var(--ink-light); padding: 10px; display: block;">Select a class to view table...</em>
-                </div>
-            </div>
-        </div>
-
-        <div id="step-2-section" class="field" style="display:none; margin-bottom: 20px;">
-            <div class="section-title" style="margin-top:0; margin-bottom: 10px; font-size: 1.2rem;">Level & Subclass</div>
-            <div style="margin-bottom: 15px;">
-                <label class="field-label">Level</label>
-                <select id="creator-level" class="styled-select" style="max-width: 100px;"></select>
-            </div>
-            <div class="grid" style="align-items: start; grid-template-columns: 1fr;">
-                <div id="subclass-container" style="display:none;">
-                    <label class="field-label">Subclass</label>
-                    <div id="creator-subclass-list" class="checklist-grid" style="grid-template-columns: 1fr; max-height: none; overflow-y: visible;"></div>
-                </div>
-                <div>
-                    <label class="field-label">Features (Up to Level)</label>
-                <div id="creator-class-features" style="padding: 10px; font-size: 0.9rem; line-height: 1.4; border: 1px solid var(--gold); border-radius: 4px;">
-                        <em style="color: var(--ink-light);">Select a class to view features...</em>
+        <div class="app-body">
+            <!-- CLASS TAB -->
+            <div id="tab-class" class="tab-pane active">
+                <div class="split-view equal-split">
+                    <div class="sidebar">
+                        <div id="creator-class-list" style="flex-shrink: 0;"></div>
+                        <div id="subclass-container" style="display:none; flex-direction: column; padding: 10px; border-top: 1px solid var(--border-color); background: rgba(0,0,0,0.05); flex-shrink: 0;">
+                            <h3 style="margin-top:0; font-size: 1.1em; color: var(--red-dark);">Select Subclass</h3>
+                            <div id="creator-subclass-list"></div>
+                        </div>
+                        <div id="creator-feature-choices" style="display:none; flex-direction: column; padding: 10px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: rgba(0,0,0,0.05); max-height: 40vh; overflow-y: auto;"></div>
+                        <div id="creator-class-table" style="padding: 10px; border-top: 1px solid var(--border-color); font-size: 0.8em; overflow-y: auto; flex: 1; background: var(--parchment);"></div>
                     </div>
+                    <div class="content-pane">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: rgba(255,255,255,0.5); border: 1px solid var(--border-color); padding: 10px; border-radius: 4px;">
+                            <h2 style="margin:0; border:none; color:var(--text-main);">Class Details</h2>
+                            <div style="display:flex; align-items: center; gap: 10px;">
+                                <label style="font-weight: bold; color: var(--gold);">Level:</label>
+                                <select id="creator-level" class="styled-select" style="width: 60px; text-align: center; font-weight: bold;"></select>
+                            </div>
+                        </div>
+                        
 
-                    <div id="creator-granted-spells-container" style="display:none; margin-top: 15px;">
-                        <label class="field-label">Granted Spells / Cantrips</label>
-                        <div id="creator-granted-spells" style="padding: 10px; font-size: 0.9rem; border: 1px solid var(--gold); border-radius: 4px; background: white;"></div>
+                        <div id="creator-class-preview" style="margin-bottom: 20px;">
+                            <em style="color: var(--text-muted);">Select a class from the list to begin...</em>
+                        </div>
+
+                        <div id="creator-class-table-dynamic"></div>
+                        <div id="creator-class-features" style="margin-top: 15px;"></div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div id="step-3-section" class="field" style="display:none; margin-bottom: 20px;">
-            <div class="section-title" style="margin-top:0; margin-bottom: 10px; font-size: 1.2rem;">Background</div>
-            <div class="grid grid-2" style="align-items: start;">
-                <div>
-                    <label class="field-label">Choose Background</label>
-                    <button id="creator-background-btn" class="styled-select" style="width: 100%; text-align: left;">Select Background</button>
-                </div>
-                <div>
-                    <label class="field-label">Description & Features</label>
-                    <div id="creator-background-info" style="height: auto; max-height: none; padding: 10px; font-size: 0.9rem; line-height: 1.4; border: 1px solid var(--gold); border-radius: 4px; background: white;">
-                        <em style="color: var(--ink-light);">Select a background...</em>
+            <!-- RACE TAB -->
+            <div id="tab-race" class="tab-pane">
+                <div class="split-view">
+                    <div class="sidebar">
+                        <div class="sidebar-header">
+                            <input type="text" id="speciesSearchInput" class="search-input" placeholder="Search Species...">
+                        </div>
+                        <div id="speciesList" class="sidebar-list"></div>
                     </div>
+                    <div class="content-pane">
+                        <div id="creator-species-info">
+                            <em style="color: var(--text-muted);">Select a species from the list...</em>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ABILITIES TAB -->
+            <div id="tab-abilities" class="tab-pane">
+                <div class="content-pane">
+                    <h2>Ability Scores</h2>
+                    <div id="creator-abilities" style="margin-top: 0; border: none; padding-top: 0;"></div>
+                </div>
+            </div>
+
+            <!-- BACKGROUND TAB -->
+            <div id="tab-background" class="tab-pane">
+                <div class="split-view">
+                    <div class="sidebar">
+                        <div class="sidebar-header">
+                            <input type="text" id="bgSearchInput" class="search-input" placeholder="Search Background...">
+                        </div>
+                        <div id="backgroundList" class="sidebar-list"></div>
+                    </div>
+                    <div class="content-pane">
+                        <div id="creator-background-info">
+                            <em style="color: var(--text-muted);">Select a background from the list...</em>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BACKGROUND (EXTRA) TAB -->
+            <div id="tab-bgextra" class="tab-pane">
+                <div class="content-pane">
+                    <h2>Background (Extra)</h2>
+
+                    <h3>Deity <span style="font-weight:normal; font-size:0.8em; color:var(--text-muted);">(Optional)</span></h3>
+                    <button id="creator-deity-btn" class="styled-select" style="width: 100%; text-align: left; padding: 10px; font-size: 1.1em;">Select Deity (Optional)</button>
+                    <input type="hidden" id="creator-deity-input">
+                    <div id="creator-deity-info" style="margin-top: 10px; padding: 15px; background: rgba(255,255,255,0.5); border: 1px solid var(--border-color); min-height: 50px;">
+                        <em style="color: var(--text-muted);">No deity selected.</em>
+                    </div>
+
+                    <h3 style="margin-top: 30px;">Languages</h3>
+                    <div id="creator-languages-container">
+                        <em style="color: var(--text-muted);">Loading languages...</em>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EQUIPMENT TAB (Placeholder content populated by class selection) -->
+            <div id="tab-equipment" class="tab-pane">
+                <div class="content-pane">
+                    <h2>Starting Equipment</h2>
+                    
+                    <div id="equipment-class-section">
+                        <h3 style="color: var(--red-dark); border-bottom: 1px solid var(--gold);">Class Equipment</h3>
+                        <!-- Equipment content is dynamically injected into creator-class-table in JS originally, we might need to move it -->
+                        <div id="equipment-container-target">
+                            <em style="color: var(--text-muted);">Please select a Class first to see starting equipment options.</em>
+                        </div>
+                    </div>
+
+                    <div id="equipment-background-section" style="margin-top: 30px;">
+                        <h3 style="color: var(--red-dark); border-bottom: 1px solid var(--gold);">Background Equipment</h3>
+                        <div id="bg-equipment-container-target">
+                            <em style="color: var(--text-muted);">Please select a Background first to see starting equipment options.</em>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SPELLS TAB -->
+            <div id="tab-spells" class="tab-pane">
+                <div class="split-view equal-split">
+                    <div class="sidebar">
+                        <div class="sidebar-header">
+                            <h3 style="margin:0; font-size:1.2em; color:var(--red-dark);">Spells List</h3>
+                        </div>
+                        <div id="spells-container-target" class="sidebar-list">
+                            <em style="color: var(--text-muted); padding: 10px; display: block;">Select a class with spellcasting to see available spells.</em>
+                        </div>
+                    </div>
+                    <div class="content-pane">
+                        <h2>Spellcasting Progression</h2>
+                        <div style="background: rgba(255,255,255,0.5); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px; margin-bottom: 20px;">
+                            <table style="width:100%; border-collapse: collapse; text-align: center;">
+                                <thead>
+                                    <tr style="border-bottom: 2px solid var(--gold);">
+                                        <th style="padding: 8px;">Level</th>
+                                        <th style="padding: 8px;">Cantrip</th>
+                                        <th style="padding: 8px;">Prepared Spells</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="spell-progression-body">
+                                    <script>
+                                        for(let i=1; i<=20; i++) {
+                                            document.write(`<tr style="border-bottom: 1px dashed var(--border-color);">
+                                                <td style="padding: 6px;">${i}</td>
+                                                <td style="padding: 6px;" id="spell-row-${i}-cantrip">-</td>
+                                                <td style="padding: 6px;" id="spell-row-${i}-prepared">-</td>
+                                            </tr>`);
+                                        }
+                                    </script>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div id="spell-detail-view" style="margin-bottom: 20px;"></div>
+
+                        <div id="creator-granted-spells-container" style="display:none; margin-top: 15px; border: 1px solid var(--border-color); padding: 10px;">
+                            <h4 style="margin-top:0;">Granted Spells / Cantrips</h4>
+                            <div id="creator-granted-spells"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FEATS TAB -->
+            <div id="tab-feats" class="tab-pane">
+                <div class="content-pane">
+                    <h2>Feats</h2>
+                    <div id="creator-feats-container">
+                        <em style="color: var(--text-muted);">Loading feats...</em>
+                    </div>
+                </div>
+            </div>
+
+            <!-- REVIEW TAB -->
+            <div id="tab-review" class="tab-pane">
+                <div class="content-pane">
+                    <div id="step-4-review"></div>
                 </div>
             </div>
         </div>
 
-        <div class="sheet-actions">
-            <button id="next-step-btn" class="btn">Next Step</button>
+        <footer class="app-footer">
+            <button id="btn-prev" class="btn" style="display:none;">Previous</button>
+            <button id="btn-next" class="btn btn-primary">Next</button>
+        </footer>
+    </div>
+
+    <!-- Hidden Modal for Deity Picking (reused logic) -->
+    <div id="deityPickerModal" class="info-modal-overlay" style="display:none;">
+        <div class="info-modal-content">
+            <button class="close-modal-btn" onclick="document.getElementById('deityPickerModal').style.display='none'">&times;</button>
+            <h3 class="info-modal-title" style="text-align: center">Select Deity</h3>
+            <div style="margin-bottom: 10px;">
+                <input type="text" id="deitySearchInput" placeholder="Search deities..." class="search-input">
+            </div>
+            <div id="deityPickerList" class="checklist-grid" style="grid-template-columns: 1fr; flex: 1; overflow-y: auto; gap: 8px; max-height: 60vh;"></div>
         </div>
     </div>
 
