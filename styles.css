@@ -984,6 +984,9 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
   .grid-3, .grid-4 { grid-template-columns: repeat(2, 1fr); }
   .stat-block { grid-template-columns: repeat(2, 1fr); }
 
+  /* Hide Actions in Combat on mobile/tablet */
+  #combat-actions-ref { display: none !important; }
+
   /* Compress Character Details on Mobile/Tablet */
   body:not(.dense-mode) .grid.grid-4:has(#charName) {
     grid-template-columns: 70px 1fr;
@@ -1155,12 +1158,12 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
   .spell-list-header { display: none; }
   .spell-row {
     display: grid;
-    grid-template-columns: 32px 1fr 1fr 1fr 32px;
+    grid-template-columns: 24px 1fr 1fr 1fr 28px;
     grid-template-areas:
       "drag name name name del"
       "lvl time time range range"
       "prep ritual conc mat info";
-    gap: 6px;
+    gap: 4px;
     padding: 8px;
     align-items: center;
     background: white;
@@ -1172,13 +1175,13 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
 
   .spell-row .spell-name { 
       grid-area: name; 
-      font-size: 1.05rem; 
+      font-size: 0.95rem; 
       font-weight: 700; 
       color: var(--red-dark);
       border-bottom: 1px solid var(--parchment-dark);
       padding-bottom: 2px;
-      height: 28px;
-      min-height: 28px;
+      height: 24px;
+      min-height: 24px;
   }
   
   .spell-row .spell-lvl { 
@@ -1187,15 +1190,15 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
       font-weight: bold;
       background: var(--parchment);
       border-radius: 4px;
-      height: 28px;
-      min-height: 28px;
-      font-size: 0.95rem;
+      height: 24px;
+      min-height: 24px;
+      font-size: 0.85rem;
       border: 1px solid var(--gold);
       padding: 0;
   }
 
-  .spell-row .spell-time { grid-area: time; font-size: 0.85rem; height: 28px; min-height: 28px; color: var(--ink-light); }
-  .spell-row .spell-range { grid-area: range; font-size: 0.85rem; height: 28px; min-height: 28px; text-align: right; color: var(--ink-light); }
+  .spell-row .spell-time { grid-area: time; font-size: 0.75rem; height: 24px; min-height: 24px; color: var(--ink-light); }
+  .spell-row .spell-range { grid-area: range; font-size: 0.75rem; height: 24px; min-height: 24px; text-align: right; color: var(--ink-light); }
 
   .spell-row .spell-col-prep, 
   .spell-row .spell-col-ritual, 
@@ -1220,13 +1223,13 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
   .spell-row .spell-check { width: 14px; height: 14px; }
 
   .spell-row .note-btn,
-  .spell-row .skill-info-btn { grid-area: info; justify-self: center; width: 28px; height: 28px; font-size: 1rem; background: var(--parchment); border-radius: 4px; border: 1px solid var(--gold-dark); display: flex; align-items: center; justify-content: center; padding: 0; }
+  .spell-row .skill-info-btn { grid-area: info; justify-self: center; width: 24px; height: 24px; font-size: 0.85rem; background: var(--parchment); border-radius: 4px; border: 1px solid var(--gold-dark); display: flex; align-items: center; justify-content: center; padding: 0; }
   .spell-row .delete-feature-btn { grid-area: del; justify-self: center; font-size: 1.4rem; color: var(--red); padding: 0; }
-  .spell-row .drag-handle { grid-area: drag; justify-self: center; font-size: 1.2rem; color: var(--gold-dark); padding: 0; }
+  .spell-row .drag-handle { grid-area: drag; justify-self: center; font-size: 1rem; color: var(--gold-dark); padding: 0; }
   
   .mobile-label { 
       display: block; 
-      font-size: 0.6rem; 
+      font-size: 0.55rem; 
       color: var(--ink); 
       margin-bottom: 0; 
       font-weight: bold; 
@@ -1234,7 +1237,7 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
   }
 
   .spell-row.cantrip-row {
-    grid-template-columns: 32px 1fr 1fr 1fr 32px;
+    grid-template-columns: 24px 1fr 1fr 1fr 28px;
     grid-template-areas:
       "drag name name name del"
       "lvl time time range range"
@@ -1266,22 +1269,7 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 @media (max-width: 480px) {
-  .stat-block { grid-template-columns: 1fr; }
-  
-  /* Further shrink ability scores for very small phones */
-  body:not(.dense-mode) .stat { flex: 0 0 80px; padding: 8px 4px; }
-  body:not(.dense-mode) .stat-value, body:not(.dense-mode) .stat input.stat-value { font-size: 1.8rem; }
-  body:not(.dense-mode) .stat-name { font-size: 0.75rem; }
-  body.swap-scores:not(.dense-mode) .stat-modifier input { font-size: 1.8rem !important; }
-  body.swap-scores:not(.dense-mode) .stat-value { font-size: 0.9rem !important; }
-  body:not(.dense-mode) .skill-item { padding: 4px; gap: 4px; }
-  body:not(.dense-mode) .skill-name { font-size: 0.8rem; }
-  body:not(.dense-mode) .skill-mod { font-size: 0.85rem; min-width: 20px; }
-
   .dice-rolls-buckets { grid-template-columns: repeat(3, 1fr) !important; }
-  
-  .tabs { flex-direction: column; }
-  .tab { width: 100%; border-radius: 6px; margin-bottom: 4px; }
   
   .sheet-actions { flex-direction: column; }
   .sheet-actions .btn { width: 100%; }
