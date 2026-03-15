@@ -6769,16 +6769,22 @@ window.uploadCustomJson = async function() {
 
     try {
         const db = await openDB();
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
         
-        const currentData = await new Promise((resolve, reject) => {
-            const req = store.get('currentData');
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-        });
+        let currentData = [];
+        try {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const data = await new Promise((resolve, reject) => {
+                const req = store.get('currentData');
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+            if (data) currentData = data;
+        } catch (e) {
+            console.warn("Could not read current data, might be empty", e);
+        }
         
-        if (!currentData) return alert("No database found. Please use Data Viewer to initialize first.");
+        if (!currentData || currentData.length === 0) return alert("No database found. Please use Data Viewer to initialize first.");
 
         if (file.name.toLowerCase().endsWith('.zip')) {
             if (typeof JSZip === 'undefined') {
@@ -6799,14 +6805,6 @@ window.uploadCustomJson = async function() {
             let addedCount = 0;
             let skippedCount = 0;
 
-            // Relevant folders for Character Sheet data
-            const allowedFolders = [
-                'action', 'background', 'baseitem', 'boon', 'charoption',
-                'class', 'condition', 'deity', 'feat', 'item', 'language',
-                'magicvariant', 'optionalfeature', 'psionic', 'race',
-                'reward', 'spell', 'subclass', 'subrace', 'table', 'variantrule'
-            ];
-
             for (const relativePath of Object.keys(zip.files)) {
                 const zipEntry = zip.files[relativePath];
                 const p = relativePath.toLowerCase();
@@ -6818,30 +6816,24 @@ window.uploadCustomJson = async function() {
                 const pathParts = p.split('/');
                 const fileName = pathParts.pop();
                 
-                const isAllowed = pathParts.length === 0 || pathParts.some(folder => allowedFolders.includes(folder));
-
-                if (isAllowed) {
-                    const content = await zipEntry.async("string");
-                    try {
-                        JSON.parse(content); // Validate JSON
-                        const newFileEntry = { name: fileName, content: content };
-                        
-                        const index = currentData.findIndex(f => f.name === fileName);
-                        if (index >= 0) {
-                            currentData[index] = newFileEntry;
-                        } else {
-                            currentData.push(newFileEntry);
-                        }
-                        addedCount++;
-                    } catch (e) {
-                        console.warn(`Skipping invalid JSON in zip: ${relativePath}`);
+                const content = await zipEntry.async("string");
+                try {
+                    JSON.parse(content); // Validate JSON
+                    const newFileEntry = { name: fileName, content: content };
+                    
+                    const index = currentData.findIndex(f => f.name === fileName);
+                    if (index >= 0) {
+                        currentData[index] = newFileEntry;
+                    } else {
+                        currentData.push(newFileEntry);
                     }
-                } else {
-                    skippedCount++;
+                    addedCount++;
+                } catch (e) {
+                    console.warn(`Skipping invalid JSON in zip: ${relativePath}`);
                 }
             }
 
-            if (addedCount === 0) return alert(`No valid character sheet JSON files found in the ZIP.\n(Skipped ${skippedCount} non-character-sheet files)`);
+            if (addedCount === 0) return alert(`No valid JSON files found in the ZIP.`);
             
             if (skippedCount > 0) {
                 console.log(`[ZIP Upload] Added ${addedCount} files. Skipped ${skippedCount} irrelevant files.`);
@@ -6867,8 +6859,10 @@ window.uploadCustomJson = async function() {
         // Keep sorted
         currentData.sort((a, b) => a.name.localeCompare(b.name));
         
+        const writeTx = db.transaction(STORE_NAME, 'readwrite');
+        const writeStore = writeTx.objectStore(STORE_NAME);
         await new Promise((resolve, reject) => {
-            const req = store.put(currentData, 'currentData');
+            const req = writeStore.put(currentData, 'currentData');
             req.onsuccess = () => resolve();
             req.onerror = () => reject(req.error);
         });
