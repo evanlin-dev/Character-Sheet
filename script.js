@@ -1307,6 +1307,7 @@ async function checkDataUploadStatus() {
       const btnSpells = document.getElementById("btn-search-spells-zip");
       const btnClassTable = document.getElementById("btn-view-class-table");
       const btnCustomData = document.getElementById("btn-custom-data-manager");
+      const btnDataBrowser = document.getElementById("btn-data-browser");
       const hasData = req.result && req.result.length > 0;
 
       // Inject Feat Search Button if missing
@@ -1369,6 +1370,7 @@ async function checkDataUploadStatus() {
         if (btnLangs) btnLangs.style.display = "inline-block";
         if (btnClassTable) btnClassTable.style.display = "inline-flex";
         if (btnCustomData) btnCustomData.style.display = "block";
+        if (btnDataBrowser) btnDataBrowser.style.display = "block";
       } else {
         if (btnItems) btnItems.style.display = "none";
         if (btnCantrips) btnCantrips.style.display = "none";
@@ -1377,6 +1379,7 @@ async function checkDataUploadStatus() {
         if (btnLangs) btnLangs.style.display = "none";
         if (btnClassTable) btnClassTable.style.display = "none";
         if (btnCustomData) btnCustomData.style.display = "none";
+        if (btnDataBrowser) btnDataBrowser.style.display = "none";
       }
 
       // Toggle Weapon Proficiency Input Mode
@@ -3655,6 +3658,18 @@ window.createSidebarMenu = function () {
     window.toggleSidebar();
   };
   sidebarContent.appendChild(dataBtn);
+
+  // Data Browser Button
+  const browserBtn = document.createElement("button");
+  browserBtn.id = "btn-data-browser";
+  browserBtn.className = "sidebar-btn";
+  browserBtn.innerText = "Data Browser";
+  browserBtn.style.display = "none";
+  browserBtn.onclick = () => {
+    window.openDataBrowser();
+    window.toggleSidebar();
+  };
+  sidebarContent.appendChild(browserBtn);
 
   if (actionsDiv) {
     Array.from(actionsDiv.children).forEach((child) => {
@@ -6706,10 +6721,8 @@ window.openCustomDataManager = async function() {
                 <button class="close-modal-btn" onclick="document.getElementById('customDataModal').style.display='none'">&times;</button>
                 <h3 class="info-modal-title">Custom Data Manager</h3>
                 <p style="font-size:0.9rem; color:var(--ink-light); margin-bottom:15px; line-height: 1.4;">
-                    Download JSON templates to create custom classes or subclasses. 
-                    <br>Fill them out, compress to .zip (optional), and upload via Data Viewer (data.html) to use in Level Up.
-                    Download JSON templates to create custom classes or subclasses.
-                    <br>Fill them out, and upload here or via Data Viewer (data.html).
+                    Download JSON templates to create custom content.
+                    <br>Fill them out, and upload them (or a .zip of multiple files) here or via the Data Viewer.
                 </p>
                 <div style="margin-bottom: 15px; background: white; padding: 15px; border: 1px solid var(--gold); border-radius: 4px;">
                     <label style="font-weight:bold; display:block; margin-bottom:8px; color: var(--red-dark);">Download Template</label>
@@ -6724,9 +6737,13 @@ window.openCustomDataManager = async function() {
                 </div>
                 ${hasData ? `
                 <div style="margin-bottom: 15px; background: white; padding: 15px; border: 1px solid var(--gold); border-radius: 4px;">
-                    <label style="font-weight:bold; display:block; margin-bottom:8px; color: var(--red-dark);">Upload Custom JSON</label>
-                    <input type="file" id="customJsonUpload" accept=".json" style="width: 100%; margin-bottom: 10px; font-size: 0.9rem;">
+                    <label style="font-weight:bold; display:block; margin-bottom:8px; color: var(--red-dark);">Upload Custom JSON or ZIP</label>
+                    <input type="file" id="customJsonUpload" accept=".json,.zip" style="width: 100%; margin-bottom: 10px; font-size: 0.9rem;">
                     <button class="btn" onclick="window.uploadCustomJson()" style="width:100%;">Upload & Refresh</button>
+                </div>
+                <div style="margin-bottom: 15px; background: white; padding: 15px; border: 1px solid var(--gold); border-radius: 4px;">
+                    <label style="font-weight:bold; display:block; margin-bottom:8px; color: var(--red-dark);">Browse Uploaded Data</label>
+                    <button class="btn btn-secondary" onclick="window.openDataBrowser()" style="width:100%;">Open Data Browser</button>
                 </div>
                 ` : ''}
                 <div style="font-size: 0.8rem; font-style: italic; color: var(--ink-light);">
@@ -6739,27 +6756,100 @@ window.openCustomDataManager = async function() {
 
 window.uploadCustomJson = async function() {
     const input = document.getElementById('customJsonUpload');
-    if (!input || !input.files[0]) return alert("Please select a JSON file.");
+    if (!input || !input.files[0]) return alert("Please select a JSON or ZIP file.");
     
     const file = input.files[0];
-    const reader = new FileReader();
     
-    reader.onload = async (e) => {
-        try {
-            const content = e.target.result;
+    // Check for massive files (e.g. full repo with images ~4GB)
+    if (file.name.toLowerCase().endsWith('.zip') && file.size > 300 * 1024 * 1024) {
+        if (!confirm(`This ZIP file is very large (${Math.round(file.size / (1024*1024))} MB) and likely contains images or non-data files which may cause the browser to crash.\n\nFor best results, zip only the 'data' folder (or relevant JSON files) and upload that.\n\nAttempt to process anyway?`)) {
+            return;
+        }
+    }
+
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        
+        const currentData = await new Promise((resolve, reject) => {
+            const req = store.get('currentData');
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+        
+        if (!currentData) return alert("No database found. Please use Data Viewer to initialize first.");
+
+        if (file.name.toLowerCase().endsWith('.zip')) {
+            if (typeof JSZip === 'undefined') {
+                try {
+                    await new Promise((resolve, reject) => {
+                        const script = document.createElement('script');
+                        script.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+                        script.onload = resolve;
+                        script.onerror = reject;
+                        document.head.appendChild(script);
+                    });
+                } catch (e) {
+                    return alert("Failed to load JSZip. Cannot process ZIP files.");
+                }
+            }
+
+            const zip = await JSZip.loadAsync(file);
+            let addedCount = 0;
+            let skippedCount = 0;
+
+            // Relevant folders for Character Sheet data
+            const allowedFolders = [
+                'action', 'background', 'baseitem', 'boon', 'charoption',
+                'class', 'condition', 'deity', 'feat', 'item', 'language',
+                'magicvariant', 'optionalfeature', 'psionic', 'race',
+                'reward', 'spell', 'subclass', 'subrace', 'table', 'variantrule'
+            ];
+
+            for (const relativePath of Object.keys(zip.files)) {
+                const zipEntry = zip.files[relativePath];
+                const p = relativePath.toLowerCase();
+                
+                if (zipEntry.dir || !p.endsWith('.json')) continue;
+                if (p.includes('package.json') || p.includes('package-lock.json')) continue;
+
+                // Check if it belongs to a valid folder or is in root
+                const pathParts = p.split('/');
+                const fileName = pathParts.pop();
+                
+                const isAllowed = pathParts.length === 0 || pathParts.some(folder => allowedFolders.includes(folder));
+
+                if (isAllowed) {
+                    const content = await zipEntry.async("string");
+                    try {
+                        JSON.parse(content); // Validate JSON
+                        const newFileEntry = { name: fileName, content: content };
+                        
+                        const index = currentData.findIndex(f => f.name === fileName);
+                        if (index >= 0) {
+                            currentData[index] = newFileEntry;
+                        } else {
+                            currentData.push(newFileEntry);
+                        }
+                        addedCount++;
+                    } catch (e) {
+                        console.warn(`Skipping invalid JSON in zip: ${relativePath}`);
+                    }
+                } else {
+                    skippedCount++;
+                }
+            }
+
+            if (addedCount === 0) return alert(`No valid character sheet JSON files found in the ZIP.\n(Skipped ${skippedCount} non-character-sheet files)`);
+            
+            if (skippedCount > 0) {
+                console.log(`[ZIP Upload] Added ${addedCount} files. Skipped ${skippedCount} irrelevant files.`);
+            }
+
+        } else if (file.name.toLowerCase().endsWith('.json')) {
+            const content = await file.text();
             JSON.parse(content); // Validate JSON
-            
-            const db = await openDB();
-            const tx = db.transaction(STORE_NAME, 'readwrite');
-            const store = tx.objectStore(STORE_NAME);
-            
-            const currentData = await new Promise((resolve, reject) => {
-                const req = store.get('currentData');
-                req.onsuccess = () => resolve(req.result);
-                req.onerror = () => reject(req.error);
-            });
-            
-            if (!currentData) return alert("No database found. Please use Data Viewer to initialize first.");
             
             const newFileEntry = { name: file.name, content: content };
             const index = currentData.findIndex(f => f.name === file.name);
@@ -6770,22 +6860,234 @@ window.uploadCustomJson = async function() {
             } else {
                 currentData.push(newFileEntry);
             }
-            
-            // Keep sorted
-            currentData.sort((a, b) => a.name.localeCompare(b.name));
-            
-            await new Promise((resolve, reject) => {
-                const req = store.put(currentData, 'currentData');
-                req.onsuccess = () => resolve();
-                req.onerror = () => reject(req.error);
-            });
-            
-            alert("Custom data uploaded successfully.");
-            location.reload();
-        } catch (err) {
-            console.error(err);
+        } else {
+            return alert("Unsupported file type. Please upload a .json or .zip file.");
+        }
+        
+        // Keep sorted
+        currentData.sort((a, b) => a.name.localeCompare(b.name));
+        
+        await new Promise((resolve, reject) => {
+            const req = store.put(currentData, 'currentData');
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+        
+        alert("Custom data uploaded successfully.");
+        location.reload();
+    } catch (err) {
+        console.error(err);
+        if (err.message && err.message.includes("End of data reached")) {
+            alert("Error: The ZIP file is too large or corrupted and the browser ran out of memory extracting it.\n\nPlease extract the ZIP file on your computer and upload only the smaller 'data.zip' or individual JSON files from the 'data' folder.");
+        } else {
             alert("Error uploading file: " + err.message);
         }
-    };
-    reader.readAsText(file);
+    }
+};
+
+window.openDataBrowser = async function() {
+    let modal = document.getElementById('dataBrowserModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'dataBrowserModal';
+        modal.className = 'info-modal-overlay';
+        modal.style.zIndex = '2020'; // Ensure it appears above the Custom Data Manager
+        document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+        <div class="info-modal-content" style="max-width: 600px; max-height: 85vh; display: flex; flex-direction: column;">
+            <button class="close-modal-btn" onclick="document.getElementById('dataBrowserModal').style.display='none'">&times;</button>
+            <h3 class="info-modal-title" style="text-align: center">Data Browser</h3>
+            <div id="dataBrowserLoading" style="text-align:center; padding:20px; color:var(--ink-light);">Loading database...</div>
+            <div id="dataBrowserContent" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+                <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+                    <select id="dbCategorySelect" class="styled-select" style="flex:1; min-width:200px;">
+                        <option value="">-- Select Category --</option>
+                    </select>
+                    <input type="text" id="dbSearchInput" placeholder="Search..." class="styled-select" style="flex:1; min-width:200px;">
+                </div>
+                <div id="dbStats" style="font-size:0.85rem; color:var(--ink-light); margin-bottom:10px; font-style:italic;"></div>
+                <div id="dataBrowserList" class="checklist-grid" style="grid-template-columns: 1fr; flex: 1; overflow-y: auto; gap: 8px; align-content: flex-start;"></div>
+            </div>
+        </div>
+    `;
+    modal.style.display = 'flex';
+
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const data = await new Promise((resolve) => {
+            const req = store.get('currentData');
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        });
+
+        if (!data || data.length === 0) {
+            document.getElementById('dataBrowserLoading').innerHTML = '<span style="color:var(--red);">No data found in the database. Please initialize or upload data first.</span>';
+            return;
+        }
+
+        const categoryMap = {
+            'spell': 'Spells', 'spells': 'Spells',
+            'item': 'Items', 'items': 'Items', 'baseitem': 'Items', 'magicvariant': 'Items',
+            'class': 'Classes',
+            'subclass': 'Subclasses',
+            'classFeature': 'Class Features',
+            'subclassFeature': 'Subclass Features',
+            'race': 'Species/Races',
+            'subrace': 'Subraces',
+            'feat': 'Feats',
+            'background': 'Backgrounds',
+            'optionalfeature': 'Optional Features',
+            'deity': 'Deities',
+            'condition': 'Conditions',
+            'language': 'Languages',
+            'action': 'Actions',
+            'table': 'Tables',
+            'monster': 'Monsters'
+        };
+
+        const aggregated = {};
+
+        data.forEach(file => {
+            if (!file.name.toLowerCase().endsWith('.json')) return;
+            try {
+                const json = JSON.parse(file.content);
+                Object.keys(json).forEach(key => {
+                    if (Array.isArray(json[key]) && json[key].length > 0 && typeof json[key][0] === 'object' && json[key][0].name) {
+                        let targetCategory = categoryMap[key];
+                        if (!targetCategory) {
+                            // Fallback for unknown categories
+                            targetCategory = key.charAt(0).toUpperCase() + key.slice(1) + (key.endsWith('s') ? '' : 's');
+                        }
+                        if (!aggregated[targetCategory]) aggregated[targetCategory] = [];
+                        aggregated[targetCategory].push(...json[key]);
+                    }
+                });
+            } catch(e) {
+                console.warn("Skipped invalid JSON file:", file.name);
+            }
+        });
+
+        window.browserDataCache = {};
+        Object.keys(aggregated).sort().forEach(cat => {
+            const uniqueMap = new Map();
+            aggregated[cat].forEach(item => {
+                if (!item || !item.name) return;
+                const id = item.name + "|" + (item.source || "");
+                if (!uniqueMap.has(id)) {
+                    uniqueMap.set(id, item);
+                } else {
+                    const existing = uniqueMap.get(id);
+                    if (item.source === 'XPHB' && existing.source !== 'XPHB') {
+                        uniqueMap.set(id, item);
+                    }
+                }
+            });
+            window.browserDataCache[cat] = Array.from(uniqueMap.values()).sort((a,b) => a.name.localeCompare(b.name));
+        });
+
+        document.getElementById('dataBrowserLoading').style.display = 'none';
+        document.getElementById('dataBrowserContent').style.display = 'flex';
+
+        const select = document.getElementById('dbCategorySelect');
+        Object.keys(window.browserDataCache).forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat;
+            opt.textContent = `${cat} (${window.browserDataCache[cat].length})`;
+            select.appendChild(opt);
+        });
+
+        const renderList = () => {
+            const cat = select.value;
+            const term = document.getElementById('dbSearchInput').value.toLowerCase();
+            const list = document.getElementById('dataBrowserList');
+            const stats = document.getElementById('dbStats');
+            list.innerHTML = '';
+            
+            if (!cat) {
+                stats.textContent = "Select a category to view items.";
+                return;
+            }
+
+            let items = window.browserDataCache[cat];
+            if (term) {
+                items = items.filter(i => i.name.toLowerCase().includes(term));
+            }
+
+            stats.textContent = `Showing ${items.length} items.`;
+
+            const maxRender = 200;
+            const toRender = items.slice(0, maxRender);
+
+            toRender.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'checklist-item';
+                div.style.flexDirection = 'column';
+                div.style.alignItems = 'flex-start';
+                div.style.cursor = 'pointer';
+                div.style.border = '1px solid var(--gold)';
+
+                let subtitleParts = [];
+                if (item.source) subtitleParts.push(item.source);
+                if (item.level !== undefined) subtitleParts.push(`Lvl ${item.level}`);
+                if (item.className) subtitleParts.push(item.className);
+                const subtitle = subtitleParts.join(' | ');
+
+                div.innerHTML = `
+                    <div style="font-weight:bold; width:100%; display:flex; justify-content:space-between; align-items:center;">
+                        <span>${item.name}</span>
+                        <span style="font-size:0.8rem; color:var(--ink-light); text-align:right;">${subtitle}</span>
+                    </div>
+                    <div class="db-item-details" style="display:none; font-size:0.85rem; color:var(--ink); margin-top:8px; border-top:1px dashed var(--gold); padding-top:8px; line-height:1.5; width:100%;"></div>
+                `;
+
+                let loaded = false;
+                div.onclick = () => {
+                    const details = div.querySelector('.db-item-details');
+                    if (details.style.display === 'none') {
+                        details.style.display = 'block';
+                        div.style.backgroundColor = 'var(--parchment)';
+                        div.style.borderColor = 'var(--red)';
+                        if (!loaded) {
+                            let desc = "";
+                            if (item.entries) desc = window.processEntries(item.entries);
+                            else if (item.desc) desc = window.processEntries(item.desc);
+                            else if (item.description) desc = item.description;
+                            else desc = "<pre style='white-space:pre-wrap; word-break:break-all; font-family:monospace; font-size:0.75rem; background:rgba(0,0,0,0.05); padding:10px; border-radius:4px; margin:0;'>" + JSON.stringify(item, null, 2).replace(/</g, "&lt;").replace(/>/g, "&gt;") + "</pre>";
+                            
+                            if (!desc.startsWith("<pre")) desc = window.cleanText(desc);
+                            details.innerHTML = desc || "<em>No description available.</em>";
+                            loaded = true;
+                        }
+                    } else {
+                        details.style.display = 'none';
+                        div.style.backgroundColor = 'white';
+                        div.style.borderColor = 'var(--gold)';
+                    }
+                };
+
+                list.appendChild(div);
+            });
+
+            if (items.length > maxRender) {
+                const msg = document.createElement('div');
+                msg.style.padding = "10px";
+                msg.style.textAlign = "center";
+                msg.style.color = "var(--ink-light)";
+                msg.style.fontStyle = "italic";
+                msg.textContent = `...and ${items.length - maxRender} more. Use search to find specific entries.`;
+                list.appendChild(msg);
+            }
+        };
+
+        select.addEventListener('change', renderList);
+        document.getElementById('dbSearchInput').addEventListener('input', renderList);
+
+    } catch(e) {
+        console.error("Data Browser Error:", e);
+        document.getElementById('dataBrowserLoading').innerHTML = '<span style="color:var(--red);">Error loading data from the database.</span>';
+    }
 };
