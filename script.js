@@ -568,6 +568,10 @@ window.openHpManagementModal = function() {
             <div class="info-modal-content" style="max-width: 350px; text-align: center;">
                 <button class="close-modal-btn" onclick="window.closeHpManageModal()">&times;</button>
                 <h3 class="info-modal-title">Manage HP</h3>
+                <div style="margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                    <span style="font-weight: bold; color: var(--ink);">Max HP:</span>
+                    <input type="number" id="hpManageMaxVal" style="width: 80px; text-align: center; border: 1px solid var(--gold); border-radius: 4px; padding: 4px; font-weight: bold; font-size: 1.2rem; color: var(--ink);">
+                </div>
                 <div style="margin-bottom: 15px;">
                     <input type="number" id="hpManageAmount" placeholder="Amount" style="font-size: 2rem; width: 100%; text-align: center; border: 2px solid var(--gold); border-radius: 8px; padding: 10px; font-weight: bold; color: var(--red-dark);">
                 </div>
@@ -584,8 +588,18 @@ window.openHpManagementModal = function() {
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') window.applyHpChange('damage'); 
         });
+
+        document.getElementById('hpManageMaxVal').addEventListener('change', (e) => {
+            const val = parseInt(e.target.value);
+            if (!isNaN(val) && val > 0) {
+                document.getElementById('maxHp').value = val;
+                window.updateHpBar();
+                window.saveCharacter();
+            }
+        });
     }
     document.getElementById('hpManageAmount').value = '';
+    document.getElementById('hpManageMaxVal').value = document.getElementById('maxHp').value || 1;
     modal.style.display = 'flex';
     setTimeout(() => document.getElementById('hpManageAmount').focus(), 50);
 };
@@ -2389,6 +2403,34 @@ function renderFeatSearchPage() {
 window.openConditionModal = function (targetCondition = null) {
   if (!window.isDataAvailable) return;
   const container = document.getElementById("conditionListContainer");
+  
+  let searchInput = document.getElementById('conditionSearchInput');
+  if (!searchInput) {
+      searchInput = document.createElement('input');
+      searchInput.id = 'conditionSearchInput';
+      searchInput.type = 'text';
+      searchInput.placeholder = 'Search conditions...';
+      searchInput.style.marginBottom = '10px';
+      searchInput.style.width = '100%';
+      searchInput.style.padding = '8px';
+      searchInput.style.border = '1px solid var(--gold)';
+      searchInput.style.borderRadius = '4px';
+      
+      searchInput.addEventListener('input', (e) => {
+          const term = e.target.value.toLowerCase();
+          container.querySelectorAll('.checklist-item').forEach(item => {
+              const nameSpan = item.querySelector('span');
+              if (nameSpan) {
+                  const name = nameSpan.textContent.toLowerCase();
+                  item.style.display = name.includes(term) ? 'flex' : 'none';
+              }
+          });
+      });
+      
+      container.parentNode.insertBefore(searchInput, container);
+  }
+  if (searchInput) searchInput.value = '';
+
   container.innerHTML = "";
   const currentVal = document.getElementById("activeConditionsInput").value;
   const activeList = currentVal ? currentVal.split(",") : [];
@@ -4520,6 +4562,299 @@ window.injectDDBHPBox = function() {
     });
 };
 
+window.syncMobileHeaderToReal = function() {
+    const pairs = [
+        { mh: 'mh-charName', real: 'charName', type: 'value' },
+        { mh: 'mh-race', real: 'race', type: 'value' },
+        { mh: 'mh-charClass', real: 'charClass', type: 'value' },
+        { mh: 'mh-charSubclass', real: 'charSubclass', type: 'value' },
+        { mh: 'mh-level', real: 'level', type: 'value' },
+        { mh: 'mh-baseAC', real: 'baseAC', type: 'value' },
+        { mh: 'mh-initiative', real: 'initiative', type: 'value' },
+        { mh: 'mh-heroicInspiration', real: 'heroicInspiration', type: 'checked' }
+    ];
+    pairs.forEach(p => {
+        const mhEl = document.getElementById(p.mh);
+        const realEl = document.getElementById(p.real);
+        if (mhEl && realEl) {
+            mhEl[p.type] = realEl[p.type];
+            if (realEl.readOnly !== undefined) {
+                mhEl.readOnly = realEl.readOnly;
+            }
+        }
+    });
+    const mhCond = document.getElementById('mh-activeConditionsInput');
+    const realCond = document.getElementById('activeConditionsInput');
+    if (mhCond && realCond) {
+        mhCond.value = realCond.value;
+    }
+    const mhHp = document.getElementById('mh-hp');
+    const hpEl = document.getElementById('hp');
+    const tempHpEl = document.getElementById('tempHp');
+    if (mhHp && hpEl) {
+        const cur = parseInt(hpEl.value) || 0;
+        const temp = tempHpEl ? parseInt(tempHpEl.value) : 0;
+        if (temp > 0) {
+            mhHp.innerHTML = `${cur} <span style="color:#2d6a4f; font-size:0.9rem;">(+${temp})</span>`;
+        } else {
+            mhHp.innerHTML = cur;
+        }
+    }
+    
+    [0, 1, 2].forEach(i => {
+        const sCb = document.getElementById(`mh-ds-s${i}`);
+        const fCb = document.getElementById(`mh-ds-f${i}`);
+        if (sCb) sCb.checked = document.getElementById(`deathSuccess${i}`)?.classList.contains('checked') || false;
+        if (fCb) fCb.checked = document.getElementById(`deathFailure${i}`)?.classList.contains('checked') || false;
+    });
+};
+
+window.initMobileHeader = function() {
+    const sheet = document.querySelector('.character-sheet');
+    if (!sheet) return;
+    if (document.getElementById('mobile-sync-header')) return;
+
+    const mh = document.createElement('div');
+    mh.id = 'mobile-sync-header';
+    mh.innerHTML = `
+        <input type="text" id="mh-charName" class="mh-name" placeholder="Character Name">
+        <div class="mh-class-info">
+            <input type="text" id="mh-race" placeholder="Race">
+            <input type="text" id="mh-charClass" placeholder="Class">
+            <input type="text" id="mh-charSubclass" placeholder="Subclass">
+            <span>Lvl</span><input type="number" id="mh-level" placeholder="1">
+        </div>
+        <div class="mh-stats-row" style="margin-bottom: 8px;">
+            <div class="mh-ac-box">
+                <span class="mh-label">AC</span>
+                <input type="number" id="mh-baseAC">
+            </div>
+            <div class="mh-init-box">
+                <span class="mh-label">Init</span>
+                <input type="text" id="mh-initiative">
+            </div>
+            <div class="mh-heroic">
+                <input type="checkbox" id="mh-heroicInspiration">
+                <label for="mh-heroicInspiration">Insp.</label>
+            </div>
+            <button class="mh-more-btn" onclick="window.openMobileMoreModal()">&#8942;</button>
+        </div>
+        <div class="mh-stats-row">
+            <div class="mh-hp-box" onclick="if(window.openHpManagementModal) window.openHpManagementModal();">
+                <span class="mh-label">HP</span>
+                <div id="mh-hp" style="pointer-events: none;"></div>
+            </div>
+            <div class="mh-death-saves-box" id="mh-death-saves" style="display: none;">
+                <div class="mh-ds-tracker">
+                    <span style="color:var(--ink);">S</span>
+                    <input type="checkbox" id="mh-ds-s0"><input type="checkbox" id="mh-ds-s1"><input type="checkbox" id="mh-ds-s2">
+                </div>
+                <div class="mh-ds-tracker">
+                    <span style="color:var(--red);">F</span>
+                    <input type="checkbox" id="mh-ds-f0"><input type="checkbox" id="mh-ds-f1"><input type="checkbox" id="mh-ds-f2">
+                </div>
+                <button class="mh-more-btn" onclick="if(window.openHpManagementModal) window.openHpManagementModal();" style="margin-left:auto; padding:0 2px;">&#8942;</button>
+            </div>
+            <div class="mh-conditions-box" id="mh-cond-wrapper">
+                <input type="text" id="mh-activeConditionsInput" placeholder="Conditions" readonly style="pointer-events: none;">
+            </div>
+        </div>
+    `;
+    sheet.prepend(mh);
+
+    const pairs = [
+        { mh: 'mh-charName', real: 'charName', type: 'value' },
+        { mh: 'mh-race', real: 'race', type: 'value' },
+        { mh: 'mh-charClass', real: 'charClass', type: 'value' },
+        { mh: 'mh-charSubclass', real: 'charSubclass', type: 'value' },
+        { mh: 'mh-level', real: 'level', type: 'value' },
+        { mh: 'mh-baseAC', real: 'baseAC', type: 'value' },
+        { mh: 'mh-initiative', real: 'initiative', type: 'value' },
+        { mh: 'mh-heroicInspiration', real: 'heroicInspiration', type: 'checked' }
+    ];
+
+    pairs.forEach(p => {
+        const mhEl = document.getElementById(p.mh);
+        const realEl = document.getElementById(p.real);
+        if (mhEl && realEl) {
+            mhEl.addEventListener('input', (e) => {
+                realEl[p.type] = mhEl[p.type];
+                realEl.dispatchEvent(new Event('input', { bubbles: true }));
+                realEl.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            mhEl.addEventListener('change', (e) => {
+                realEl[p.type] = mhEl[p.type];
+                realEl.dispatchEvent(new Event('input', { bubbles: true }));
+                realEl.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            realEl.addEventListener('input', () => mhEl[p.type] = realEl[p.type]);
+            realEl.addEventListener('change', () => mhEl[p.type] = realEl[p.type]);
+        }
+    });
+
+    [0, 1, 2].forEach(i => {
+        const sCb = document.getElementById(`mh-ds-s${i}`);
+        const fCb = document.getElementById(`mh-ds-f${i}`);
+        if (sCb) sCb.addEventListener('change', (e) => {
+            const isChecked = document.getElementById(`deathSuccess${i}`)?.classList.contains('checked');
+            if (e.target.checked !== isChecked) window.toggleDeathSave('success', i);
+        });
+        if (fCb) fCb.addEventListener('change', (e) => {
+            const isChecked = document.getElementById(`deathFailure${i}`)?.classList.contains('checked');
+            if (e.target.checked !== isChecked) window.toggleDeathSave('failure', i);
+        });
+    });
+
+    if (!window.mobileDeathSaveOverrideApplied) {
+        const originalToggleDeathSave = window.toggleDeathSave;
+        window.toggleDeathSave = function(type, index) {
+            if (originalToggleDeathSave) originalToggleDeathSave(type, index);
+            if (window.syncMobileHeaderToReal) window.syncMobileHeaderToReal();
+        };
+        window.mobileDeathSaveOverrideApplied = true;
+    }
+
+    const mhCondWrapper = document.getElementById('mh-cond-wrapper');
+    const mhCond = document.getElementById('mh-activeConditionsInput');
+    const realCond = document.getElementById('activeConditionsInput');
+    if (mhCondWrapper && realCond && mhCond) {
+        mhCondWrapper.onclick = () => {
+            if (window.isDataAvailable) window.openConditionModal();
+            else realCond.focus();
+        };
+        realCond.addEventListener('input', () => mhCond.value = realCond.value);
+        realCond.addEventListener('change', () => mhCond.value = realCond.value);
+    }
+    
+    const originalUpdateHpBar = window.updateHpBar;
+    window.updateHpBar = function() {
+        if (originalUpdateHpBar) originalUpdateHpBar();
+        const mhHp = document.getElementById('mh-hp');
+        const hpEl = document.getElementById('hp');
+        const tempHpEl = document.getElementById('tempHp');
+        
+        const mhHpBox = document.querySelector('.mh-hp-box');
+        const mhDsBox = document.getElementById('mh-death-saves');
+
+        if (mhHp && hpEl) {
+            const cur = parseInt(hpEl.value) || 0;
+            const temp = tempHpEl ? parseInt(tempHpEl.value) : 0;
+            if (temp > 0) {
+                mhHp.innerHTML = `${cur} <span style="color:#2d6a4f; font-size:0.9rem;">(+${temp})</span>`;
+            } else {
+                mhHp.innerHTML = cur;
+            }
+            
+            if (mhHpBox && mhDsBox) {
+                if (cur <= 0) {
+                    mhHpBox.style.display = 'none';
+                    mhDsBox.style.display = 'flex';
+                } else {
+                    mhHpBox.style.display = 'flex';
+                    mhDsBox.style.display = 'none';
+                }
+            }
+        }
+    };
+    
+    const originalRenderConds = window.renderConditionTags;
+    window.renderConditionTags = function() {
+        if (originalRenderConds) originalRenderConds();
+        const condEl = document.getElementById('activeConditionsInput');
+        if (condEl) document.getElementById('mh-activeConditionsInput').value = condEl.value;
+    };
+
+    const originalUpdateClassDisplay = window.updateClassDisplay;
+    window.updateClassDisplay = function() {
+        if (originalUpdateClassDisplay) originalUpdateClassDisplay();
+        if (window.syncMobileHeaderToReal) window.syncMobileHeaderToReal();
+    };
+
+    const originalUpdateModifiers = window.updateModifiers;
+    window.updateModifiers = function() {
+        if (originalUpdateModifiers) originalUpdateModifiers();
+        if (window.syncMobileHeaderToReal) window.syncMobileHeaderToReal();
+    };
+
+    const originalCalculateTotalAC = window.calculateTotalAC;
+    window.calculateTotalAC = function() {
+        if (originalCalculateTotalAC) originalCalculateTotalAC();
+        if (window.syncMobileHeaderToReal) window.syncMobileHeaderToReal();
+    };
+};
+
+window.openMobileMoreModal = function() {
+    let modal = document.getElementById('mhMoreModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'mhMoreModal';
+        modal.className = 'info-modal-overlay';
+        modal.innerHTML = `
+            <div class="info-modal-content" style="max-width: 320px; text-align: center; padding: 20px;">
+                <button class="close-modal-btn" onclick="document.getElementById('mhMoreModal').style.display='none'">&times;</button>
+                <h3 class="info-modal-title">Character Details</h3>
+                <div class="field" style="margin-bottom: 10px; text-align: left;">
+                    <span class="field-label">Background</span>
+                    <input type="text" id="mh-modal-bg" style="font-weight:bold; color: var(--ink);">
+                </div>
+                <div class="field" style="margin-bottom: 10px; text-align: left;">
+                    <span class="field-label">Alignment</span>
+                    <input type="text" id="mh-modal-align" style="font-weight:bold; color: var(--red-dark); cursor: pointer;" readonly>
+                </div>
+                <div class="field" style="margin-bottom: 15px; text-align: left;">
+                    <span class="field-label">Experience</span>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <input type="number" id="mh-modal-exp" style="font-weight:bold; color: var(--ink); flex:1; text-align:left;">
+                        <button class="btn btn-secondary" onclick="const btn = document.getElementById('addExpBtn'); if(btn) btn.click(); document.getElementById('mhMoreModal').style.display='none';" style="padding: 4px 12px; font-size: 0.85rem;">+ XP</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        const sync = (modalId, realId) => {
+            const mEl = document.getElementById(modalId);
+            const rEl = document.getElementById(realId);
+            if (!mEl || !rEl) return;
+            mEl.addEventListener('input', () => { 
+                rEl.value = mEl.value; 
+                if (window.saveCharacter) window.saveCharacter(); 
+            });
+            rEl.addEventListener('input', () => mEl.value = rEl.value);
+            rEl.addEventListener('change', () => mEl.value = rEl.value);
+        };
+        sync('mh-modal-bg', 'background');
+        sync('mh-modal-exp', 'experience');
+
+        const alignModalEl = document.getElementById('mh-modal-align');
+        const realAlign = document.getElementById('alignment');
+        if (alignModalEl && realAlign) {
+            alignModalEl.onclick = () => {
+                document.getElementById('mhMoreModal').style.display = 'none';
+                realAlign.click();
+            };
+            if (!window.mobileAlignOverrideApplied) {
+                const originalSetAlignment = window.setAlignment;
+                window.setAlignment = function(val) {
+                    if (originalSetAlignment) originalSetAlignment(val);
+                    alignModalEl.value = val;
+                };
+                window.mobileAlignOverrideApplied = true;
+            }
+        }
+    }
+    
+    const bgEl = document.getElementById('background');
+    const alignEl = document.getElementById('alignment');
+    const expEl = document.getElementById('experience');
+    
+    if(bgEl) document.getElementById('mh-modal-bg').value = bgEl.value;
+    if(alignEl) document.getElementById('mh-modal-align').value = alignEl.value;
+    if(expEl) document.getElementById('mh-modal-exp').value = expEl.value;
+    
+    modal.style.display = 'flex';
+};
+
 /* =========================================
       6. INITIALIZATION
       ========================================= */
@@ -4539,6 +4874,9 @@ document.addEventListener("DOMContentLoaded", () => {
   
   // Inject DDB HP Box
   if (window.injectDDBHPBox) window.injectDDBHPBox();
+
+  // Inject Mobile Header
+  if (window.initMobileHeader) window.initMobileHeader();
 
   // Apply responsive stat names automatically on initial load
   if (window.updateResponsiveStatNames) window.updateResponsiveStatNames();
@@ -5033,49 +5371,55 @@ window.showLevelUpToast = function(level) {
 window.showLevelUpButton = function(level) {
     if (!window.isDataAvailable) return;
 
-    const levelInput = document.getElementById('level');
-    if (!levelInput) return;
-    
-    let btn = document.getElementById('level-up-arrow-btn');
-    if (!btn) {
-        btn = document.createElement('button');
-        btn.id = 'level-up-arrow-btn';
-        btn.innerHTML = '▲'; 
-        btn.title = "View Level Up Features";
-        
-        // Style the button to sit inside the input field
-        btn.style.position = 'absolute';
-        btn.style.right = '5px'; 
-        btn.style.top = '50%';
-        btn.style.transform = 'translateY(-50%)';
-        
-        btn.style.background = 'var(--red)';
-        btn.style.color = 'white';
-        btn.style.border = '1px solid var(--gold)';
-        btn.style.borderRadius = '50%';
-        btn.style.width = '24px';
-        btn.style.height = '24px';
-        btn.style.cursor = 'pointer';
-        btn.style.fontSize = '12px';
-        btn.style.display = 'flex';
-        btn.style.alignItems = 'center';
-        btn.style.justifyContent = 'center';
-        btn.style.zIndex = '10';
-        btn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
-        
-        if (levelInput.parentElement) {
-            levelInput.parentElement.style.position = 'relative'; // Ensure positioning context
-            levelInput.parentElement.appendChild(btn);
+    const attachBtn = (targetInput, btnId) => {
+        if (!targetInput) return;
+        let btn = document.getElementById(btnId);
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.id = btnId;
+            btn.innerHTML = '▲'; 
+            btn.title = "View Level Up Features";
+            
+            btn.style.position = 'absolute';
+            if (btnId === 'mh-level-up-arrow-btn') {
+                btn.style.right = '-12px'; 
+                btn.style.top = '-8px';
+            } else {
+                btn.style.right = '5px'; 
+                btn.style.top = '50%';
+                btn.style.transform = 'translateY(-50%)';
+            }
+            
+            btn.style.background = 'var(--red)';
+            btn.style.color = 'white';
+            btn.style.border = '1px solid var(--gold)';
+            btn.style.borderRadius = '50%';
+            btn.style.width = '24px';
+            btn.style.height = '24px';
+            btn.style.cursor = 'pointer';
+            btn.style.fontSize = '12px';
+            btn.style.display = 'flex';
+            btn.style.alignItems = 'center';
+            btn.style.justifyContent = 'center';
+            btn.style.zIndex = '10';
+            btn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+            
+            if (targetInput.parentElement) {
+                targetInput.parentElement.style.position = 'relative'; 
+                targetInput.parentElement.appendChild(btn);
+            }
         }
-    }
-    
-    btn.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        window.openLevelUpModal(level);
+        
+        btn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            window.openLevelUpModal(level);
+        };
+        btn.style.display = 'flex';
     };
-    
-    btn.style.display = 'flex';
+
+    attachBtn(document.getElementById('level'), 'level-up-arrow-btn');
+    attachBtn(document.getElementById('mh-level'), 'mh-level-up-arrow-btn');
 };
 
 window.openLevelUpModal = async function(level) {
@@ -5104,6 +5448,8 @@ window.openLevelUpModal = async function(level) {
             localStorage.removeItem('previousLevel');
             const btn = document.getElementById('level-up-arrow-btn');
             if (btn) btn.remove();
+            const mhBtn = document.getElementById('mh-level-up-arrow-btn');
+            if (mhBtn) mhBtn.remove();
             document.getElementById('levelUpModal').style.display = 'none';
         });
     } else {
@@ -5190,6 +5536,8 @@ window.openLevelUpModal = async function(level) {
         localStorage.removeItem('previousLevel');
         const btn = document.getElementById('level-up-arrow-btn');
         if (btn) btn.remove();
+        const mhBtn = document.getElementById('mh-level-up-arrow-btn');
+        if (mhBtn) mhBtn.remove();
         document.getElementById('levelUpModal').style.display = 'none';
         
         window.updateClassDisplay();
