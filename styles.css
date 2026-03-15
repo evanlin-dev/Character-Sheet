@@ -123,65 +123,394 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
 /* =========================================
    SIDEBAR NAVIGATION & WIDE LAYOUT
    ========================================= */
-.quick-nav {
-  position: fixed;
-  bottom: 80px;
-  right: 20px;
-  width: auto;
-  max-width: 280px;
-  height: auto;
-  max-height: 70vh;
-  background: var(--parchment);
-  border: 2px solid var(--gold);
-  padding: 10px;
-  overflow-y: auto;
-  z-index: 3002;
-  transform: scale(0);
-  transform-origin: bottom right;
-  transition: transform 0.2s ease;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.quick-nav.visible {
-  transform: scale(1);
-}
-.quick-nav-link {
-  display: block;
-  padding: 8px 0;
-  color: var(--ink);
-  text-decoration: none;
-  font-family: "Cinzel", serif;
-  font-size: 0.9rem;
-  border-bottom: 1px dashed var(--gold-dark);
-  cursor: pointer;
-  transition: color 0.2s;
-}
-.quick-nav-link:hover {
-  color: var(--red);
-  padding-left: 5px;
+/* App Views Logic (Mobile/Tablet) */
+body.app-view-active .character-sheet > *:not(#mobile-sync-header):not(#app-views-container):not(.info-modal-overlay) {
+    display: none !important;
 }
 
-/* Custom Nav Buttons from User Input */
-.nav-btn-custom {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: white;
-  border: 1px solid var(--gold);
-  padding: 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-family: "Cinzel", serif;
-  font-size: 0.9rem;
-  color: var(--ink);
-  transition: background 0.2s;
+#app-views-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 10px;
 }
-.nav-btn-custom:hover {
-  background: var(--parchment-dark);
+
+.app-view {
+    background: transparent;
+    border-radius: 8px;
+    padding: 0 0 20px 0;
 }
+
+/* =========================================
+   APP VIEWS (MOBILE TABS)
+   ========================================= */
+.mobile-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 480px) {
+    .mobile-stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.mobile-skills-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 24px;
+}
+
+/* Saves stay single column; only skills go 2-col */
+#mobile-saves-wrapper {
+    grid-template-columns: 1fr;
+}
+
+@media (max-width: 480px) {
+    .mobile-skills-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.mobile-list-header {
+    display: grid;
+    grid-template-columns: 34px 28px 32px 1fr 45px;
+    gap: 8px;
+    padding: 0 12px;
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    color: var(--ink-light);
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 8px;
+    align-items: center;
+}
+
+.mobile-list-header span:nth-child(4) {
+    text-align: left;
+}
+
+.mobile-mod-label {
+    display: none;
+}
+
+/* ===== MOBILE SPELL VIEW ===== */
+.mobile-spell-stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.mobile-spell-stat-box {
+    background: white;
+    border: 1px solid var(--gold);
+    border-radius: 8px;
+    padding: 8px 4px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+.mobile-spell-stat-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.mobile-spell-stat-box span:last-child {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--red-dark);
+}
+.mobile-spell-actions-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    justify-content: center;
+}
+.mobile-spell-filter-row {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.mobile-spell-filter-row::-webkit-scrollbar { display: none; }
+.msv-filter-btn {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border: 1px solid var(--gold-dark);
+    border-radius: 12px;
+    background: white;
+    color: var(--ink);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.msv-filter-btn.active { background: var(--red); color: white; border-color: var(--red-dark); }
+
+/* Spell slots compact */
+.msv-slots-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    background: var(--parchment-dark);
+    border-radius: 8px;
+    border: 1px solid var(--gold);
+}
+.msv-slot-level { display: flex; align-items: center; gap: 6px; }
+.msv-slot-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    min-width: 28px;
+}
+.msv-slot-dots { display: flex; gap: 4px; flex-wrap: wrap; }
+.msv-slot-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--gold-dark);
+    background: white;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.msv-slot-dot.used { background: var(--red); border-color: var(--red-dark); }
+
+/* Spell cards */
+.msv-level-group { margin-bottom: 12px; }
+.msv-level-header {
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--red);
+    border-bottom: 1px solid var(--gold);
+    padding-bottom: 4px;
+    margin: 0 0 6px 0;
+}
+.msv-spell-card {
+    background: white;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 4px;
+}
+.msv-spell-card-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.msv-spell-card-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+}
+.msv-spell-level-badge {
+    flex-shrink: 0;
+    font-family: 'Cinzel', serif;
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: white;
+    background: var(--red-dark);
+    border-radius: 3px;
+    padding: 1px 4px;
+    text-transform: uppercase;
+}
+.msv-spell-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.msv-tag {
+    flex-shrink: 0;
+    font-family: 'Cinzel', serif;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: var(--gold);
+    color: var(--ink);
+}
+.msv-tag-conc { background: var(--parchment-dark); color: var(--ink-light); }
+.msv-spell-card-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.msv-spell-meta { font-size: 0.72rem; color: var(--ink-light); white-space: nowrap; }
+.msv-info-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: 1px solid var(--gold-dark);
+    border-radius: 50%;
+    background: white;
+    color: var(--gold-dark);
+    font-size: 0.7rem;
+    font-family: serif;
+    font-weight: bold;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* Manage Spells Modal */
+.msv-manage-group { margin-bottom: 16px; }
+.msv-manage-group-header {
+    font-family: 'Cinzel', serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid var(--gold);
+    padding-bottom: 4px;
+    margin: 0 0 8px 0;
+}
+.msv-manage-remove { background: none; border: none; cursor: pointer; color: var(--red-dark); font-size: 0.8rem; padding: 0; align-self: center; line-height: 1; }
+.msv-manage-remove:hover { opacity: 0.7; }
+.msv-manage-row {
+    display: grid;
+    grid-template-columns: 18px 24px 1fr auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 4px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.msv-manage-row-prep { background: rgba(139,46,46,0.04); }
+.msv-manage-level {
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--red-dark);
+    text-align: center;
+}
+.msv-manage-name { font-size: 0.85rem; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msv-manage-tags { display: flex; gap: 3px; }
+.msv-manage-prep-badge { font-size: 0.7rem; color: var(--ink-light); font-style: italic; }
+.msv-prep-toggle {
+    font-size: 0.72rem;
+    padding: 3px 8px;
+    border: 1px solid var(--gold-dark);
+    border-radius: 12px;
+    background: white;
+    color: var(--ink);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.msv-prep-toggle-active { background: var(--red); color: white; border-color: var(--red-dark); }
+
+body.app-view-active #view-stats .skill-item {
+    display: grid;
+    grid-template-columns: 34px 28px 32px 1fr 45px;
+    gap: 8px;
+    align-items: center;
+    align-content: center;
+    padding: 2px 8px;
+    background: white;
+    border: 1px solid var(--gold);
+    border-radius: 6px;
+    min-height: 0 !important;
+    height: auto;
+}
+
+body.app-view-active #view-stats .skill-item .skill-checkbox {
+    grid-column: 1; grid-row: 1; align-self: center; margin: 0 auto; width: 18px; height: 18px; min-height: unset;
+    display: flex; align-items: center; justify-content: center;
+}
+body.app-view-active #view-stats .skill-item .adv-toggle {
+    grid-column: 2; grid-row: 1; align-self: center; margin: 0 auto; width: 18px; height: 18px; min-height: unset; font-size: 0.6rem;
+    display: flex; align-items: center; justify-content: center;
+}
+
+body.app-view-active #view-stats .skill-item .mobile-mod-label {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 0.75rem;
+    color: var(--ink-light);
+    font-weight: bold;
+    text-transform: uppercase;
+    line-height: normal;
+}
+
+body.app-view-active #view-stats .skill-item .skill-name {
+    grid-column: 4; grid-row: 1; align-self: center; display: flex; align-items: center; justify-content: flex-start; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem; line-height: normal;
+}
+body.app-view-active #view-stats .skill-item .skill-mod {
+    grid-column: 5; grid-row: 1; align-self: center; display: flex; align-items: center; justify-content: center; min-width: 0; font-size: 0.9rem; line-height: normal;
+}
+body.app-view-active #view-stats .skill-item .skill-info-btn { display: none; }
+
+body.app-view-active #view-stats .stat { flex: none; min-width: 0; padding: 4px 2px; gap: 1px; justify-content: center; border-radius: 6px; box-shadow: 0 2px 6px var(--shadow); }
+body.app-view-active #view-stats .stat-value { font-size: 1.3rem; }
+body.app-view-active #view-stats .stat-name { font-size: 0.65rem; margin-bottom: 0; letter-spacing: 0.5px; }
+body.app-view-active #view-stats .stat-modifier { margin: 0; }
+body.app-view-active #view-stats .stat-modifier input { font-size: 0.85rem; margin-bottom: 0; width: auto !important; min-width: 0; padding: 0; }
+body.swap-scores.app-view-active #view-stats .stat-modifier input { font-size: 1.3rem !important; }
+body.swap-scores.app-view-active #view-stats .stat-value { font-size: 0.75rem !important; }
+
+/* Inventory view: single-row compact items matching skill/save row style */
+body.app-view-active #view-inventory .inventory-item {
+    display: grid;
+    grid-template-columns: 20px 1fr 36px 36px 24px 24px 20px;
+    grid-template-areas: "drag name qty weight equip note del";
+    grid-template-rows: 1fr;
+    gap: 6px;
+    align-items: center;
+    padding: 2px 8px;
+    background: white;
+    border: 1px solid var(--gold);
+    border-radius: 6px;
+    min-height: 0 !important;
+    height: auto;
+    margin-bottom: 6px;
+    box-shadow: none;
+}
+body.app-view-active #view-inventory .inventory-item input,
+body.app-view-active #view-inventory .inventory-item button {
+    min-height: 0 !important;
+    height: 28px;
+    padding: 0 2px;
+}
+body.app-view-active #view-inventory .inventory-item .drag-handle { grid-area: drag; font-size: 0.75rem; color: var(--ink-light); justify-self: center; }
+body.app-view-active #view-inventory .inventory-item .name-field { grid-area: name; font-size: 0.9rem; font-weight: 600; width: 100%; border-bottom: none; }
+body.app-view-active #view-inventory .inventory-item .qty-field { grid-area: qty; font-size: 0.8rem; text-align: center; width: 100%; }
+body.app-view-active #view-inventory .inventory-item .weight-field { grid-area: weight; font-size: 0.8rem; text-align: center; width: 100%; }
+body.app-view-active #view-inventory .inventory-item .equip-check { grid-area: equip; margin: 0 auto; display: block; width: 16px; height: 16px !important; min-height: 0 !important; padding: 0; }
+body.app-view-active #view-inventory .inventory-item .note-btn { grid-area: note; font-size: 0.95rem; height: 28px !important; }
+body.app-view-active #view-inventory .inventory-item .delete-btn { grid-area: del; font-size: 1rem; padding: 0; }
+body.app-view-active #view-inventory .inventory-item .desc-field { display: none; }
+
+/* Saving throws: 4-column layout (no MOD column) */
+body.app-view-active #view-stats #mobile-saves-wrapper .skill-item { grid-template-columns: 34px 28px 1fr 45px; }
+body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .mobile-mod-label { display: none; }
+body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .skill-name { grid-column: 3; }
+body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .skill-mod { grid-column: 4; }
+.mobile-saves-header { grid-template-columns: 34px 28px 1fr 45px; }
+
+/* Skills header doesn't align with 2-column layout — hide it */
+body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) { display: none; }
 
 @media (min-width: 1200px) {
   .character-sheet:not(.creator-mode):not(.dm-mode) {
@@ -1038,13 +1367,25 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
   body.swap-scores:not(.dense-mode) .stat-modifier input { font-size: 2rem !important; }
   body.swap-scores:not(.dense-mode) .stat-value { font-size: 1rem !important; }
 
-  body:not(.dense-mode) .skill-item { padding: 4px 6px; gap: 6px; border-color: rgba(0,0,0,0.1); background: white; box-shadow: 0 1px 2px rgba(0,0,0,0.05); min-height: 32px; }
-  body:not(.dense-mode) .skill-name { font-size: 0.85rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  body:not(.dense-mode) .skill-mod { font-size: 0.9rem; min-width: 24px; }
-  body:not(.dense-mode) .skill-checkbox { width: 16px; height: 16px; border-radius: 3px; border-width: 1px; }
+  body:not(.dense-mode) .skill-item {
+      display: grid;
+      grid-template-columns: 18px 20px 30px 1fr 20px 35px;
+      padding: 2px 6px;
+      gap: 6px;
+      border-color: rgba(0,0,0,0.1);
+      background: white;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      align-items: center;
+      align-content: center;
+  }
+  body:not(.dense-mode) .skill-item > * { margin: 0; min-height: unset; align-self: center; grid-row: 1; }
+  body:not(.dense-mode) .skill-checkbox { grid-column: 1; align-self: center; margin: 0 auto !important; width: 16px; height: 16px; min-height: unset; border-radius: 3px; border-width: 1px; display: flex; align-items: center; justify-content: center; }
+  body:not(.dense-mode) .adv-toggle { grid-column: 2; align-self: center; margin: 0 auto !important; width: 18px; height: 18px; min-height: unset; font-size: 0.6rem; display: flex; align-items: center; justify-content: center; }
+  body:not(.dense-mode) .mobile-mod-label { grid-column: 3; align-self: center; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; color: var(--ink-light); font-weight: bold; text-transform: uppercase; }
+  body:not(.dense-mode) .skill-name { grid-column: 4; align-self: center; display: flex; align-items: center; justify-content: flex-start; font-size: 0.85rem; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 !important; }
+  body:not(.dense-mode) .skill-info-btn { grid-column: 5; align-self: center; margin: 0 auto !important; width: 18px; height: 18px; min-height: unset; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; }
+  body:not(.dense-mode) .skill-mod { grid-column: 6; align-self: center; display: flex; align-items: center; justify-content: flex-end; font-size: 0.9rem; min-width: 24px; min-height: unset; text-align: right; margin: 0 !important; }
   body:not(.dense-mode) .checkmark { font-size: 0.8rem; }
-  body:not(.dense-mode) .adv-toggle { width: 18px; height: 18px; font-size: 0.6rem; margin-right: 2px; }
-  body:not(.dense-mode) .skill-info-btn { width: 18px; height: 18px; font-size: 0.7rem; }
 
   /* Compress Hit Points & Death Saves on Mobile/Tablet */
   body:not(.dense-mode) .hp-death-grid { grid-template-columns: 1fr 1fr; gap: 8px; }

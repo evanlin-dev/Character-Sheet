@@ -474,7 +474,20 @@
       </div>
       <div class="field">
         <label class="field-label">Defenses</label>
-        <textarea id="defenses" placeholder="Resistances, Immunities, Vulnerabilities..." style="min-height: 60px"></textarea>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div>
+            <div class="field-label" style="font-size:0.7rem; margin-bottom:2px;">Resistances</div>
+            <textarea id="resistances" placeholder="e.g. Fire, Poison..." style="min-height: 44px"></textarea>
+          </div>
+          <div>
+            <div class="field-label" style="font-size:0.7rem; margin-bottom:2px;">Immunities</div>
+            <textarea id="immunities" placeholder="e.g. Charmed, Frightened..." style="min-height: 44px"></textarea>
+          </div>
+          <div>
+            <div class="field-label" style="font-size:0.7rem; margin-bottom:2px;">Vulnerabilities</div>
+            <textarea id="vulnerabilities" placeholder="e.g. Cold..." style="min-height: 44px"></textarea>
+          </div>
+        </div>
       </div>
       </div>
 
@@ -519,33 +532,40 @@
       <div class="sheet-section full-width">
       <h2 class="section-title" id="section-extra">Extra</h2>
       <div class="tabs">
-        <div class="tab active" onclick="switchTab('class-features')">Class Features</div>
-        <div class="tab" onclick="switchTab('race-features')">Race Features</div>
-        <div class="tab" onclick="switchTab('background-features')">Background Features</div>
-        <div class="tab" onclick="switchTab('feats')">Feats</div>
+        <div class="tab active" onclick="switchTab('features')">Features & Traits</div>
         <div class="tab" onclick="switchTab('equipment')">Equipment & Inventory</div>
         <div class="tab" onclick="switchTab('spells')">Spells</div>
         <div class="tab" onclick="switchTab('notes')">Notes</div>
       </div>
 
-      <div class="tab-content active" id="class-features">
-        <div id="classFeaturesContainer"></div>
-        <button class="add-feature-btn" onclick="addFeatureItem('classFeaturesContainer')">+ Add Feature</button>
-      </div>
-
-      <div class="tab-content" id="race-features">
-        <div id="raceFeaturesContainer"></div>
-        <button class="add-feature-btn" onclick="addFeatureItem('raceFeaturesContainer')">+ Add Feature</button>
-      </div>
-
-      <div class="tab-content" id="background-features">
-        <div id="backgroundFeaturesContainer"></div>
-        <button class="add-feature-btn" onclick="addFeatureItem('backgroundFeaturesContainer')">+ Add Feature</button>
-      </div>
-
-      <div class="tab-content" id="feats">
-        <div id="featsContainer"></div>
-        <button class="add-feature-btn" onclick="addFeatureItem('featsContainer')">+ Add Feat</button>
+      <div class="tab-content active" id="features">
+        <div class="mobile-spell-filter-row" id="features-filter-row" style="margin-bottom:16px;">
+          <button class="msv-filter-btn active" onclick="window.switchFeaturesFilter('all')">All</button>
+          <button class="msv-filter-btn" onclick="window.switchFeaturesFilter('class')">Class</button>
+          <button class="msv-filter-btn" onclick="window.switchFeaturesFilter('background')">Background</button>
+          <button class="msv-filter-btn" onclick="window.switchFeaturesFilter('species')">Species</button>
+          <button class="msv-filter-btn" onclick="window.switchFeaturesFilter('feats')">Feats</button>
+        </div>
+        <div id="class-features" class="feature-section">
+          <h3 class="section-title" style="font-size:1rem;margin-bottom:8px;" data-filter-label="class">Class Features</h3>
+          <div id="classFeaturesContainer"></div>
+          <button class="add-feature-btn" onclick="addFeatureItem('classFeaturesContainer')">+ Add Feature</button>
+        </div>
+        <div id="race-features" class="feature-section">
+          <h3 class="section-title" style="font-size:1rem;margin-bottom:8px;" data-filter-label="species">Species Features</h3>
+          <div id="raceFeaturesContainer"></div>
+          <button class="add-feature-btn" onclick="addFeatureItem('raceFeaturesContainer')">+ Add Feature</button>
+        </div>
+        <div id="background-features" class="feature-section">
+          <h3 class="section-title" style="font-size:1rem;margin-bottom:8px;" data-filter-label="background">Background Features</h3>
+          <div id="backgroundFeaturesContainer"></div>
+          <button class="add-feature-btn" onclick="addFeatureItem('backgroundFeaturesContainer')">+ Add Feature</button>
+        </div>
+        <div id="feats" class="feature-section">
+          <h3 class="section-title" style="font-size:1rem;margin-bottom:8px;" data-filter-label="feats">Feats</h3>
+          <div id="featsContainer"></div>
+          <button class="add-feature-btn" onclick="addFeatureItem('featsContainer')">+ Add Feat</button>
+        </div>
       </div>
 
       <div class="tab-content" id="equipment">

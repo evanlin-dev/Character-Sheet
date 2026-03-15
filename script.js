@@ -330,26 +330,47 @@ function resizeAllTextareas() {
 
 // Update Logic
 window.updateModifiers = function () {
-  const profBonusStr = document.getElementById("profBonus").value;
-  const profBonus = parseInt(profBonusStr.replace(/[^0-9-]/g, '')) || 0;
+  let profBonus = 2;
+  const pbInput = document.getElementById("profBonus");
+  if (pbInput && pbInput.value) {
+      const parsed = parseInt(String(pbInput.value).replace(/[^0-9-]/g, ''));
+      if (!isNaN(parsed) && parsed !== 0) profBonus = parsed;
+  } else {
+      const lvl = parseInt(document.getElementById("level")?.value) || 1;
+      profBonus = Math.ceil(lvl / 4) + 1;
+  }
+
   abilities.forEach((ability) => {
-    const score = parseInt(document.getElementById(ability).value) || 10;
+    const score = parseInt(document.getElementById(ability)?.value) || 10;
     const mod = calcMod(score);
-    document.getElementById(`${ability}Mod`).value = formatMod(mod);
+    const modEl = document.getElementById(`${ability}Mod`);
+    if (modEl) {
+        if (modEl.tagName === 'INPUT') modEl.value = formatMod(mod);
+        else modEl.textContent = formatMod(mod);
+    }
+
     const isSaveProf = saveProficiency[ability] || false;
     const saveTotal = mod + (isSaveProf ? profBonus : 0);
     const saveEl = document.getElementById(`saveMod_${ability}`);
-    if (saveEl) saveEl.textContent = formatMod(saveTotal);
+    if (saveEl) {
+        if (saveEl.tagName === 'INPUT') saveEl.value = formatMod(saveTotal);
+        else saveEl.textContent = formatMod(saveTotal);
+    }
   });
+  
   Object.keys(skillsMap).forEach((skillName) => {
     const ability = skillsMap[skillName];
-    const abilityScore = parseInt(document.getElementById(ability).value) || 10;
+    const abilityScore = parseInt(document.getElementById(ability)?.value) || 10;
     const abilityMod = calcMod(abilityScore);
     const isProf = skillProficiency[skillName] || false;
     const total = abilityMod + (isProf ? profBonus : 0);
     const skillEl = document.getElementById(`skillMod_${skillName}`);
-    if (skillEl) skillEl.textContent = formatMod(total);
+    if (skillEl) {
+        if (skillEl.tagName === 'INPUT') skillEl.value = formatMod(total);
+        else skillEl.textContent = formatMod(total);
+    }
   });
+  
   updateCombatStats();
   updateSpellDC();
   updateAllWeaponStats();
@@ -648,17 +669,13 @@ window.applyHpChange = function(type) {
 
 window.toggleSkill = function (skillName) {
   skillProficiency[skillName] = !skillProficiency[skillName];
-  document
-    .getElementById(`skillCheck_${skillName}`)
-    ?.classList.toggle("checked", skillProficiency[skillName]);
+  document.getElementById(`skillCheck_${skillName}`)?.classList.toggle("checked", skillProficiency[skillName]);
   updateModifiers();
   saveCharacter();
 };
 window.toggleSave = function (ability) {
   saveProficiency[ability] = !saveProficiency[ability];
-  document
-    .getElementById(`saveCheck_${ability}`)
-    ?.classList.toggle("checked", saveProficiency[ability]);
+  document.getElementById(`saveCheck_${ability}`)?.classList.toggle("checked", saveProficiency[ability]);
   updateModifiers();
   saveCharacter();
 };
@@ -672,7 +689,29 @@ window.toggleDeathSave = function (type, index) {
     .classList.toggle("checked", arr[index]);
   saveCharacter();
 };
+// Map old saved tab IDs to the new features tab + filter
+const _featuresTabMap = { 'class-features': 'class', 'race-features': 'species', 'background-features': 'background', 'feats': 'feats' };
+
+window.switchFeaturesFilter = function(filter) {
+  window._featuresFilter = filter;
+  document.querySelectorAll('#features-filter-row .msv-filter-btn').forEach(btn => {
+    const btnFilter = btn.getAttribute('onclick').match(/'(\w+)'/)?.[1];
+    btn.classList.toggle('active', btnFilter === filter);
+  });
+  const sectionMap = { 'class': 'class-features', 'background': 'background-features', 'species': 'race-features', 'feats': 'feats' };
+  document.querySelectorAll('.feature-section').forEach(s => {
+    s.style.display = (filter === 'all' || s.id === sectionMap[filter]) ? '' : 'none';
+  });
+  saveCharacter();
+};
+
 window.switchTab = function (tabName) {
+  // Remap old feature tab IDs
+  if (_featuresTabMap[tabName]) {
+    window.switchTab('features');
+    window.switchFeaturesFilter(_featuresTabMap[tabName]);
+    return;
+  }
   document
     .querySelectorAll(".tab-content")
     .forEach((c) => c.classList.remove("active"));
@@ -705,11 +744,7 @@ window.addFeatureItem = function (containerId, title = "", desc = "") {
   box.className = "feature-box";
 
   if (isCompact) {
-    box.style.display = "flex";
-    box.style.alignItems = "center";
-    box.style.justifyContent = "space-between";
-    box.style.padding = "8px";
-    box.style.gap = "8px";
+    box.style.padding = "8px 10px";
   }
 
   // Header with Textarea for Title (allows wrapping)
@@ -717,10 +752,7 @@ window.addFeatureItem = function (containerId, title = "", desc = "") {
   header.className = "feature-header";
 
   if (isCompact) {
-    header.style.borderBottom = "none";
-    header.style.marginBottom = "0";
-    header.style.paddingBottom = "0";
-    header.style.flexGrow = "1";
+    header.style.marginBottom = "4px";
   }
 
   const dragHandle = document.createElement("div");
@@ -759,9 +791,7 @@ window.addFeatureItem = function (containerId, title = "", desc = "") {
 
   header.appendChild(titleInput);
 
-  if (!isCompact) {
-    header.appendChild(delBtn);
-  }
+  header.appendChild(delBtn);
 
   box.appendChild(header);
 
@@ -786,51 +816,22 @@ window.addFeatureItem = function (containerId, title = "", desc = "") {
   descContainer.appendChild(display);
   descContainer.appendChild(input);
 
-  if (isCompact) {
-    descContainer.style.display = "none";
-
-    // Add Info Button for Compact Mode
-    const infoBtn = document.createElement("button");
-    infoBtn.className = "skill-info-btn";
-    infoBtn.innerHTML = "?";
-    infoBtn.title = "View Description";
-    infoBtn.style.marginRight = "4px";
-    infoBtn.style.flexShrink = "0";
-
-    infoBtn.onclick = function () {
-      const titleVal = titleInput.value;
-      openNoteEditor(
-        titleVal || "Feature Description",
-        input,
-        null,
-        (newVal) => {
-          display.innerHTML = newVal
-            ? newVal.replace(/\n/g, "<br>")
-            : "<em style='color:#999'>Click to edit description...</em>";
-        },
-      );
-    };
-
-    box.appendChild(infoBtn);
-    box.appendChild(delBtn);
-  } else {
-    descContainer.style.cursor = "pointer";
-    descContainer.style.minHeight = "20px";
-    descContainer.onclick = function () {
-      const titleVal = titleInput.value;
-      openNoteEditor(
-        titleVal || "Feature Description",
-        input,
-        null,
-        (newVal) => {
-          display.innerHTML = newVal
-            ? newVal.replace(/\n/g, "<br>")
-            : "<em style='color:#999'>Click to edit description...</em>";
-        },
-      );
-    };
-    box.appendChild(descContainer);
-  }
+  descContainer.style.cursor = "pointer";
+  descContainer.style.minHeight = "20px";
+  descContainer.onclick = function () {
+    const titleVal = titleInput.value;
+    openNoteEditor(
+      titleVal || "Feature Description",
+      input,
+      null,
+      (newVal) => {
+        display.innerHTML = newVal
+          ? newVal.replace(/\n/g, "<br>")
+          : "<em style='color:#999'>Click to edit description...</em>";
+      },
+    );
+  };
+  box.appendChild(descContainer);
 
   container.appendChild(box);
   autoResizeTextarea(titleInput); // Initial resize
@@ -3323,7 +3324,9 @@ window.saveCharacter = function () {
     hitDice: document.getElementById("hitDice").value,
     activeConditions: document.getElementById("activeConditionsInput").value,
     heroicInspiration: document.getElementById("heroicInspiration").checked,
-    defenses: document.getElementById("defenses").value,
+    resistances: document.getElementById("resistances")?.value || '',
+    immunities: document.getElementById("immunities")?.value || '',
+    vulnerabilities: document.getElementById("vulnerabilities")?.value || '',
     resourcesData: resourcesData,
     classes: window.characterClasses,
 
@@ -3411,6 +3414,7 @@ window.saveCharacter = function () {
     advantageState,
     currentTheme: document.body.className,
     activeTab: document.querySelector(".tab-content.active")?.id,
+    featuresFilter: window._featuresFilter || 'all',
   };
   localStorage.setItem("dndCharacter", JSON.stringify(characterData));
 
@@ -3821,6 +3825,39 @@ window.updateResponsiveStatNames = function() {
 };
 window.addEventListener('resize', window.updateResponsiveStatNames);
 
+window.injectMobileModLabels = function() {
+    // Stats
+    document.querySelectorAll('.stat-card').forEach((card) => {
+        const statNameEl = card.querySelector('.stat-name');
+        if (!statNameEl) return;
+        const ability = (statNameEl.dataset.originalText || statNameEl.textContent).trim().substring(0,3).toUpperCase();
+        
+        card.querySelectorAll('.skill-item').forEach(skill => {
+            if (!skill.querySelector('.mobile-mod-label')) {
+                const lbl = document.createElement('div');
+                lbl.className = 'mobile-mod-label';
+                lbl.textContent = ability;
+                skill.appendChild(lbl);
+            }
+        });
+    });
+
+    // Global fallback for saves
+    const abilitiesArr = ["str", "dex", "con", "int", "wis", "cha"];
+    abilitiesArr.forEach(ab => {
+        const check = document.getElementById(`saveCheck_${ab}`);
+        if (check) {
+            let item = check.closest('.skill-item');
+            if (item && !item.querySelector('.mobile-mod-label')) {
+                const lbl = document.createElement('div');
+                lbl.className = 'mobile-mod-label';
+                lbl.textContent = ab.toUpperCase();
+                item.appendChild(lbl);
+            }
+        }
+    });
+};
+
 window.enableDenseLayout = function() {
     if (document.getElementById('dense-layout-root')) return;
     const sheet = document.querySelector('.character-sheet');
@@ -4000,7 +4037,7 @@ window.enableDenseLayout = function() {
     const langField = document.getElementById('languages')?.closest('.field');
     if (langField) move(langField, sidebarLeft);
     
-    const defField = document.getElementById('defenses')?.closest('.field');
+    const defField = document.getElementById('resistances')?.closest('.field');
     const condField = document.getElementById('activeConditionsInput')?.closest('.combat-stat') || document.getElementById('activeConditionsInput')?.closest('.field');
 
     if (defField || condField) {
@@ -4214,191 +4251,748 @@ window.toggleSidebar = function () {
 };
 
 window.initQuickNav = function () {
-  if (document.getElementById("quick-nav")) return;
+  if (document.getElementById("view-selection-modal")) return;
 
-  const nav = document.createElement("div");
-  nav.className = "quick-nav";
-  nav.id = "quick-nav";
+  const modal = document.createElement("div");
+  modal.id = "view-selection-modal";
+  modal.className = "info-modal-overlay";
+  modal.innerHTML = `
+      <div class="info-modal-content" style="max-width: 350px; text-align: center;">
+          <button class="close-modal-btn" onclick="document.getElementById('view-selection-modal').style.display='none'">&times;</button>
+          <h3 class="info-modal-title">Navigation</h3>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+              <button class="btn" style="white-space: normal; height: auto; padding: 10px;" onclick="window.switchAppView('view-legacy')">Full Sheet</button>
+              <hr style="border: none; border-top: 1px solid var(--gold); margin: 2px 0;" />
+              <button class="btn btn-secondary" style="white-space: normal; height: auto; padding: 10px;" onclick="window.switchAppView('view-stats')">Ability Scores, Saving Throws, & Skills</button>
+              <button class="btn btn-secondary" style="white-space: normal; height: auto; padding: 10px;" onclick="window.switchAppView('view-actions')">Actions</button>
+              <button class="btn btn-secondary" style="white-space: normal; height: auto; padding: 10px;" onclick="window.switchAppView('view-inventory')">Inventory</button>
+              <button class="btn btn-secondary" style="white-space: normal; height: auto; padding: 10px;" onclick="window.switchAppView('view-spells')">Spells</button>
+              <button class="btn btn-secondary" style="white-space: normal; height: auto; padding: 10px;" onclick="window.switchAppView('view-features')">Features & Traits</button>
+              <button class="btn btn-secondary" style="white-space: normal; height: auto; padding: 10px;" onclick="window.switchAppView('view-defenses')">Speed & Defenses</button>
+              <button class="btn btn-secondary" style="white-space: normal; height: auto; padding: 10px;" onclick="window.switchAppView('view-proficiencies')">Proficiencies & Training</button>
+              <button class="btn btn-secondary" style="white-space: normal; height: auto; padding: 10px;" onclick="window.switchAppView('view-notes')">Notes</button>
+          </div>
+      </div>
+  `;
+  document.body.appendChild(modal);
 
   const gridBtn = document.querySelector(".grid-menu-btn");
   if (gridBtn) {
     gridBtn.onclick = (e) => {
       e.stopPropagation();
-      nav.classList.toggle("visible");
+      document.getElementById('view-selection-modal').style.display = 'flex';
     };
   }
+};
 
-  document.addEventListener("click", (e) => {
-    if (
-      nav.classList.contains("visible") &&
-      !nav.contains(e.target) &&
-      (!gridBtn || !gridBtn.contains(e.target))
-    ) {
-      nav.classList.remove("visible");
+window.mountStatsView = function() {
+    const statsView = document.getElementById('view-stats');
+    if (!statsView) return;
+
+    if (!document.getElementById('mobile-stats-wrapper')) {
+        statsView.innerHTML = `
+            <div id="mobile-stats-wrapper" class="mobile-stats-grid"></div>
+            <h3 class="section-title">Saving Throws</h3>
+            <div class="mobile-list-header mobile-saves-header"><span>PROF</span><span>ADV</span><span>SKILL</span><span>BONUS</span></div>
+            <div id="mobile-saves-wrapper" class="mobile-skills-grid"></div>
+            <h3 class="section-title">Skills</h3>
+            <div class="mobile-list-header"><span>PROF</span><span>ADV</span><span>MOD</span><span>SKILL</span><span>BONUS</span></div>
+            <div id="mobile-skills-wrapper" class="mobile-skills-grid"></div>
+        `;
     }
-  });
 
-  document.body.appendChild(nav);
+    const statsWrapper = document.getElementById('mobile-stats-wrapper');
+    const savesWrapper = document.getElementById('mobile-saves-wrapper');
+    const skillsWrapper = document.getElementById('mobile-skills-wrapper');
 
-  const buildLinks = () => {
-    const navItems = [
-      {
-        id: "stats",
-        label: "Abilities",
-        icon: '<path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>',
-      },
-      {
-        id: "combat",
-        label: "Combat",
-        icon: '<path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>',
-      },
-      {
-        id: "resources",
-        label: "Resources",
-        icon: '<path d="M7 2v11h3v9l7-12h-4l4-8z"/>',
-      },
-      {
-        id: "actions",
-        label: "Actions",
-        icon: '<path d="M6 2l10 10L6 22l-2-2 10-10L4 4z"/>',
-      },
-      {
-        id: "extras",
-        label: "Extras",
-        icon: '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>',
-      },
-      {
-        id: "features",
-        label: "Features",
-        icon: '<path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>',
-      },
-      {
-        id: "equipment",
-        label: "Inventory",
-        icon: '<path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>',
-      },
-      {
-        id: "spells",
-        label: "Spells",
-        icon: '<path d="M7.5 5.6L10 7 7.5 8.4 6.1 10.9 4.7 8.4 2.2 7l2.5-1.4L6.1 3.1 7.5 5.6zm12 9.8L17 14l2.5-1.4 1.4-2.5 1.4 2.5 2.5 1.4-2.5 1.4-1.4 2.5-1.4-2.5zM22 2l-2.5 1.4L18.1 5.9 16.7 3.4 14.2 2l2.5-1.4L18.1.6 19.5 3.1 22 2z"/>',
-      },
-      {
-        id: "notes",
-        label: "Notes",
-        icon: '<path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>',
-      },
-    ];
+    // 1. Move Saving Throws globally by ID to catch them even if they are outside stat-cards
+    const abilitiesArr = ["str", "dex", "con", "int", "wis", "cha"];
+    const abilityMapFull = { 'str': 'Strength', 'dex': 'Dexterity', 'con': 'Constitution', 'int': 'Intelligence', 'wis': 'Wisdom', 'cha': 'Charisma' };
 
-    let html = "";
-    navItems.forEach((item) => {
-      if (item.id === "features") {
-          html += `
-            <div class="nav-group-features">
-                <button class="nav-btn-custom" data-target="${item.id}">
-                    <svg viewBox="0 0 24 24" width="1.5em" height="1.5em" style="min-width:24px" fill="currentColor">
-                        ${item.icon}
-                    </svg>
-                    <span>${item.label}</span>
-                    <span class="arrow" style="margin-left:auto; font-size:0.8em;">▶</span>
-                </button>
-                <div class="nav-sub-items" style="display:none; flex-direction:column; gap:5px; padding-left:15px; border-left:2px solid var(--gold); margin-top:5px;">
-                    <button class="nav-btn-custom sub-item" data-target="class-features-sub" style="font-size:0.85rem; padding:8px;">Class</button>
-                    <button class="nav-btn-custom sub-item" data-target="race-features-sub" style="font-size:0.85rem; padding:8px;">Race</button>
-                    <button class="nav-btn-custom sub-item" data-target="bg-features-sub" style="font-size:0.85rem; padding:8px;">Background</button>
-                    <button class="nav-btn-custom sub-item" data-target="feats-sub" style="font-size:0.85rem; padding:8px;">Feats</button>
-                </div>
-            </div>
-          `;
-      } else {
-          html += `
-                <button class="nav-btn-custom" data-target="${item.id}">
-                    <svg viewBox="0 0 24 24" width="1.5em" height="1.5em" style="min-width:24px" fill="currentColor">
-                        ${item.icon}
-                    </svg>
-                    <span>${item.label}</span>
-                </button>
-               `;
-      }
+    abilitiesArr.forEach(ab => {
+        const check = document.getElementById(`saveCheck_${ab}`);
+        if (check) {
+            let saveItem = check.closest('.skill-item');
+            if (!saveItem) {
+                saveItem = check.parentElement;
+                saveItem.classList.add('skill-item', 'mobile-save-item-added');
+            }
+            
+            if (saveItem && !saveItem.dataset.moved) {
+                const ph = document.createElement('div');
+                ph.id = 'ph-save-' + ab;
+                ph.style.display = 'none';
+                saveItem.parentNode.insertBefore(ph, saveItem);
+                saveItem.dataset.moved = ph.id;
+                
+                const modEl = document.getElementById(`saveMod_${ab}`);
+                if (modEl) modEl.classList.add('skill-mod');
+
+                const nameCandidates = Array.from(saveItem.children).filter(c => !c.classList.contains('skill-checkbox') && !c.classList.contains('adv-toggle') && !c.classList.contains('skill-mod') && !c.classList.contains('mobile-mod-label') && c !== modEl);
+                let nameEl = saveItem.querySelector('.skill-name') || nameCandidates[0];
+                
+                if (nameEl) {
+                    nameEl.classList.add('skill-name');
+                    if (!nameEl.dataset.originalText) nameEl.dataset.originalText = nameEl.textContent;
+                    nameEl.textContent = abilityMapFull[ab];
+                }
+                
+                let modLabel = saveItem.querySelector('.mobile-mod-label');
+                if (!modLabel) {
+                    modLabel = document.createElement('div');
+                    modLabel.className = 'mobile-mod-label';
+                    modLabel.textContent = ab.toUpperCase();
+                    saveItem.appendChild(modLabel);
+                }
+                
+                savesWrapper.appendChild(saveItem);
+            }
+        }
     });
 
-    nav.innerHTML = html;
-
-    nav.querySelectorAll(".nav-btn-custom").forEach((btn) => {
-      btn.onclick = (e) => {
-        const target = btn.dataset.target;
+    // 2. Move Stat Blocks & Remaining Skills
+    document.querySelectorAll('.stat-card').forEach((card, cardIdx) => {
+        if (!card.dataset.id) card.dataset.id = 'stat-card-' + cardIdx;
+        const cardId = card.dataset.id;
         
-        if (target === "features") {
-            e.stopPropagation();
-            const sub = btn.nextElementSibling;
-            if (sub && sub.classList.contains('nav-sub-items')) {
-                const isHidden = sub.style.display === 'none';
-                sub.style.display = isHidden ? 'flex' : 'none';
-                const arrow = btn.querySelector('.arrow');
-                if (arrow) arrow.innerHTML = isHidden ? '▼' : '▶';
-            }
-            return;
+        let ability = "STR";
+        const statNameEl = card.querySelector('.stat-name');
+        if (statNameEl) ability = (statNameEl.dataset.originalText || statNameEl.textContent).trim().substring(0,3).toUpperCase();
+
+        const stat = card.querySelector('.stat');
+        if (stat && !stat.dataset.moved) {
+            const ph = document.createElement('div');
+            ph.id = 'ph-' + cardId + '-stat';
+            ph.style.display = 'none';
+            stat.parentNode.insertBefore(ph, stat);
+            stat.dataset.moved = ph.id;
+            statsWrapper.appendChild(stat);
         }
 
-        nav.classList.remove("visible");
+        const skills = card.querySelectorAll('.skill-item');
+        skills.forEach((skill, idx) => {
+            if (!skill.dataset.moved) {
+                const ph = document.createElement('div');
+                ph.id = 'ph-' + cardId + '-skill-' + idx;
+                ph.style.display = 'none';
+                skill.parentNode.insertBefore(ph, skill);
+                skill.dataset.moved = ph.id;
 
-        const scrollToContainer = (id) => {
-            const el = document.getElementById(id);
-            if (el) {
-                const tabContent = el.closest('.tab-content');
-                if (tabContent) {
-                    window.switchTab(tabContent.id);
-                    setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+                const nameEl = skill.querySelector('.skill-name');
+                const isSave = nameEl && nameEl.textContent.toLowerCase().includes('save');
+
+                let modLabel = skill.querySelector('.mobile-mod-label');
+                if (!modLabel) {
+                    modLabel = document.createElement('div');
+                    modLabel.className = 'mobile-mod-label';
+                    modLabel.textContent = ability;
+                    skill.appendChild(modLabel);
+                }
+
+                if (isSave) {
+                    savesWrapper.appendChild(skill);
+                } else {
+                    skillsWrapper.appendChild(skill);
                 }
             }
-        };
-
-        // Logic to scroll to section or switch tab
-        if (target === "stats") {
-          document
-            .getElementById("section-stats")
-            ?.scrollIntoView({ behavior: "smooth", block: "start" });
-        } else if (target === "combat") {
-          document
-            .getElementById("section-combat")
-            ?.scrollIntoView({ behavior: "smooth", block: "center" });
-        } else if (target === "resources") {
-          document
-            .getElementById("section-resources")
-            ?.scrollIntoView({ behavior: "smooth", block: "center" });
-        } else if (target === "actions") {
-          document
-            .getElementById("section-actions")
-            ?.scrollIntoView({ behavior: "smooth", block: "center" });
-        } else if (target === "spells") {
-          window.switchTab("spells");
-          const el = document.querySelector(".tabs");
-          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-        } else if (target === "equipment") {
-          window.switchTab("equipment");
-          const el = document.querySelector(".tabs");
-          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-        } else if (target === "class-features-sub") {
-          scrollToContainer("classFeaturesContainer");
-        } else if (target === "race-features-sub") {
-          scrollToContainer("raceFeaturesContainer");
-        } else if (target === "bg-features-sub") {
-          scrollToContainer("backgroundFeaturesContainer");
-        } else if (target === "feats-sub") {
-          scrollToContainer("featsContainer");
-        } else if (target === "notes") {
-          window.switchTab("notes");
-          const el = document.querySelector(".tabs");
-          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-        } else if (target === "extras") {
-          window.switchTab("feats"); // Default extra to feats since spells has its own button
-          const el = document.querySelector(".tabs");
-          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      };
+        });
     });
-  };
-  // Build immediately
-  buildLinks();
+
+    // Sort skills alphabetically
+    const skillItems = Array.from(skillsWrapper.children);
+    skillItems.sort((a, b) => {
+        const nameCandA = a.querySelector('.skill-name');
+        const nameCandB = b.querySelector('.skill-name');
+        const nameA = nameCandA ? nameCandA.textContent.trim() : "";
+        const nameB = nameCandB ? nameCandB.textContent.trim() : "";
+        return nameA.localeCompare(nameB);
+    });
+    skillItems.forEach(item => skillsWrapper.appendChild(item));
+};
+
+window.unmountStatsView = function() {
+    document.querySelectorAll('[data-moved]').forEach(el => {
+        const ph = document.getElementById(el.dataset.moved);
+        if (ph) {
+            ph.parentNode.insertBefore(el, ph);
+            ph.remove();
+        }
+        
+        const nameCandidates = Array.from(el.children).filter(c => !c.classList.contains('skill-checkbox') && !c.classList.contains('adv-toggle') && !c.classList.contains('skill-mod') && !c.classList.contains('mobile-mod-label'));
+        const nameEl = el.querySelector('.skill-name') || nameCandidates[0];
+        
+        if (nameEl && nameEl.dataset.originalText) {
+            nameEl.textContent = nameEl.dataset.originalText;
+            delete nameEl.dataset.originalText;
+        }
+
+        if (el.classList.contains('mobile-save-item-added')) {
+            el.classList.remove('skill-item', 'mobile-save-item-added');
+            if (nameEl) nameEl.classList.remove('skill-name');
+        }
+
+        delete el.dataset.moved;
+    });
+};
+
+// ===== INVENTORY VIEW (Mobile) =====
+window.mountInventoryView = function() {
+    const invView = document.getElementById('view-inventory');
+    if (!invView) return;
+    if (!document.getElementById('mobile-inv-wrapper')) {
+        invView.innerHTML = '<div id="mobile-inv-wrapper"><div id="mobile-inv-equipped-slot"></div><div id="mobile-inv-backpack-slot"></div></div>';
+    }
+    const equippedList = document.getElementById('equippedList');
+    if (equippedList) {
+        const section = equippedList.closest('.sheet-section-col');
+        if (section && !section.dataset.invMoved) {
+            const ph = document.createElement('div');
+            ph.id = 'ph-inv-equipped';
+            ph.style.display = 'none';
+            section.parentNode.insertBefore(ph, section);
+            section.dataset.invMoved = 'ph-inv-equipped';
+            document.getElementById('mobile-inv-equipped-slot').appendChild(section);
+        }
+    }
+    const inventoryList = document.getElementById('inventoryList');
+    if (inventoryList) {
+        const section = inventoryList.closest('.sheet-section-col');
+        if (section && !section.dataset.invMoved) {
+            const ph = document.createElement('div');
+            ph.id = 'ph-inv-backpack';
+            ph.style.display = 'none';
+            section.parentNode.insertBefore(ph, section);
+            section.dataset.invMoved = 'ph-inv-backpack';
+            document.getElementById('mobile-inv-backpack-slot').appendChild(section);
+        }
+    }
+};
+
+window.unmountInventoryView = function() {
+    document.querySelectorAll('[data-inv-moved]').forEach(section => {
+        const ph = document.getElementById(section.dataset.invMoved);
+        if (ph) { ph.parentNode.insertBefore(section, ph); ph.remove(); }
+        delete section.dataset.invMoved;
+    });
+};
+
+// ===== SPELL VIEW (Mobile) =====
+window.mountSpellView = function() {
+    const spellView = document.getElementById('view-spells');
+    if (!spellView) return;
+    // Compute which filter buttons to show
+    const _prepLevels = Array.from(document.querySelectorAll('#preparedSpellsList .spell-row'))
+        .map(r => parseInt(r.querySelector('.spell-lvl')?.value) || 0).filter(l => l > 0);
+    const _maxLevel = _prepLevels.length ? Math.max(..._prepLevels) : 0;
+    const _hasCantrips = document.querySelectorAll('#cantripList .spell-row').length > 0;
+    const _hasRitual = Array.from(document.querySelectorAll('#preparedSpellsList .spell-row'))
+        .some(r => r.querySelector('.spell-ritual')?.checked);
+    const _lvlLabels = ['','1st','2nd','3rd','4th','5th','6th','7th','8th','9th'];
+    let _filterBtns = `<button class="msv-filter-btn active" data-filter="all" onclick="window.setSpellFilter('all')">All</button>`;
+    if (_hasCantrips) _filterBtns += `<button class="msv-filter-btn" data-filter="0" onclick="window.setSpellFilter('0')">Cantrips</button>`;
+    for (let i = 1; i <= _maxLevel; i++) _filterBtns += `<button class="msv-filter-btn" data-filter="${i}" onclick="window.setSpellFilter('${i}')">${_lvlLabels[i]}</button>`;
+    if (_hasRitual) _filterBtns += `<button class="msv-filter-btn" data-filter="ritual" onclick="window.setSpellFilter('ritual')">Ritual</button>`;
+
+    spellView.innerHTML = `
+        <div id="mobile-spell-wrapper">
+            <div class="mobile-spell-stats-row">
+                <div class="mobile-spell-stat-box">
+                    <span class="mobile-spell-stat-label">Modifier</span>
+                    <span id="msv-mod">—</span>
+                </div>
+                <div class="mobile-spell-stat-box">
+                    <span class="mobile-spell-stat-label">Spell Attack</span>
+                    <span id="msv-atk">—</span>
+                </div>
+                <div class="mobile-spell-stat-box">
+                    <span class="mobile-spell-stat-label">Save DC</span>
+                    <span id="msv-dc">—</span>
+                </div>
+            </div>
+            <div class="mobile-spell-actions-row">
+                <button class="btn" onclick="window.openManageSpellsModal()">⚙ Manage Spells</button>
+            </div>
+            <div id="msv-slots"></div>
+            <div class="mobile-spell-filter-row">${_filterBtns}</div>
+            <div id="msv-list"></div>
+        </div>`;
+    window._msvFilter = 'all';
+    window.refreshMobileSpellStats();
+    window.refreshMobileSpellSlots();
+    window.refreshMobileSpellView();
+};
+
+window.unmountSpellView = function() { /* rebuilt on each mount */ };
+
+window.mountActionsView = function() {
+    const view = document.getElementById('view-actions');
+    if (!view) return;
+    ['actionsContainer', 'bonusActionsContainer', 'reactionsContainer'].forEach((id, i) => {
+        const container = document.getElementById(id);
+        if (!container) return;
+        const section = container.closest('div[class=""]') || container.parentElement;
+        if (!section || section.dataset.actMoved) return;
+        const ph = document.createElement('div');
+        ph.id = 'ph-act-' + i;
+        ph.style.display = 'none';
+        section.parentNode.insertBefore(ph, section);
+        section.dataset.actMoved = ph.id;
+        view.appendChild(section);
+    });
+};
+
+window.unmountActionsView = function() {
+    document.querySelectorAll('[data-act-moved]').forEach(el => {
+        const ph = document.getElementById(el.dataset.actMoved);
+        if (ph) { ph.parentNode.insertBefore(el, ph); ph.remove(); }
+        delete el.dataset.actMoved;
+    });
+};
+
+// ===== DEFENSES VIEW (Mobile) =====
+window.mountDefensesView = function() {
+    const view = document.getElementById('view-defenses');
+    if (!view) return;
+
+    function moveEl(el, attrKey) {
+        if (!el || el.dataset[attrKey]) return;
+        const ph = document.createElement('div');
+        ph.id = attrKey + '-ph-' + Math.random().toString(36).slice(2);
+        ph.style.display = 'none';
+        el.parentNode.insertBefore(ph, el);
+        el.dataset[attrKey] = ph.id;
+        view.appendChild(el);
+    }
+
+    // Speed
+    const speedStat = document.getElementById('speed')?.closest('.combat-stat');
+    moveEl(speedStat, 'defMoved');
+
+    // Defenses section (resistances, immunities, vulnerabilities)
+    const defField = document.getElementById('resistances')?.closest('.field');
+    moveEl(defField, 'defMoved');
+};
+
+window.unmountDefensesView = function() {
+    document.querySelectorAll('[data-def-moved]').forEach(el => {
+        const ph = document.getElementById(el.dataset.defMoved);
+        if (ph) { ph.parentNode.insertBefore(el, ph); ph.remove(); }
+        delete el.dataset.defMoved;
+    });
+};
+
+// ===== PROFICIENCIES VIEW (Mobile) =====
+window.mountProficienciesView = function() {
+    const view = document.getElementById('view-proficiencies');
+    if (!view) return;
+
+    function moveEl(el, attrKey) {
+        if (!el || el.dataset[attrKey]) return;
+        const ph = document.createElement('div');
+        ph.id = attrKey + '-ph-' + Math.random().toString(36).slice(2);
+        ph.style.display = 'none';
+        el.parentNode.insertBefore(ph, el);
+        el.dataset[attrKey] = ph.id;
+        view.appendChild(el);
+    }
+
+    moveEl(document.getElementById('profBonus')?.closest('.combat-stat'), 'profMoved');
+    moveEl(document.getElementById('armorLight')?.closest('.field'), 'profMoved');
+    moveEl(document.getElementById('weaponProfsSelector')?.closest('.field'), 'profMoved');
+    moveEl(document.getElementById('toolProfs')?.closest('.field'), 'profMoved');
+    moveEl(document.getElementById('languages')?.closest('.field'), 'profMoved');
+};
+
+window.unmountProficienciesView = function() {
+    document.querySelectorAll('[data-prof-moved]').forEach(el => {
+        const ph = document.getElementById(el.dataset.profMoved);
+        if (ph) { ph.parentNode.insertBefore(el, ph); ph.remove(); }
+        delete el.dataset.profMoved;
+    });
+};
+
+// ===== NOTES VIEW (Mobile) =====
+window.mountNotesView = function() {
+    const view = document.getElementById('view-notes');
+    if (!view) return;
+
+    function moveEl(el, attrKey) {
+        if (!el || el.dataset[attrKey]) return;
+        const ph = document.createElement('div');
+        ph.id = attrKey + '-ph-' + Math.random().toString(36).slice(2);
+        ph.style.display = 'none';
+        el.parentNode.insertBefore(ph, el);
+        el.dataset[attrKey] = ph.id;
+        view.appendChild(el);
+    }
+
+    ['personality','ideals','bonds','flaws','deity','notes'].forEach(id => {
+        moveEl(document.getElementById(id)?.closest('.field'), 'notesMoved');
+    });
+};
+
+window.unmountNotesView = function() {
+    document.querySelectorAll('[data-notes-moved]').forEach(el => {
+        const ph = document.getElementById(el.dataset.notesMoved);
+        if (ph) { ph.parentNode.insertBefore(el, ph); ph.remove(); }
+        delete el.dataset.notesMoved;
+    });
+};
+
+// ===== FEATURES VIEW (Mobile) =====
+window.mountFeaturesView = function() {
+    const view = document.getElementById('view-features');
+    if (!view) return;
+
+    function moveEl(el, attrKey) {
+        if (!el || el.dataset[attrKey]) return;
+        const ph = document.createElement('div');
+        ph.id = attrKey + '-ph-' + Math.random().toString(36).slice(2);
+        ph.style.display = 'none';
+        el.parentNode.insertBefore(ph, el);
+        el.dataset[attrKey] = ph.id;
+        view.appendChild(el);
+    }
+
+    // Move the filter row and all 4 feature sections
+    moveEl(document.getElementById('features-filter-row'), 'featMoved');
+    ['class-features','race-features','background-features','feats'].forEach(id => {
+        moveEl(document.getElementById(id), 'featMoved');
+    });
+};
+
+window.unmountFeaturesView = function() {
+    document.querySelectorAll('[data-feat-moved]').forEach(el => {
+        const ph = document.getElementById(el.dataset.featMoved);
+        if (ph) { ph.parentNode.insertBefore(el, ph); ph.remove(); }
+        delete el.dataset.featMoved;
+    });
+};
+
+window.setSpellFilter = function(filter) {
+    window._msvFilter = filter;
+    document.querySelectorAll('.msv-filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+    window.refreshMobileSpellView();
+};
+
+window.refreshMobileSpellStats = function() {
+    const fmt = v => (v >= 0 ? `+${v}` : `${v}`);
+    const modVal = parseInt(document.getElementById('spellAttackMod')?.value) || 0;
+    const atkVal = parseInt(document.getElementById('spellAttackBonus')?.value) || 0;
+    const dcVal = document.getElementById('spellDC')?.value || '—';
+    if (document.getElementById('msv-mod')) document.getElementById('msv-mod').textContent = fmt(modVal);
+    if (document.getElementById('msv-atk')) document.getElementById('msv-atk').textContent = fmt(atkVal);
+    if (document.getElementById('msv-dc')) document.getElementById('msv-dc').textContent = dcVal;
+};
+
+window.refreshMobileSpellSlots = function() {
+    const container = document.getElementById('msv-slots');
+    if (!container || typeof spellSlotsData === 'undefined' || spellSlotsData.length === 0) {
+        if (container) container.innerHTML = '';
+        return;
+    }
+    container.innerHTML = '<div class="msv-slots-grid">' +
+        spellSlotsData.map((slot, idx) =>
+            `<div class="msv-slot-level"><span class="msv-slot-label">Lv ${slot.level}</span><div class="msv-slot-dots">${
+                Array.from({ length: slot.total }, (_, i) =>
+                    `<div class="msv-slot-dot${i < slot.used ? ' used' : ''}" onclick="window.toggleSlotMsv(${idx},${i})"></div>`
+                ).join('')
+            }</div></div>`
+        ).join('') + '</div>';
+};
+
+window.toggleSlotMsv = function(levelIndex, slotIndex) {
+    window.toggleSlot(levelIndex, slotIndex);
+    window.refreshMobileSpellSlots();
+};
+
+window.refreshMobileSpellView = function() {
+    const container = document.getElementById('msv-list');
+    if (!container) return;
+    window._msvSpells = [];
+    const filter = window._msvFilter || 'all';
+
+    const spells = [];
+    document.querySelectorAll('#cantripList .spell-row').forEach(row => {
+        const name = row.querySelector('.spell-name')?.value?.trim();
+        if (!name) return;
+        spells.push({ level: 0, name,
+            time: row.querySelector('.spell-time')?.value || '',
+            range: row.querySelector('.spell-range')?.value || '',
+            ritual: row.querySelector('.spell-ritual')?.checked || false,
+            concentration: row.querySelector('.spell-conc')?.checked || false,
+            material: row.querySelector('.spell-mat')?.checked || false,
+            description: row.querySelector('.spell-desc')?.value || '' });
+    });
+    document.querySelectorAll('#preparedSpellsList .spell-row').forEach(row => {
+        const name = row.querySelector('.spell-name')?.value?.trim();
+        if (!name) return;
+        spells.push({ level: parseInt(row.querySelector('.spell-lvl')?.value) || 1, name,
+            time: row.querySelector('.spell-time')?.value || '',
+            range: row.querySelector('.spell-range')?.value || '',
+            ritual: row.querySelector('.spell-ritual')?.checked || false,
+            concentration: row.querySelector('.spell-conc')?.checked || false,
+            material: row.querySelector('.spell-mat')?.checked || false,
+            description: row.querySelector('.spell-desc')?.value || '' });
+    });
+
+    let filtered = spells;
+    if (filter === '0') filtered = spells.filter(s => s.level === 0);
+    else if (filter === 'ritual') filtered = spells.filter(s => s.ritual);
+    else if (filter !== 'all') filtered = spells.filter(s => s.level === parseInt(filter));
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div style="text-align:center;color:var(--ink-light);padding:24px;font-style:italic;">No prepared spells</div>';
+        return;
+    }
+
+    const byLevel = {};
+    filtered.forEach(s => { (byLevel[s.level] = byLevel[s.level] || []).push(s); });
+    const lvlLabel = l => ['Cantrips','1st Level','2nd Level','3rd Level','4th Level','5th Level','6th Level','7th Level','8th Level','9th Level'][l] || `${l}th Level`;
+    const badge = l => ['Cantrip','1st','2nd','3rd','4th','5th','6th','7th','8th','9th'][l] || `${l}th`;
+
+    let html = '';
+    Object.keys(byLevel).sort((a,b) => a-b).forEach(lvl => {
+        html += '<div class="msv-level-group">';
+        if (filter === 'all' || filter === 'ritual') html += `<h3 class="msv-level-header">${lvlLabel(+lvl)}</h3>`;
+        byLevel[lvl].forEach(spell => {
+            const tags = [
+                spell.ritual ? '<span class="msv-tag">R</span>' : '',
+                spell.concentration ? '<span class="msv-tag msv-tag-conc">C</span>' : '',
+                spell.material ? '<span class="msv-tag">M</span>' : '',
+            ].join('');
+            const hasDesc = spell.description.trim().length > 0;
+            const spellIdx = window._msvSpells.push({ name: spell.name, desc: spell.description }) - 1;
+            html += `<div class="msv-spell-card">
+                <div class="msv-spell-card-main">
+                    <div class="msv-spell-card-left">
+                        <span class="msv-spell-level-badge">${badge(+lvl)}</span>
+                        <span class="msv-spell-name">${spell.name}</span>
+                        ${tags}
+                    </div>
+                    <div class="msv-spell-card-right">
+                        ${spell.time ? `<span class="msv-spell-meta">${spell.time}</span>` : ''}
+                        ${spell.range ? `<span class="msv-spell-meta">${spell.range}</span>` : ''}
+                        ${hasDesc ? `<button class="msv-info-btn" onclick="window.showMsvSpellInfo(${spellIdx})">?</button>` : ''}
+                    </div>
+                </div>
+            </div>`;
+        });
+        html += '</div>';
+    });
+    container.innerHTML = html;
+};
+
+window.showMsvSpellInfo = function(idx) {
+    const s = window._msvSpells?.[idx];
+    if (!s) return;
+    document.getElementById('infoModalTitle').textContent = s.name || 'Spell';
+    document.getElementById('infoModalText').innerHTML = s.desc
+        ? s.desc.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>')
+        : 'No description available.';
+    document.getElementById('infoModal').style.display = 'flex';
+};
+
+window.openManageSpellsModal = function() {
+    let modal = document.getElementById('msvManageModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'msvManageModal';
+        modal.className = 'info-modal-overlay';
+        modal.innerHTML = `
+            <div class="info-modal-content" style="max-width:500px;width:95%;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">
+                <button class="close-modal-btn" onclick="document.getElementById('msvManageModal').style.display='none';window.refreshMobileSpellView();">&times;</button>
+                <h3 class="info-modal-title">Manage Spells</h3>
+                <div id="msv-prep-count" style="text-align:center;font-size:0.85rem;color:var(--ink-light);margin-bottom:10px;"></div>
+                <div id="msv-manage-actions" style="display:flex;gap:8px;margin-bottom:12px;justify-content:center;flex-wrap:wrap;"></div>
+                <div style="overflow-y:auto;flex:1;padding-right:4px;" id="msv-manage-list"></div>
+            </div>`;
+        document.body.appendChild(modal);
+    }
+    window.refreshManageSpellsModal();
+    modal.style.display = 'flex';
+};
+
+window.refreshManageSpellsModal = function() {
+    const preparedCount = document.querySelectorAll('#preparedSpellsList .spell-row').length;
+    const totalKnown = document.querySelectorAll('#preparedSpellsList .spell-row, #spellList .spell-row').length;
+    const countEl = document.getElementById('msv-prep-count');
+    if (countEl) countEl.textContent = `${preparedCount} / ${totalKnown} spells prepared`;
+
+    const actionsEl = document.getElementById('msv-manage-actions');
+    if (actionsEl) {
+        actionsEl.innerHTML = `
+            <button class="add-feature-btn" onclick="window.msvAddCustomSpell()">+ Add to Spellbook</button>
+            ${window.isDataAvailable ? `<button class="add-feature-btn" onclick="window.msvSearchAndAdd('spellList','all')">Search Spells</button>` : ''}
+            <button class="add-feature-btn" onclick="window.msvAddCantrip()">+ Add Cantrip</button>
+            ${window.isDataAvailable ? `<button class="add-feature-btn" onclick="window.msvSearchAndAdd('cantripList','cantrip')">Search Cantrips</button>` : ''}`;
+    }
+
+    const listEl = document.getElementById('msv-manage-list');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    function buildManageRow(row, prepared, isCantrip) {
+        const name = row.querySelector('.spell-name')?.value?.trim() || '(unnamed)';
+        const level = isCantrip ? 'C' : (row.querySelector('.spell-lvl')?.value || '?');
+        const ritual = row.querySelector('.spell-ritual')?.checked;
+        const conc = row.querySelector('.spell-conc')?.checked;
+        const div = document.createElement('div');
+        div.className = 'msv-manage-row' + (prepared ? ' msv-manage-row-prep' : '');
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'msv-manage-remove';
+        removeBtn.textContent = '✕';
+        removeBtn.title = 'Remove from spellbook';
+        removeBtn.onclick = function() {
+            row.remove();
+            saveCharacter();
+            window.refreshManageSpellsModal();
+        };
+        div.appendChild(removeBtn);
+        div.insertAdjacentHTML('beforeend', `<span class="msv-manage-level">${level}</span><span class="msv-manage-name">${name}</span><span class="msv-manage-tags">${ritual ? '<span class="msv-tag">R</span>' : ''}${conc ? '<span class="msv-tag msv-tag-conc">C</span>' : ''}</span>`);
+        if (isCantrip) {
+            const badge = document.createElement('span');
+            badge.className = 'msv-manage-prep-badge';
+            badge.textContent = 'Always';
+            div.appendChild(badge);
+        } else {
+            const btn = document.createElement('button');
+            btn.className = 'msv-prep-toggle' + (prepared ? ' msv-prep-toggle-active' : '');
+            btn.textContent = prepared ? '✓ Prep' : 'Prepare';
+            btn.onclick = function() {
+                const cb = row.querySelector('.spell-prep');
+                if (cb) { cb.checked = !prepared; cb.dispatchEvent(new Event('change')); }
+                window.refreshManageSpellsModal();
+            };
+            div.appendChild(btn);
+        }
+        return div;
+    }
+
+    const cantrips = document.querySelectorAll('#cantripList .spell-row');
+    if (cantrips.length > 0) {
+        const grp = document.createElement('div');
+        grp.className = 'msv-manage-group';
+        grp.innerHTML = '<h4 class="msv-manage-group-header">Cantrips</h4>';
+        cantrips.forEach(row => grp.appendChild(buildManageRow(row, true, true)));
+        listEl.appendChild(grp);
+    }
+
+    const preparedRows = Array.from(document.querySelectorAll('#preparedSpellsList .spell-row'));
+    const knownRows = Array.from(document.querySelectorAll('#spellList .spell-row'));
+    if (preparedRows.length > 0 || knownRows.length > 0) {
+        const grp = document.createElement('div');
+        grp.className = 'msv-manage-group';
+        grp.innerHTML = '<h4 class="msv-manage-group-header">Leveled Spells</h4>';
+        [...preparedRows.map(r => ({r, p:true})), ...knownRows.map(r => ({r, p:false}))]
+            .sort((a,b) => (parseInt(a.r.querySelector('.spell-lvl')?.value)||0) - (parseInt(b.r.querySelector('.spell-lvl')?.value)||0))
+            .forEach(({r, p}) => grp.appendChild(buildManageRow(r, p, false)));
+        listEl.appendChild(grp);
+    }
+};
+
+window.msvAddCustomSpell = function() {
+    window.addSpellRow('spellList', 1);
+    window.refreshManageSpellsModal();
+};
+
+window.msvAddCantrip = function() {
+    window.addSpellRow('cantripList', 0);
+    window.refreshManageSpellsModal();
+};
+
+window.msvSearchAndAdd = function(containerId, filterType) {
+    window.openSpellSearch(containerId, filterType, 9, null, function(spellData) {
+        const target = (spellData.level === 0 && containerId === 'spellList') ? 'cantripList' : containerId;
+        window.addSpellRow(target, spellData.level, spellData);
+        window.refreshManageSpellsModal();
+    });
+};
+
+// ===== SWITCH APP VIEW =====
+window.switchAppView = function(viewId) {
+    document.getElementById('view-selection-modal').style.display = 'none';
+    const prev = window._currentMobileView;
+
+    if (viewId === 'view-legacy') {
+        document.body.classList.remove('app-view-active');
+        const container = document.getElementById('app-views-container');
+        if (container) container.style.display = 'none';
+        if (window.unmountStatsView) window.unmountStatsView();
+        if (window.unmountInventoryView) window.unmountInventoryView();
+        if (window.unmountDefensesView) window.unmountDefensesView();
+        if (window.unmountProficienciesView) window.unmountProficienciesView();
+        if (window.unmountNotesView) window.unmountNotesView();
+        if (window.unmountFeaturesView) window.unmountFeaturesView();
+        if (window.unmountActionsView) window.unmountActionsView();
+        window._currentMobileView = null;
+        return;
+    }
+
+    document.body.classList.add('app-view-active');
+
+    let container = document.getElementById('app-views-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'app-views-container';
+        const sheet = document.querySelector('.character-sheet');
+        if (sheet) sheet.appendChild(container);
+
+        const views = [
+            { id: 'view-stats', title: 'Ability Scores, Saving Throws, & Skills' },
+            { id: 'view-actions', title: 'Actions' },
+            { id: 'view-inventory', title: 'Inventory' },
+            { id: 'view-spells', title: 'Spells' },
+            { id: 'view-features', title: 'Features & Traits' },
+            { id: 'view-defenses', title: 'Speed & Defenses' },
+            { id: 'view-proficiencies', title: 'Proficiencies & Training' },
+            { id: 'view-notes', title: 'Notes' }
+        ];
+
+        const noPlaceholder = new Set(['view-stats', 'view-actions', 'view-inventory', 'view-spells', 'view-features', 'view-defenses', 'view-proficiencies', 'view-notes']);
+        views.forEach(v => {
+            const vDiv = document.createElement('div');
+            vDiv.id = v.id;
+            vDiv.className = 'app-view';
+            vDiv.style.display = 'none';
+            if (!noPlaceholder.has(v.id)) {
+                vDiv.innerHTML = `<h2 class="section-title">${v.title}</h2><div style="text-align:center; color:var(--ink-light); padding: 20px; font-style: italic;">Empty for now, will add content later.</div>`;
+            }
+            container.appendChild(vDiv);
+        });
+    }
+
+    container.style.display = 'flex';
+
+    // Unmount previous view before mounting new one
+    if (prev !== viewId) {
+        if (prev === 'view-stats' && window.unmountStatsView) window.unmountStatsView();
+        if (prev === 'view-inventory' && window.unmountInventoryView) window.unmountInventoryView();
+        if (prev === 'view-defenses' && window.unmountDefensesView) window.unmountDefensesView();
+        if (prev === 'view-proficiencies' && window.unmountProficienciesView) window.unmountProficienciesView();
+        if (prev === 'view-notes' && window.unmountNotesView) window.unmountNotesView();
+        if (prev === 'view-features' && window.unmountFeaturesView) window.unmountFeaturesView();
+        if (prev === 'view-actions' && window.unmountActionsView) window.unmountActionsView();
+    }
+
+    // Hide all views
+    document.querySelectorAll('.app-view').forEach(v => v.style.display = 'none');
+
+    // Mount new view
+    if (viewId === 'view-stats' && window.mountStatsView) window.mountStatsView();
+    if (viewId === 'view-inventory' && window.mountInventoryView) window.mountInventoryView();
+    if (viewId === 'view-spells' && window.mountSpellView) window.mountSpellView();
+    if (viewId === 'view-defenses' && window.mountDefensesView) window.mountDefensesView();
+    if (viewId === 'view-proficiencies' && window.mountProficienciesView) window.mountProficienciesView();
+    if (viewId === 'view-notes' && window.mountNotesView) window.mountNotesView();
+    if (viewId === 'view-features' && window.mountFeaturesView) window.mountFeaturesView();
+    if (viewId === 'view-actions' && window.mountActionsView) window.mountActionsView();
+    window._currentMobileView = viewId;
+
+    const activeView = document.getElementById(viewId);
+    if (activeView) activeView.style.display = 'block';
 };
 
 window.openHpSettingsModal = function() {
@@ -4858,7 +5452,29 @@ window.openMobileMoreModal = function() {
 /* =========================================
       6. INITIALIZATION
       ========================================= */
+// Reset to full sheet on bfcache restore (iOS Safari / mobile back-forward nav)
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) {
+    document.body.classList.remove('app-view-active');
+    const c = document.getElementById('app-views-container');
+    if (c) c.style.display = 'none';
+    if (window.unmountStatsView) window.unmountStatsView();
+    if (window.unmountInventoryView) window.unmountInventoryView();
+    if (window.unmountDefensesView) window.unmountDefensesView();
+    if (window.unmountProficienciesView) window.unmountProficienciesView();
+    if (window.unmountNotesView) window.unmountNotesView();
+    if (window.unmountFeaturesView) window.unmountFeaturesView();
+    if (window.unmountActionsView) window.unmountActionsView();
+    window._currentMobileView = null;
+  }
+});
+
 document.addEventListener("DOMContentLoaded", () => {
+  // Always start with full sheet (no filtered view active)
+  document.body.classList.remove('app-view-active');
+  const existingContainer = document.getElementById('app-views-container');
+  if (existingContainer) existingContainer.style.display = 'none';
+
   // Load Dense Mode Preference
   if (localStorage.getItem("denseMode") === "true") {
     document.body.classList.add("dense-mode");
@@ -4880,6 +5496,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Apply responsive stat names automatically on initial load
   if (window.updateResponsiveStatNames) window.updateResponsiveStatNames();
+
+  // Inject mobile mod labels globally for grid layout (mobile/tablet only)
+  if (window.injectMobileModLabels && window.matchMedia('(max-width: 900px)').matches) window.injectMobileModLabels();
 
   // Guard clause: Only run initialization if we are on the character sheet (checking for charName input)
   if (!document.getElementById("charName")) return;
@@ -5229,6 +5848,12 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (data.shield) document.getElementById("shieldEquipped").checked = true;
       if (data.activeTab) window.switchTab(data.activeTab);
+      if (data.resistances !== undefined) { const el = document.getElementById('resistances'); if (el) el.value = data.resistances; }
+      if (data.immunities !== undefined) { const el = document.getElementById('immunities'); if (el) el.value = data.immunities; }
+      if (data.vulnerabilities !== undefined) { const el = document.getElementById('vulnerabilities'); if (el) el.value = data.vulnerabilities; }
+      // Backward compat: old saved data had a single 'defenses' field
+      if (data.defenses && !data.resistances) { const el = document.getElementById('resistances'); if (el) el.value = data.defenses; }
+      if (data.featuresFilter) window.switchFeaturesFilter(data.featuresFilter);
     } else {
       document.querySelectorAll("input, textarea, select").forEach((el) => {
         if (el.type === "checkbox" || el.type === "radio") el.checked = false;
@@ -5305,6 +5930,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const modalObserver = new MutationObserver(checkModals);
     modalSelectors.forEach(selector => {
         document.querySelectorAll(selector).forEach(el => {
+            if (!el) return;
             modalObserver.observe(el, { attributes: true, attributeFilter: ['style', 'class'] });
         });
     });
