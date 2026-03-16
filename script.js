@@ -185,6 +185,70 @@ const deathSaves = {
 let spellSlotsData = [{ level: 1, total: 1, used: 0 }];
 let resourcesData = [];
 let pbScores = { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 };
+
+// Class resource definitions for auto-detection
+// colLabel: regex to match class table column; formula: fn(level, abilityMod) => max; levelMin: earliest level
+const CLASS_RESOURCE_DEFS = {
+    'Barbarian': [
+        { name: 'Rages', colLabel: /^Rages$/i, reset: 'lr' }
+    ],
+    'Bard': [
+        { name: 'Bardic Inspiration', formula: (lvl, chaMod) => Math.max(1, chaMod), levelMin: 1, reset: 'lr' }
+    ],
+    'Cleric': [
+        { name: 'Channel Divinity', formula: (lvl) => lvl >= 18 ? 3 : lvl >= 6 ? 2 : 1, levelMin: 2, reset: 'sr' }
+    ],
+    'Druid': [
+        { name: 'Wild Shape', formula: () => 2, levelMin: 2, reset: 'sr' }
+    ],
+    'Fighter': [
+        { name: 'Second Wind', formula: () => 1, levelMin: 1, reset: 'sr' },
+        { name: 'Action Surge', formula: (lvl) => lvl >= 17 ? 2 : 1, levelMin: 2, reset: 'sr' },
+        { name: 'Indomitable', formula: (lvl) => lvl >= 17 ? 3 : lvl >= 13 ? 2 : 1, levelMin: 9, reset: 'lr' }
+    ],
+    'Monk': [
+        { name: 'Ki Points', colLabel: /^Ki Points$/i, reset: 'sr' }
+    ],
+    'Paladin': [
+        { name: 'Lay on Hands', formula: (lvl) => lvl * 5, levelMin: 1, reset: 'lr' },
+        { name: 'Channel Divinity', formula: () => 1, levelMin: 3, reset: 'sr' }
+    ],
+    'Sorcerer': [
+        { name: 'Sorcery Points', colLabel: /^Sorcery Points$/i, reset: 'lr' }
+    ],
+    'Wizard': [
+        { name: 'Arcane Recovery', formula: () => 1, levelMin: 1, reset: 'lr' }
+    ]
+};
+
+// Formula options for custom resource max and weapon stats
+const RESOURCE_FORMULA_OPTS = [
+    { key: 'fixed',      label: 'Fixed number' },
+    { key: 'pb',         label: 'Proficiency Bonus',    compute: () => getPB() },
+    { key: 'pb_x2',      label: 'Prof. Bonus × 2',      compute: () => getPB() * 2 },
+    { key: 'level',      label: 'Level',                compute: () => getLevel() },
+    { key: 'level_x5',   label: 'Level × 5',            compute: () => getLevel() * 5 },
+    { key: 'str_mod',    label: 'STR modifier',         compute: () => Math.max(1, getAbilityMod('str')) },
+    { key: 'dex_mod',    label: 'DEX modifier',         compute: () => Math.max(1, getAbilityMod('dex')) },
+    { key: 'con_mod',    label: 'CON modifier',         compute: () => Math.max(1, getAbilityMod('con')) },
+    { key: 'int_mod',    label: 'INT modifier',         compute: () => Math.max(1, getAbilityMod('int')) },
+    { key: 'wis_mod',    label: 'WIS modifier',         compute: () => Math.max(1, getAbilityMod('wis')) },
+    { key: 'cha_mod',    label: 'CHA modifier',         compute: () => Math.max(1, getAbilityMod('cha')) },
+    { key: 'str_mod_pb', label: 'STR mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('str') + getPB()) },
+    { key: 'dex_mod_pb', label: 'DEX mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('dex') + getPB()) },
+    { key: 'con_mod_pb', label: 'CON mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('con') + getPB()) },
+    { key: 'int_mod_pb', label: 'INT mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('int') + getPB()) },
+    { key: 'wis_mod_pb', label: 'WIS mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('wis') + getPB()) },
+    { key: 'cha_mod_pb', label: 'CHA mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('cha') + getPB()) },
+];
+
+const ABILITY_OPTS = [
+    { key: 'none', label: 'Manual / None' },
+    { key: 'str', label: 'STR' }, { key: 'dex', label: 'DEX' },
+    { key: 'con', label: 'CON' }, { key: 'int', label: 'INT' },
+    { key: 'wis', label: 'WIS' }, { key: 'cha', label: 'CHA' },
+];
+
 const pbCosts = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
 const maxPoints = 27;
 window.characterClasses = []; // Stores {name, subclass, level}
@@ -200,6 +264,23 @@ function calcMod(score) {
 }
 function formatMod(mod) {
   return mod >= 0 ? `+${mod}` : `${mod}`;
+}
+
+// Shared stat helpers used by formulas
+function getPB() {
+    const pbInput = document.getElementById("profBonus");
+    if (pbInput && pbInput.value) {
+        const parsed = parseInt(String(pbInput.value).replace(/[^0-9-]/g, ''));
+        if (!isNaN(parsed) && parsed !== 0) return parsed;
+    }
+    const lvl = parseInt(document.getElementById("level")?.value) || 1;
+    return Math.ceil(lvl / 4) + 1;
+}
+function getAbilityMod(ability) {
+    return Math.floor(((parseInt(document.getElementById(ability)?.value) || 10) - 10) / 2);
+}
+function getLevel() {
+    return parseInt(document.getElementById("level")?.value) || 1;
 }
 
 // Helper to process entries recursively (Global)
@@ -353,7 +434,7 @@ window.updateModifiers = function () {
 
     const isSaveProf = saveProficiency[ability] || false;
     const isSaveExp = saveExpertise[ability] || false;
-    const saveTotal = mod + (isSaveProf ? (isSaveExp ? profBonus * 2 : profBonus) : 0);
+    const saveTotal = mod + (isSaveProf ? profBonus : 0) + (isSaveProf && isSaveExp ? profBonus : 0);
     const saveEl = document.getElementById(`saveMod_${ability}`);
     if (saveEl) {
         if (saveEl.tagName === 'INPUT') saveEl.value = formatMod(saveTotal);
@@ -367,7 +448,7 @@ window.updateModifiers = function () {
     const abilityMod = calcMod(abilityScore);
     const isProf = skillProficiency[skillName] || false;
     const isExp = skillExpertise[skillName] || false;
-    const total = abilityMod + (isProf ? (isExp ? profBonus * 2 : profBonus) : 0);
+    const total = abilityMod + (isProf ? profBonus : 0) + (isProf && isExp ? profBonus : 0);
     const skillEl = document.getElementById(`skillMod_${skillName}`);
     if (skillEl) {
         if (skillEl.tagName === 'INPUT') skillEl.value = formatMod(total);
@@ -378,6 +459,8 @@ window.updateModifiers = function () {
   updateCombatStats();
   updateSpellDC();
   updateAllWeaponStats();
+  if (window.recomputeWeaponFormulas) window.recomputeWeaponFormulas();
+  if (window.recomputeResourceMaxes) window.recomputeResourceMaxes();
 };
 
 window.updateAllWeaponStats = function () {
@@ -418,6 +501,7 @@ window.updateAllWeaponStats = function () {
     row.querySelector(".weapon-atk").value = atkString;
     row.querySelector(".weapon-damage").value = dmgString;
   });
+  if (window.renderWeaponsCard) window.renderWeaponsCard();
   saveCharacter();
 };
 
@@ -2962,12 +3046,238 @@ window.addWeapon = function (data = null) {
     ? `<input type="text" class="weapon-name" placeholder="Click to select..." onclick="openWeaponPicker(this)" readonly value="${data ? data.name : ""}" style="cursor: pointer; color: var(--red-dark); font-weight: bold;" />`
     : `<input type="text" class="weapon-name" placeholder="Enter weapon name" value="${data ? data.name : ""}" style="cursor: text; color: var(--ink); font-weight: bold;" />`;
 
-  newWeapon.innerHTML = `<button class="delete-feature-btn" style="position: absolute; top: 5px; right: 5px; z-index:10; width: 24px; height: 24px;" onclick="this.closest('.weapon-item').remove(); saveCharacter();">&times;</button><div style="display: flex; flex-direction: column; gap: 10px;"><div class="grid grid-3" style="margin-bottom: 0; gap: 10px;"><div class="field"><span class="field-label">Weapon Name</span>${nameField}</div><div class="field"><span class="field-label">Atk Bonus</span><input type="text" class="weapon-atk" placeholder="+0" value="${data ? data.atk : ""}" /></div><div class="field"><span class="field-label">Damage</span><input type="text" class="weapon-damage" placeholder="1d6+0" value="${data ? data.damage : ""}" /></div></div><div class="field"><span class="field-label">Notes</span><input type="text" class="weapon-notes" placeholder="Properties..." value="${data ? data.notes : ""}" /></div></div>`;
+  newWeapon.innerHTML = `
+    <div style="display:flex; position:absolute; top:5px; right:5px; gap:4px; z-index:10;">
+        <button class="weapon-formula-btn" title="Set formula" onclick="window.openWeaponFormulaModal(this)" style="width:24px; height:24px; background:transparent; border:1px solid var(--gold); border-radius:4px; font-size:0.75rem; cursor:pointer; color:var(--ink-light); display:flex; align-items:center; justify-content:center;">⚙</button>
+        <button class="delete-feature-btn" style="width:24px; height:24px;" onclick="this.closest('.weapon-item').remove(); saveCharacter();">&times;</button>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div class="grid grid-3" style="margin-bottom: 0; gap: 10px;">
+            <div class="field"><span class="field-label">Weapon Name</span>${nameField}</div>
+            <div class="field"><span class="field-label">Atk Bonus</span><input type="text" class="weapon-atk" placeholder="+0" value="${data ? data.atk : ""}" /></div>
+            <div class="field"><span class="field-label">Damage</span><input type="text" class="weapon-damage" placeholder="1d6+0" value="${data ? data.damage : ""}" /></div>
+        </div>
+        <div class="field"><span class="field-label">Notes</span><input type="text" class="weapon-notes" placeholder="Properties..." value="${data ? data.notes : ""}" /></div>
+    </div>`;
+  if (data && data.formulaData) {
+      newWeapon.dataset.wformula = JSON.stringify(data.formulaData);
+  }
   weaponList.appendChild(newWeapon);
   newWeapon
     .querySelectorAll("input")
     .forEach((input) => input.addEventListener("input", saveCharacter));
-  if (!window.isInitializing) saveCharacter();
+  if (!window.isInitializing) {
+      if (data && data.formulaData) window.recomputeWeaponFormulas();
+      saveCharacter();
+  }
+};
+
+// Recompute weapon atk/damage from saved formula
+window.recomputeWeaponFormulas = function() {
+    const pb = getPB();
+    document.querySelectorAll('.weapon-item[data-wformula]').forEach(row => {
+        try {
+            const f = JSON.parse(row.dataset.wformula);
+            if (!f) return;
+            if (f.atkAbility && f.atkAbility !== 'none') {
+                const mod = getAbilityMod(f.atkAbility);
+                const total = mod + (f.atkProf ? pb : 0);
+                const atkInput = row.querySelector('.weapon-atk');
+                if (atkInput) atkInput.value = total >= 0 ? `+${total}` : `${total}`;
+            }
+            if (f.dmgAbility && f.dmgAbility !== 'none' && f.damageDice) {
+                const mod = getAbilityMod(f.dmgAbility);
+                const dmgInput = row.querySelector('.weapon-damage');
+                if (dmgInput) {
+                    let s = f.damageDice;
+                    if (mod > 0) s += ` + ${mod}`;
+                    else if (mod < 0) s += ` - ${Math.abs(mod)}`;
+                    if (f.damageType) s += ` ${f.damageType}`;
+                    dmgInput.value = s;
+                }
+            }
+            if (f.saveDCAbility && f.saveDCAbility !== 'none') {
+                const dc = 8 + getAbilityMod(f.saveDCAbility) + pb;
+                const notesInput = row.querySelector('.weapon-notes');
+                if (notesInput && !notesInput.value.includes('DC')) {
+                    // Only update if DC isn't already in notes
+                }
+                // Write DC to a dedicated display if it exists
+                const dcEl = row.querySelector('.weapon-dc-val');
+                if (dcEl) dcEl.textContent = `DC ${dc}`;
+            }
+        } catch (e) {}
+    });
+    if (window.renderWeaponsCard) window.renderWeaponsCard();
+};
+
+window.renderWeaponsCard = function() {
+    const card = document.getElementById('mobile-weapons-card');
+    if (!card) return;
+
+    const items = Array.from(document.querySelectorAll('.weapon-item'));
+    if (items.length === 0) {
+        card.innerHTML = `
+            <div class="weapons-card-header">
+                <span class="weapons-card-title">Weapons</span>
+            </div>
+            <div style="color:var(--ink-light); font-style:italic; font-size:0.82rem; padding:4px 0;">No weapons added yet.</div>`;
+        return;
+    }
+
+    const pb = getPB();
+    const rowsHtml = items.map((item, i) => {
+        const name = item.querySelector('.weapon-name')?.value || '—';
+        const atk  = item.querySelector('.weapon-atk')?.value  || '—';
+        const dmg  = item.querySelector('.weapon-damage')?.value || '—';
+        const notes = item.querySelector('.weapon-notes')?.value?.trim() || '';
+
+        let dcStr = '';
+        try {
+            const f = JSON.parse(item.dataset.wformula || '{}');
+            if (f.saveDCAbility && f.saveDCAbility !== 'none') {
+                dcStr = `Save DC ${8 + getAbilityMod(f.saveDCAbility) + pb}`;
+            }
+        } catch(e) {}
+
+        const detailParts = [];
+        if (notes) detailParts.push(notes);
+        if (dcStr) detailParts.push(dcStr);
+        const hasDetail = detailParts.length > 0;
+        const expandId = `wcard-detail-${i}`;
+
+        return `<div class="weapon-card-item">
+            <div class="weapon-card-row${hasDetail ? ' weapon-card-row-expandable' : ''}"
+                 onclick="${hasDetail ? `var d=document.getElementById('${expandId}');if(d){d.classList.toggle('open');this.querySelector('.wcard-chevron').classList.toggle('open')}` : ''}">
+                <span class="weapon-card-name">${name}</span>
+                <span class="weapon-card-atk">${atk}</span>
+                <span class="weapon-card-dmg">${dmg}</span>
+                ${hasDetail ? `<span class="wcard-chevron">▾</span>` : '<span style="width:12px;flex-shrink:0;"></span>'}
+            </div>
+            ${hasDetail ? `<div class="weapon-card-detail" id="${expandId}">${detailParts.join(' · ')}</div>` : ''}
+        </div>`;
+    }).join('');
+
+    card.innerHTML = `
+        <div class="weapons-card-header">
+            <span class="weapons-card-title">Weapons</span>
+        </div>
+        ${rowsHtml}`;
+};
+
+// Open weapon formula modal
+window.openWeaponFormulaModal = function(btn) {
+    const row = btn.closest('.weapon-item');
+    if (!row) return;
+    let current = {};
+    try { current = JSON.parse(row.dataset.wformula || '{}'); } catch(e) {}
+    if (!row.id) row.id = 'wrow-' + Date.now();
+
+    const pb = getPB();
+    const abilityOptHtml = (selected) => ABILITY_OPTS.map(o =>
+        `<option value="${o.key}" ${selected === o.key ? 'selected' : ''}>${o.label}</option>`
+    ).join('');
+
+    const wfPreview = (f) => {
+        const lines = [];
+        if (f.atkAbility && f.atkAbility !== 'none') {
+            const mod = getAbilityMod(f.atkAbility);
+            const total = mod + (f.atkProf ? pb : 0);
+            lines.push(`<b>Attack:</b> ${total >= 0 ? '+' : ''}${total}`);
+        }
+        if (f.dmgAbility && f.dmgAbility !== 'none') {
+            const mod = getAbilityMod(f.dmgAbility);
+            const dice = f.damageDice || '';
+            let s = dice;
+            if (mod > 0) s += ` + ${mod}`;
+            else if (mod < 0) s += ` - ${Math.abs(mod)}`;
+            if (f.damageType) s += ` ${f.damageType}`;
+            lines.push(`<b>Damage:</b> ${s || `modifier: ${mod >= 0 ? '+' : ''}${mod}`}`);
+        }
+        if (f.saveDCAbility && f.saveDCAbility !== 'none') {
+            lines.push(`<b>Save DC:</b> ${8 + getAbilityMod(f.saveDCAbility) + pb}`);
+        }
+        return lines.length ? lines.join('<br>') : '<span style="color:var(--ink-light);">No formula — manual input only.</span>';
+    };
+
+    let modal = document.getElementById('weapFormulaModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'weapFormulaModal';
+        modal.className = 'info-modal-overlay';
+        document.body.appendChild(modal);
+    }
+    modal.dataset.weaponRowId = row.id;
+    modal.innerHTML = `
+        <div class="info-modal-content" style="max-width:360px;">
+            <button class="info-modal-close" onclick="document.getElementById('weapFormulaModal').style.display='none'">×</button>
+            <h3 class="info-modal-title">Weapon Formula</h3>
+            <div style="margin-bottom:10px;">
+                <span class="field-label">Attack Bonus — Ability</span>
+                <select id="wfAtkAbility" style="width:100%; margin-top:4px; padding:6px; border:1px solid var(--gold); border-radius:4px; background:var(--parchment);">
+                    ${abilityOptHtml(current.atkAbility || 'none')}
+                </select>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+                <input type="checkbox" id="wfAtkProf" ${current.atkProf !== false ? 'checked' : ''} style="width:16px; height:16px;">
+                <label for="wfAtkProf" style="font-family:'Cinzel',serif; font-size:0.82rem; color:var(--ink);">Add Proficiency Bonus</label>
+            </div>
+            <div style="margin-bottom:10px;">
+                <span class="field-label">Damage Modifier — Ability</span>
+                <select id="wfDmgAbility" style="width:100%; margin-top:4px; padding:6px; border:1px solid var(--gold); border-radius:4px; background:var(--parchment);">
+                    ${abilityOptHtml(current.dmgAbility || 'none')}
+                </select>
+            </div>
+            <div style="margin-bottom:14px;">
+                <span class="field-label">Save DC — Ability (= 8 + mod + PB)</span>
+                <select id="wfDCAbility" style="width:100%; margin-top:4px; padding:6px; border:1px solid var(--gold); border-radius:4px; background:var(--parchment);">
+                    ${abilityOptHtml(current.saveDCAbility || 'none')}
+                </select>
+            </div>
+            <div id="wfPreview" style="background:var(--parchment-dark); border:1px solid var(--gold); border-radius:4px; padding:8px; margin-bottom:16px; font-size:0.85rem; font-family:'Crimson Text',serif; line-height:1.6;">
+                ${wfPreview(current)}
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn" style="flex:1;" onclick="window.applyWeaponFormula()">Apply</button>
+                <button class="btn btn-secondary" style="flex:1;" onclick="document.getElementById('weapFormulaModal').style.display='none'">Cancel</button>
+            </div>
+        </div>`;
+
+    // Live preview on any change
+    const previewEl = modal.querySelector('#wfPreview');
+    const getFormState = () => ({
+        atkAbility: modal.querySelector('#wfAtkAbility').value,
+        atkProf: modal.querySelector('#wfAtkProf').checked,
+        dmgAbility: modal.querySelector('#wfDmgAbility').value,
+        saveDCAbility: modal.querySelector('#wfDCAbility').value,
+        damageDice: current.damageDice,
+        damageType: current.damageType
+    });
+    ['wfAtkAbility', 'wfDmgAbility', 'wfDCAbility', 'wfAtkProf'].forEach(id => {
+        modal.querySelector('#' + id).addEventListener('change', () => {
+            previewEl.innerHTML = wfPreview(getFormState());
+        });
+    });
+
+    window.applyWeaponFormula = function() {
+        const r = document.getElementById(modal.dataset.weaponRowId);
+        if (!r) return;
+        const f = getFormState();
+        // Extract dice and damage type from current damage field if not already set
+        const dmgInput = r.querySelector('.weapon-damage');
+        if (dmgInput && dmgInput.value && !f.damageDice) {
+            const diceMatch = dmgInput.value.match(/^([\dd\s]+)/i);
+            if (diceMatch) f.damageDice = diceMatch[1].trim();
+            const typeMatch = dmgInput.value.match(/(slashing|piercing|bludgeoning|fire|cold|lightning|acid|poison|necrotic|radiant|thunder|psychic|force)/i);
+            if (typeMatch) f.damageType = typeMatch[1].toLowerCase();
+        }
+        r.dataset.wformula = JSON.stringify(f);
+        modal.style.display = 'none';
+        window.recomputeWeaponFormulas();
+        saveCharacter();
+    };
+
+    modal.style.display = 'flex';
 };
 
 // Resources
@@ -3030,6 +3340,384 @@ window.toggleResourceSlot = function(index, slotIndex) {
     else resourcesData[index].used = slotIndex + 1;
     renderResources();
     saveCharacter();
+};
+
+// Auto-detect class resources from class table + known formulas
+window.autoDetectClassResources = async function() {
+    const charClass = document.getElementById('charClass')?.value?.trim();
+    const level = parseInt(document.getElementById('level')?.value) || 1;
+    if (!charClass) return;
+
+    const defs = CLASS_RESOURCE_DEFS[charClass];
+    if (!defs || defs.length === 0) {
+        // Remove stale auto-detected resources from a prior class
+        resourcesData = resourcesData.filter(r => !r.auto);
+        renderResources();
+        if (document.getElementById('mobile-resources-card')) window.renderMobileResources();
+        saveCharacter();
+        return;
+    }
+
+    const chaMod = Math.floor(((parseInt(document.getElementById('cha')?.value) || 10) - 10) / 2);
+    const stripTag = s => s.replace(/\{@\w+\s*([^}]+)?\}/g, '$1').trim();
+
+    // Load class data for colLabel lookups
+    let classObj = null;
+    if (window.isDataAvailable) {
+        try {
+            const db = await openDB();
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const allFiles = await new Promise(resolve => {
+                const req = store.get('currentData');
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => resolve([]);
+            });
+            allFiles.forEach(file => {
+                if (!file.name.toLowerCase().endsWith('.json')) return;
+                try {
+                    const json = JSON.parse(file.content);
+                    if (json.class) {
+                        json.class.filter(c => c.name.toLowerCase() === charClass.toLowerCase()).forEach(m => {
+                            if (!classObj) classObj = m;
+                            else if (m.source === 'XPHB') classObj = m;
+                            else if (m.source === 'PHB' && classObj.source !== 'XPHB') classObj = m;
+                        });
+                    }
+                } catch (e) {}
+            });
+        } catch (e) {}
+    }
+
+    const getColValue = (regex) => {
+        if (!classObj || !classObj.classTableGroups) return null;
+        const li = level - 1;
+        for (const group of classObj.classTableGroups) {
+            if (!group.colLabels) continue;
+            const ci = group.colLabels.findIndex(l => regex.test(stripTag(l)));
+            if (ci !== -1 && group.rows && group.rows[li]) {
+                const cell = group.rows[li][ci];
+                const v = parseInt(typeof cell === 'object' ? (cell.value ?? cell) : cell);
+                if (!isNaN(v)) return v;
+            }
+        }
+        return null;
+    };
+
+    // Build set of expected auto resource names at this level
+    const expectedNames = new Set();
+    const updates = [];
+
+    for (const def of defs) {
+        if (def.levelMin && level < def.levelMin) continue;
+        let maxVal = null;
+        if (def.colLabel) maxVal = getColValue(def.colLabel);
+        if (maxVal === null && def.formula) maxVal = def.formula(level, chaMod);
+        if (maxVal === null || maxVal <= 0) continue;
+
+        expectedNames.add(def.name);
+        updates.push({ name: def.name, max: maxVal, reset: def.reset });
+    }
+
+    // Remove stale auto-detected resources (class changed or level too low)
+    resourcesData = resourcesData.filter(r => !r.auto || expectedNames.has(r.name));
+
+    // Add or update auto resources
+    for (const upd of updates) {
+        const existing = resourcesData.find(r => r.auto && r.name === upd.name);
+        if (existing) {
+            // Update max if it changed (preserve used count)
+            if (existing.max !== upd.max) {
+                existing.max = upd.max;
+                if (existing.used > existing.max) existing.used = existing.max;
+            }
+            existing.reset = upd.reset;
+        } else {
+            // Check if user already manually added one with this name — don't duplicate
+            const userHas = resourcesData.find(r => !r.auto && r.name === upd.name);
+            if (!userHas) {
+                resourcesData.unshift({ name: upd.name, max: upd.max, used: 0, reset: upd.reset, auto: true });
+            }
+        }
+    }
+
+    renderResources();
+    if (document.getElementById('mobile-resources-card')) window.renderMobileResources();
+    saveCharacter();
+};
+
+// Short rest: restore SR resources, re-render
+window.doShortRest = function() {
+    resourcesData.forEach(r => { if (r.reset === 'sr') r.used = 0; });
+    renderResources();
+    window.renderMobileResources();
+    saveCharacter();
+};
+
+// Long rest: restore ALL resources
+window.doLongRest = function() {
+    resourcesData.forEach(r => r.used = 0);
+    renderResources();
+    window.renderMobileResources();
+    saveCharacter();
+};
+
+// Adjust max pips for fixed custom resources
+window.adjustMobileResourceMax = function(index, delta) {
+    const res = resourcesData[index];
+    if (!res || res.auto) return;
+    const newMax = Math.max(1, (res.fixedMax ?? res.max) + delta);
+    res.fixedMax = newMax;
+    res.max = newMax;
+    if (res.used > res.max) res.used = res.max;
+    renderResources();
+    window.renderMobileResources();
+    saveCharacter();
+};
+
+// Mobile pip toggle
+window.toggleMobileResourcePip = function(index, pipIndex) {
+    const res = resourcesData[index];
+    if (!res) return;
+    if (pipIndex < res.used) res.used = pipIndex;
+    else res.used = pipIndex + 1;
+    renderResources();
+    window.renderMobileResources();
+    saveCharacter();
+};
+
+// Mobile stepper (+/-)
+window.stepMobileResource = function(index, delta) {
+    const res = resourcesData[index];
+    if (!res) return;
+    res.used = Math.max(0, Math.min(res.max, (res.used || 0) + delta));
+    renderResources();
+    window.renderMobileResources();
+    saveCharacter();
+};
+
+// Add a custom resource from mobile UI
+window.addCustomResourceMobile = function() {
+    resourcesData.push({ name: 'New Resource', max: 3, used: 0, reset: 'lr', auto: false });
+    renderResources();
+    window.renderMobileResources();
+    saveCharacter();
+};
+
+// Delete a resource from mobile UI
+window.deleteMobileResource = function(index) {
+    resourcesData.splice(index, 1);
+    renderResources();
+    window.renderMobileResources();
+    saveCharacter();
+};
+
+// Rename resource from mobile UI
+window.renameMobileResource = function(index, val) {
+    if (resourcesData[index]) { resourcesData[index].name = val; saveCharacter(); }
+};
+
+// Change reset type from mobile UI
+window.setMobileResourceReset = function(index, val) {
+    if (resourcesData[index]) { resourcesData[index].reset = val; window.renderMobileResources(); saveCharacter(); }
+};
+
+// Compute a resource's effective max from its formulaKey
+window.computeResourceMax = function(res) {
+    if (!res.formulaKey || res.formulaKey === 'fixed') return res.fixedMax ?? res.max;
+    const opt = RESOURCE_FORMULA_OPTS.find(o => o.key === res.formulaKey);
+    return (opt && opt.compute) ? Math.max(1, opt.compute()) : (res.fixedMax ?? res.max);
+};
+
+// Re-run formula for all formula-driven resources after stat changes
+window.recomputeResourceMaxes = function() {
+    let changed = false;
+    resourcesData.forEach(res => {
+        if (!res.formulaKey || res.formulaKey === 'fixed') return;
+        const newMax = window.computeResourceMax(res);
+        if (newMax !== res.max) {
+            res.max = newMax;
+            if (res.used > res.max) res.used = res.max;
+            changed = true;
+        }
+    });
+    if (changed) {
+        renderResources();
+        if (document.getElementById('mobile-resources-card')) window.renderMobileResources();
+        saveCharacter();
+    }
+};
+
+// Open resource settings modal (formula + fixed max adjuster)
+window.openResourceSettingsModal = function(index) {
+    const res = resourcesData[index];
+    if (!res) return;
+    const currentKey = res.formulaKey || 'fixed';
+    const currentFixed = res.fixedMax ?? res.max;
+    const optHtml = RESOURCE_FORMULA_OPTS.map(o =>
+        `<option value="${o.key}" ${currentKey === o.key ? 'selected' : ''}>${o.label}</option>`
+    ).join('');
+    const preview = window.computeResourceMax(res);
+
+    let modal = document.getElementById('resFormulaModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'resFormulaModal';
+        modal.className = 'info-modal-overlay';
+        document.body.appendChild(modal);
+    }
+    modal.dataset.resIndex = index;
+    modal.innerHTML = `
+        <div class="info-modal-content" style="max-width:320px;">
+            <button class="info-modal-close" onclick="document.getElementById('resFormulaModal').style.display='none'">×</button>
+            <h3 class="info-modal-title">${res.name} — Settings</h3>
+            <div class="field" style="margin-bottom:10px;">
+                <span class="field-label">Max Pips Formula</span>
+                <select id="resFormulaSelect" style="width:100%; margin-top:4px; padding:6px; border:1px solid var(--gold); border-radius:4px; background:var(--parchment); font-size:0.9rem;">
+                    ${optHtml}
+                </select>
+            </div>
+            <div id="resFixedRow" style="display:${currentKey === 'fixed' ? 'flex' : 'none'}; align-items:center; gap:10px; margin-bottom:10px;">
+                <span style="font-family:'Cinzel',serif; font-size:0.8rem; color:var(--ink); white-space:nowrap;">Fixed max:</span>
+                <button class="mini-btn" id="resFixedMinus">−</button>
+                <span id="resFixedVal" style="font-family:'Cinzel',serif; font-size:1rem; font-weight:700; min-width:24px; text-align:center;">${currentFixed}</span>
+                <button class="mini-btn" id="resFixedPlus">+</button>
+            </div>
+            <div style="font-size:0.85rem; color:var(--ink-light); margin-bottom:16px;">
+                Computed value: <strong id="resFormulaPreview">${preview}</strong>
+            </div>
+            <div style="margin-bottom:12px;">
+                <span class="field-label">Resets on</span>
+                <select id="resResetSelect" style="width:100%; margin-top:4px; padding:6px; border:1px solid var(--gold); border-radius:4px; background:var(--parchment); font-size:0.9rem;">
+                    <option value="lr" ${(res.reset||'lr')==='lr'?'selected':''}>Long Rest</option>
+                    <option value="sr" ${res.reset==='sr'?'selected':''}>Short Rest</option>
+                    <option value="both" ${res.reset==='both'?'selected':''}>Both Rests</option>
+                </select>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn" style="flex:1;" onclick="window.applyResourceFormula()">Apply</button>
+                <button class="btn btn-secondary" style="flex:1;" onclick="document.getElementById('resFormulaModal').style.display='none'">Cancel</button>
+            </div>
+        </div>`;
+
+    // Live preview
+    let fixedVal = currentFixed;
+    const selEl = modal.querySelector('#resFormulaSelect');
+    const previewEl = modal.querySelector('#resFormulaPreview');
+    const fixedRow = modal.querySelector('#resFixedRow');
+    const fixedValEl = modal.querySelector('#resFixedVal');
+
+    selEl.addEventListener('change', function() {
+        const key = this.value;
+        const opt = RESOURCE_FORMULA_OPTS.find(o => o.key === key);
+        const val = (opt && opt.compute) ? Math.max(1, opt.compute()) : fixedVal;
+        previewEl.textContent = val;
+        fixedRow.style.display = key === 'fixed' ? 'flex' : 'none';
+    });
+    modal.querySelector('#resFixedMinus').addEventListener('click', () => {
+        fixedVal = Math.max(1, fixedVal - 1);
+        fixedValEl.textContent = fixedVal;
+        if (selEl.value === 'fixed') previewEl.textContent = fixedVal;
+    });
+    modal.querySelector('#resFixedPlus').addEventListener('click', () => {
+        fixedVal = fixedVal + 1;
+        fixedValEl.textContent = fixedVal;
+        if (selEl.value === 'fixed') previewEl.textContent = fixedVal;
+    });
+
+    window.applyResourceFormula = function() {
+        const idx = parseInt(modal.dataset.resIndex);
+        const r = resourcesData[idx];
+        if (!r) return;
+        const key = selEl.value;
+        r.formulaKey = key;
+        r.fixedMax = fixedVal;
+        r.reset = modal.querySelector('#resResetSelect').value;
+        if (key === 'fixed') {
+            r.max = fixedVal;
+        } else {
+            r.max = window.computeResourceMax(r);
+        }
+        if (r.used > r.max) r.used = r.max;
+        modal.style.display = 'none';
+        renderResources();
+        window.renderMobileResources();
+        saveCharacter();
+    };
+
+    modal.style.display = 'flex';
+};
+
+// Render mobile resources card into #mobile-resources-card
+window.renderMobileResources = function() {
+    const card = document.getElementById('mobile-resources-card');
+    if (!card) return;
+
+    if (resourcesData.length === 0) {
+        card.innerHTML = `
+            <div class="res-card-header">
+                <span class="res-card-title">Resources</span>
+                <button class="res-add-btn" onclick="window.addCustomResourceMobile()">+ Add</button>
+            </div>
+            <div style="color:var(--ink-light); font-style:italic; font-size:0.82rem; padding:8px 0;">No resources yet. Add a custom one or level up to auto-detect class resources.</div>`;
+        return;
+    }
+
+    let rowsHtml = '';
+    resourcesData.forEach((res, i) => {
+        const effectiveMax = window.computeResourceMax(res);
+        const usePips = effectiveMax <= 10;
+        const resetLabel = res.reset === 'sr' ? 'Short Rest' : res.reset === 'both' ? 'Both Rests' : 'Long Rest';
+        const resetClass = res.reset === 'sr' ? 'res-badge-sr' : res.reset === 'both' ? 'res-badge-both' : 'res-badge-lr';
+        const hasFormula = res.formulaKey && res.formulaKey !== 'fixed';
+
+        let inputHtml = '';
+        if (usePips) {
+            let pips = '';
+            for (let p = 0; p < effectiveMax; p++) {
+                const filled = p < res.used ? 'filled' : '';
+                pips += `<div class="res-pip ${filled}" onclick="window.toggleMobileResourcePip(${i}, ${p})"></div>`;
+            }
+            // Show max +/- only for fixed custom resources
+            const maxControls = (!res.auto && !hasFormula)
+                ? `<div class="res-max-controls">
+                    <button class="res-max-btn" onclick="window.adjustMobileResourceMax(${i}, -1)">−</button>
+                    <span class="res-max-label">${effectiveMax}</span>
+                    <button class="res-max-btn" onclick="window.adjustMobileResourceMax(${i}, 1)">+</button>
+                  </div>`
+                : '';
+            inputHtml = `<div class="res-pips-row"><div class="res-pips">${pips}</div>${maxControls}</div>`;
+        } else {
+            inputHtml = `<div class="res-stepper">
+                <button class="res-step-btn" onclick="window.stepMobileResource(${i}, 1)">−</button>
+                <span class="res-step-val">${res.used}</span>
+                <span class="res-step-sep">/</span>
+                <span class="res-step-max">${effectiveMax}</span>
+                <button class="res-step-btn" onclick="window.stepMobileResource(${i}, -1)">+</button>
+            </div>`;
+        }
+
+        const settingsBtn = !res.auto
+            ? `<button class="res-settings-btn" onclick="window.openResourceSettingsModal(${i})" title="Settings">⚙</button>`
+            : `<span class="res-auto-tag" title="Auto-detected from class">⚙</span>`;
+
+        rowsHtml += `<div class="res-row">
+            <div class="res-row-top">
+                <input class="res-name-inp" value="${res.name.replace(/"/g, '&quot;')}" onchange="window.renameMobileResource(${i}, this.value)" ${res.auto ? 'readonly' : ''} />
+                ${settingsBtn}
+                <span class="res-badge ${resetClass}">${resetLabel}</span>
+                <button class="res-del-btn" onclick="window.deleteMobileResource(${i})">×</button>
+            </div>
+            ${inputHtml}
+        </div>`;
+    });
+
+    card.innerHTML = `
+        <div class="res-card-header">
+            <span class="res-card-title">Resources</span>
+            <button class="res-add-btn" onclick="window.addCustomResourceMobile()">+ Add</button>
+        </div>
+        ${rowsHtml}`;
 };
 
 // Spells
@@ -3551,6 +4239,7 @@ window.saveCharacter = function () {
         atk: item.querySelector(".weapon-atk").value,
         damage: item.querySelector(".weapon-damage").value,
         notes: item.querySelector(".weapon-notes").value,
+        formulaData: item.dataset.wformula ? JSON.parse(item.dataset.wformula) : null,
       }),
     ),
 
@@ -4932,15 +5621,23 @@ window.mountActionsView = function() {
         if (atkInput) atkInput.addEventListener('input', window._syncAtkBadge);
     }
 
-    // Move class resources section
-    const resSec = document.getElementById('resourcesContainer')?.closest('.sheet-section');
-    if (resSec && !resSec.dataset.actMoved) {
-        const ph = document.createElement('div');
-        ph.id = 'ph-act-res';
-        ph.style.display = 'none';
-        resSec.parentNode.insertBefore(ph, resSec);
-        resSec.dataset.actMoved = 'ph-act-res';
-        view.appendChild(resSec);
+    // Inject mobile resources card
+    if (!document.getElementById('mobile-resources-card')) {
+        const card = document.createElement('div');
+        card.id = 'mobile-resources-card';
+        card.className = 'res-card';
+        view.insertBefore(card, view.children[1] || null);
+        window.renderMobileResources();
+    }
+
+    // Inject mobile weapons card
+    if (!document.getElementById('mobile-weapons-card')) {
+        const wcard = document.createElement('div');
+        wcard.id = 'mobile-weapons-card';
+        wcard.className = 'weapons-mobile-card';
+        const resCard = document.getElementById('mobile-resources-card');
+        view.insertBefore(wcard, resCard ? resCard.nextSibling : view.children[2] || null);
+        window.renderWeaponsCard();
     }
 
     // Move actions, bonus actions, reactions sections
@@ -4962,8 +5659,10 @@ window.mountActionsView = function() {
 };
 
 window.unmountActionsView = function() {
-    // Remove injected header
+    // Remove injected header, resources card, and weapons card
     document.getElementById('act-view-header')?.remove();
+    document.getElementById('mobile-resources-card')?.remove();
+    document.getElementById('mobile-weapons-card')?.remove();
     const atkInput = document.getElementById('attacksPerAction');
     if (atkInput) atkInput.removeEventListener('input', window._syncAtkBadge);
 
@@ -6526,6 +7225,8 @@ document.addEventListener("DOMContentLoaded", () => {
     injectAdvantageToggles();
     updateAdvantageVisuals();
     resizeAllTextareas();
+    // Auto-detect class resources (async, non-blocking)
+    if (window.autoDetectClassResources) setTimeout(() => window.autoDetectClassResources(), 50);
     // Check for pending level up
     if (localStorage.getItem('pendingLevelUp') === 'true') {
         const lvl = parseInt(document.getElementById('level').value) || 1;
@@ -6833,7 +7534,9 @@ window.openLevelUpModal = async function(level) {
         
         window.updateClassDisplay();
         window.saveCharacter();
-        
+        // Re-detect class resources for the new level
+        if (window.autoDetectClassResources) window.autoDetectClassResources();
+
         loadingOverlay.remove();
         alert("Level up confirmed! Features and spells have been added.");
         } catch (e) {

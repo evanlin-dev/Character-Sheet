@@ -453,7 +453,7 @@ body.app-view-active .header { display: none !important; }
 
 body.app-view-active #view-stats .skill-item {
     display: grid;
-    grid-template-columns: 38px 28px 32px 1fr 45px;
+    grid-template-columns: 20px 16px 28px 32px 1fr 45px;
     gap: 4px;
     align-items: center;
     align-content: center;
@@ -465,23 +465,22 @@ body.app-view-active #view-stats .skill-item {
     height: auto;
 }
 
-/* Checkbox and E button share col 1, pinned to opposite ends */
 body.app-view-active #view-stats .skill-item .skill-checkbox {
-    grid-column: 1; grid-row: 1; align-self: center; justify-self: start; width: 18px; height: 18px; min-height: unset;
+    grid-column: 1; grid-row: 1; align-self: center; justify-self: center; width: 18px; height: 18px; min-height: unset;
     display: flex; align-items: center; justify-content: center;
 }
 body.app-view-active #view-stats .skill-item .expertise-btn {
-    grid-column: 1; grid-row: 1; align-self: center; justify-self: end;
+    grid-column: 2; grid-row: 1; align-self: center; justify-self: center;
     width: 14px; height: 14px; font-size: 0.45rem; padding: 0;
     margin-left: 0; border-radius: 2px;
 }
 body.app-view-active #view-stats .skill-item .adv-toggle {
-    grid-column: 2; grid-row: 1; align-self: center; margin: 0 auto; width: 18px; height: 18px; min-height: unset; font-size: 0.6rem;
+    grid-column: 3; grid-row: 1; align-self: center; margin: 0 auto; width: 18px; height: 18px; min-height: unset; font-size: 0.6rem;
     display: flex; align-items: center; justify-content: center;
 }
 
 body.app-view-active #view-stats .skill-item .mobile-mod-label {
-    grid-column: 3;
+    grid-column: 4;
     grid-row: 1;
     align-self: center;
     display: flex;
@@ -495,10 +494,10 @@ body.app-view-active #view-stats .skill-item .mobile-mod-label {
 }
 
 body.app-view-active #view-stats .skill-item .skill-name {
-    grid-column: 4; grid-row: 1; align-self: center; display: flex; align-items: center; justify-content: flex-start; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem; line-height: normal;
+    grid-column: 5; grid-row: 1; align-self: center; display: flex; align-items: center; justify-content: flex-start; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem; line-height: normal;
 }
 body.app-view-active #view-stats .skill-item .skill-mod {
-    grid-column: 5; grid-row: 1; align-self: center; display: flex; align-items: center; justify-content: center; min-width: 0; font-size: 0.9rem; line-height: normal;
+    grid-column: 6; grid-row: 1; align-self: center; display: flex; align-items: center; justify-content: center; min-width: 0; font-size: 0.9rem; line-height: normal;
 }
 body.app-view-active #view-stats .skill-item .skill-info-btn { display: none; }
 
@@ -564,10 +563,10 @@ body.app-view-active #view-inventory .inventory-item .delete-btn { grid-area: de
 body.app-view-active #view-inventory .inventory-item .desc-field { display: none; }
 
 /* Saving throws: 4-column layout (no MOD column) */
-body.app-view-active #view-stats #mobile-saves-wrapper .skill-item { grid-template-columns: 38px 28px 1fr 45px; }
+body.app-view-active #view-stats #mobile-saves-wrapper .skill-item { grid-template-columns: 20px 16px 28px 1fr 45px; }
 body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .mobile-mod-label { display: none; }
-body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .skill-name { grid-column: 3; }
-body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .skill-mod { grid-column: 4; }
+body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .skill-name { grid-column: 4; }
+body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .skill-mod { grid-column: 5; }
 .mobile-saves-header { grid-template-columns: 38px 28px 1fr 45px; gap: 4px; }
 
 /* Skills header doesn't align with 2-column layout — hide it */
@@ -2878,3 +2877,296 @@ body.swap-scores.dense-mode .stat-modifier input {
     margin-bottom: 4px;
     margin-top: 8px;
 }
+
+/* ===== MOBILE RESOURCES CARD ===== */
+.res-card {
+    background: var(--parchment-dark);
+    border: 1px solid var(--gold);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+}
+.res-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--gold);
+}
+.res-card-title {
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--red-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.res-add-btn {
+    font-size: 0.75rem;
+    padding: 3px 9px;
+    background: transparent;
+    border: 1px solid var(--gold);
+    border-radius: 4px;
+    color: var(--ink);
+    cursor: pointer;
+    font-family: 'Cinzel', serif;
+}
+.res-add-btn:hover { background: var(--gold); color: var(--parchment); }
+
+.res-row {
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed var(--gold);
+}
+.res-row:last-of-type { border-bottom: none; margin-bottom: 4px; }
+.res-row-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 7px;
+}
+.res-name-inp {
+    flex: 1;
+    font-family: 'Cinzel', serif;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--gold);
+    padding: 1px 0;
+    min-width: 0;
+}
+.res-name-inp[readonly] { color: var(--ink-light); cursor: default; }
+.res-auto-tag {
+    font-size: 0.7rem;
+    color: var(--ink-light);
+    flex-shrink: 0;
+}
+.res-badge {
+    font-size: 0.65rem;
+    font-family: 'Cinzel', serif;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    letter-spacing: 0.3px;
+}
+.res-badge-sr { background: #d4edff; color: #0066aa; border: 1px solid #99ccee; }
+.res-badge-lr { background: #fde8e8; color: var(--red-dark); border: 1px solid var(--red-light); }
+.res-del-btn {
+    background: transparent;
+    border: none;
+    color: var(--ink-light);
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.res-del-btn:hover { color: var(--red-dark); }
+
+/* Pip bubbles */
+.res-pips {
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+}
+.res-pip {
+    width: 26px;
+    height: 26px;
+    border: 2px solid var(--gold-dark);
+    border-radius: 50%;
+    cursor: pointer;
+    background: var(--parchment);
+    transition: background 0.1s, border-color 0.1s;
+    flex-shrink: 0;
+}
+.res-pip.filled {
+    background: var(--ink);
+    border-color: var(--ink);
+}
+.res-pip:active { transform: scale(0.9); }
+
+/* Stepper for large pools */
+.res-stepper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.res-step-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--gold);
+    border-radius: 6px;
+    background: var(--parchment);
+    color: var(--ink);
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.res-step-btn:active { background: var(--gold); }
+.res-step-val {
+    font-family: 'Cinzel', serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--ink);
+    min-width: 28px;
+    text-align: center;
+}
+.res-step-sep {
+    color: var(--ink-light);
+    font-size: 0.9rem;
+}
+.res-step-max {
+    font-family: 'Cinzel', serif;
+    font-size: 0.9rem;
+    color: var(--ink-light);
+    min-width: 20px;
+}
+
+/* Rest buttons */
+.res-rest-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--gold);
+}
+.rest-btn {
+    padding: 8px 4px;
+    border-radius: 5px;
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid;
+    letter-spacing: 0.3px;
+}
+.rest-btn-sr {
+    background: #d4edff;
+    color: #0055aa;
+    border-color: #99ccee;
+}
+.rest-btn-sr:hover { background: #aad8f7; }
+.rest-btn-lr {
+    background: #fde8e8;
+    color: var(--red-dark);
+    border-color: var(--red-light);
+}
+.rest-btn-lr:hover { background: #f5c6c6; }
+
+/* Resource pip row + max controls */
+.res-pips-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.res-max-controls { display: flex; align-items: center; gap: 5px; margin-left: auto; flex-shrink: 0; }
+.res-max-btn {
+    width: 22px; height: 22px; border: 1px solid var(--gold); border-radius: 4px;
+    background: var(--parchment); color: var(--ink); font-size: 0.9rem;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; padding: 0;
+}
+.res-max-btn:active { background: var(--gold); }
+.res-max-label {
+    font-family: 'Cinzel', serif; font-size: 0.75rem; color: var(--ink-light);
+    min-width: 16px; text-align: center;
+}
+.res-settings-btn {
+    background: transparent; border: 1px solid var(--gold); border-radius: 3px;
+    color: var(--ink-light); font-size: 0.75rem; cursor: pointer;
+    padding: 1px 4px; line-height: 1; flex-shrink: 0;
+}
+.res-settings-btn:hover { background: var(--gold); color: var(--parchment); }
+.res-badge-both { background: #e8e4f8; color: #5533aa; border: 1px solid #b8a8e8; }
+
+/* Update res-badge to be more compact with full text */
+.res-badge { font-size: 0.6rem; }
+
+/* ── Mobile Weapons Card ─────────────────────────────── */
+.weapons-mobile-card {
+    background: var(--parchment);
+    border: 1px solid var(--gold);
+    border-radius: 6px;
+    padding: 10px 12px 8px;
+    margin-bottom: 10px;
+}
+.weapons-card-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.weapons-card-title {
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.weapon-card-item {
+    border-bottom: 1px solid var(--gold-light, #e8d8a0);
+    padding: 4px 0;
+}
+.weapon-card-item:last-child { border-bottom: none; }
+.weapon-card-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+}
+.weapon-card-row-expandable { cursor: pointer; }
+.weapon-card-row-expandable:active { background: rgba(0,0,0,0.04); border-radius: 4px; }
+.weapon-card-name {
+    flex: 1;
+    font-family: 'Crimson Text', serif;
+    font-size: 0.9rem;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.weapon-card-atk {
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: var(--gold);
+    color: var(--parchment);
+    border-radius: 4px;
+    padding: 1px 5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.weapon-card-dmg {
+    font-family: 'Crimson Text', serif;
+    font-size: 0.85rem;
+    color: var(--ink);
+    white-space: nowrap;
+    flex-shrink: 0;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.wcard-chevron {
+    font-size: 0.75rem;
+    color: var(--ink-light);
+    flex-shrink: 0;
+    width: 12px;
+    text-align: center;
+    transition: transform 0.15s;
+    display: inline-block;
+}
+.wcard-chevron.open { transform: rotate(180deg); }
+.weapon-card-detail {
+    display: none;
+    font-family: 'Crimson Text', serif;
+    font-size: 0.8rem;
+    color: var(--ink-light);
+    font-style: italic;
+    padding: 2px 4px 4px;
+    line-height: 1.3;
+}
+.weapon-card-detail.open { display: block; }
