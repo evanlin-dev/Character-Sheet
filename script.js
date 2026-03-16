@@ -524,6 +524,165 @@ window.calculateWeight = function () {
   }
 };
 
+window._getItemCategory = function(name) {
+    const n = name.toLowerCase();
+    if (/sword|dagger|bow|axe|mace|staff|spear|crossbow|wand|hammer|lance|pike|trident|rapier|whip|club|flail|sling|javelin|dart|quarterstaff|greatclub|glaive|halberd|maul|morningstar|scimitar|handaxe|shortsword|longsword|greatsword|blowgun|net|kukri|sickle|hatchet|cleaver/.test(n)) return 'Weapons';
+    if (/armor|shield|helmet|gauntlet|plate|chainmail|chain mail|leather armor|breastplate|hide armor|padded|studded|ring mail|scale mail|splint|half plate|brigandine|buckler|pauldron|vambrace/.test(n)) return 'Armor & Shields';
+    if (/potion|scroll|elixir|tincture|vial|philter|antitoxin|acid flask|alchemist/.test(n)) return 'Potions & Scrolls';
+    if (/cloak|robe|hat|cape|ring|amulet|necklace|bracelet|gloves|belt|boots|goggles|glasses|crown|circlet|earring|brooch|pendant|tunic|coat|vestment/.test(n)) return 'Clothing & Accessories';
+    if (/tool|kit|instrument|thieves|herbalism|navigator|poisoner|tinker|forgery|disguise|calligrapher|cartographer|cobbler|cook|glassblower|jeweler|leatherworker|mason|painter|potter|smith|weaver|woodcarver/.test(n)) return 'Tools & Kits';
+    if (/ration|food|drink|water|meal|provision|bread|meat|cheese|wine|ale|mead|soup|jerky/.test(n)) return 'Food & Drink';
+    if (/rope|bag|pack|backpack|bedroll|blanket|lantern|torch|candle|mirror|tent|waterskin|flask|oil|piton|spike|crowbar|grappling|ladder|manacles|lock|ink|paper|parchment|book|chest|barrel|bucket|jug|pot|sack|ball bearing|block|tackle|holy water|signal whistle|soap|string|wire|fishing|shovel|pickaxe|sledge|magnifying|hourglass|compass|map|net|saddlebag|saddle|bit|bridle/.test(n)) return 'Adventuring Gear';
+    return 'Miscellaneous';
+};
+
+window.openEncumbranceChart = function() {
+    const COLORS = {
+        'Weapons':               '#c0392b',
+        'Armor & Shields':       '#2980b9',
+        'Potions & Scrolls':     '#8e44ad',
+        'Clothing & Accessories':'#e67e22',
+        'Tools & Kits':          '#16a085',
+        'Food & Drink':          '#f39c12',
+        'Adventuring Gear':      '#27ae60',
+        'Miscellaneous':         '#7f8c8d',
+        'Free Capacity':         '#e8e0d0',
+    };
+
+    // Collect all items
+    const allItems = [];
+    document.querySelectorAll('.inventory-item').forEach(row => {
+        const name    = row.querySelector('.name-field')?.value?.trim() || '(unnamed)';
+        const qty     = parseFloat(row.querySelector('.qty-field')?.value) || 0;
+        const wt      = parseFloat(row.querySelector('.weight-field')?.value) || 0;
+        const equipped = !!row.closest('#equippedList');
+        allItems.push({ name, qty, weight: qty * wt, equipped });
+    });
+
+    // Group by category
+    const groups = {};
+    allItems.forEach(item => {
+        const cat = window._getItemCategory(item.name);
+        if (!groups[cat]) groups[cat] = { weight: 0, items: [] };
+        groups[cat].weight += item.weight;
+        groups[cat].items.push(item);
+    });
+
+    const totalCarried = parseFloat(document.getElementById('totalWeightVal')?.textContent) || 0;
+    const maxCap       = parseFloat(document.getElementById('maxWeightVal')?.textContent) || 150;
+    const free         = Math.max(0, maxCap - totalCarried);
+
+    // Build slices (only categories with weight > 0)
+    const slices = Object.entries(groups)
+        .filter(([, g]) => g.weight > 0)
+        .sort((a,b) => b[1].weight - a[1].weight)
+        .map(([cat, g]) => ({ label: cat, value: g.weight, color: COLORS[cat] || '#95a5a6', items: g.items }));
+    if (free > 0) slices.push({ label: 'Free Capacity', value: free, color: COLORS['Free Capacity'], items: [] });
+
+    const chartTotal = slices.reduce((s,sl) => s + sl.value, 0);
+
+    // Build modal
+    let modal = document.getElementById('encumbranceModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'encumbranceModal';
+        modal.className = 'info-modal-overlay';
+        modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+        <div class="info-modal-content" style="max-width:460px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">
+            <button class="close-modal-btn" onclick="document.getElementById('encumbranceModal').style.display='none'">&times;</button>
+            <h3 class="info-modal-title" style="text-align:center;">Weight Breakdown</h3>
+            <div style="text-align:center; font-size:0.85rem; color:var(--ink-light); margin-bottom:8px;">
+                <b>${totalCarried.toFixed(1)}</b> / ${maxCap} lbs carried
+                ${totalCarried > maxCap ? ' <span style="color:var(--red-dark);font-weight:bold;">— Encumbered!</span>' : ''}
+            </div>
+            <canvas id="encumbranceCanvas" width="260" height="260" style="display:block; margin:0 auto 12px; flex-shrink:0;"></canvas>
+            <div id="encumbranceLegend" style="overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:4px; padding:0 2px;"></div>
+        </div>`;
+    modal.style.display = 'flex';
+
+    // Draw donut chart
+    const canvas = document.getElementById('encumbranceCanvas');
+    const ctx    = canvas.getContext('2d');
+    const cx = 130, cy = 130, rOuter = 110, rInner = 55;
+    ctx.clearRect(0, 0, 260, 260);
+    let angle = -Math.PI / 2;
+    slices.forEach(slice => {
+        const sweep = (slice.value / chartTotal) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(cx + rInner * Math.cos(angle), cy + rInner * Math.sin(angle));
+        ctx.arc(cx, cy, rOuter, angle, angle + sweep);
+        ctx.arc(cx, cy, rInner, angle + sweep, angle, true);
+        ctx.closePath();
+        ctx.fillStyle = slice.color;
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        angle += sweep;
+    });
+    // Center text
+    ctx.fillStyle = '#4a3728';
+    ctx.font = 'bold 15px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${totalCarried.toFixed(1)} lbs`, cx, cy - 5);
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.fillText('carried', cx, cy + 13);
+
+    // Legend with expandable item lists
+    const legend = document.getElementById('encumbranceLegend');
+    slices.forEach(slice => {
+        const pct = chartTotal > 0 ? ((slice.value / chartTotal) * 100).toFixed(1) : '0';
+        const hasItems = slice.items && slice.items.length > 0;
+
+        const entry = document.createElement('div');
+        entry.style.cssText = 'border:1px solid var(--gold); border-radius:6px; overflow:hidden; background:white;';
+
+        const header = document.createElement('div');
+        header.style.cssText = `display:flex; align-items:center; gap:8px; padding:6px 10px; cursor:${hasItems ? 'pointer' : 'default'};`;
+        header.innerHTML = `
+            <span style="width:13px;height:13px;border-radius:3px;background:${slice.color};flex-shrink:0;display:inline-block;border:1px solid rgba(0,0,0,0.15);"></span>
+            <span style="flex:1;font-weight:600;font-size:0.85rem;">${slice.label}</span>
+            <span style="font-size:0.8rem;color:var(--ink-light);">${slice.value.toFixed(1)} lbs · ${pct}%</span>
+            ${hasItems ? '<span style="font-size:0.75rem;color:var(--ink-light);margin-left:4px;">▾</span>' : ''}`;
+
+        entry.appendChild(header);
+
+        if (hasItems) {
+            const itemList = document.createElement('div');
+            itemList.style.cssText = 'display:none; background:var(--parchment); border-top:1px solid var(--gold); padding:6px 10px 6px 30px; font-size:0.8rem; color:var(--ink);';
+            slice.items.forEach(item => {
+                const line = document.createElement('div');
+                line.style.cssText = 'display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px dashed var(--gold-light,#e8d9a0);';
+                line.innerHTML = `<span>${item.name}${item.equipped ? ' <em style="color:var(--ink-light);">(E)</em>' : ''} ×${item.qty}</span><span style="color:var(--ink-light);">${item.weight.toFixed(1)} lbs</span>`;
+                itemList.appendChild(line);
+            });
+            entry.appendChild(itemList);
+
+            const arrow = header.querySelector('span:last-child');
+            header.addEventListener('click', () => {
+                const open = itemList.style.display !== 'none';
+                itemList.style.display = open ? 'none' : 'block';
+                if (arrow) arrow.textContent = open ? '▾' : '▴';
+            });
+        }
+
+        legend.appendChild(entry);
+    });
+
+    // Weightless items
+    const zeroItems = allItems.filter(i => i.weight === 0 && i.name !== '(unnamed)');
+    if (zeroItems.length) {
+        const note = document.createElement('div');
+        note.style.cssText = 'font-size:0.75rem;color:var(--ink-light);font-style:italic;margin-top:4px;padding:4px 6px;border-top:1px dashed var(--gold);';
+        note.textContent = `Weightless: ${zeroItems.map(i => i.name).join(', ')}`;
+        legend.appendChild(note);
+    }
+};
+
 // HP & Toggles
 window.updateHpBar = function () {
   const current = parseInt(document.getElementById("hp").value) || 0;
