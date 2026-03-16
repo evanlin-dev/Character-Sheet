@@ -769,6 +769,10 @@ document.addEventListener('DOMContentLoaded', () => {
         btnNext.textContent = index === tabs.length - 1 ? 'Create Character' : 'Next';
 
         // Specific Tab Init Logic
+        if (tabId === 'spells') {
+            renderClassFeatures();
+            renderSidebarSpellChoices();
+        }
         if (tabId === 'abilities') {
             renderAbilityScoreSection();
         }
@@ -1687,7 +1691,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (!suppressToast) checkNewFeats();
-        renderGrantedSpells();
+        renderGrantedSpells(); renderSidebarSpellChoices();
         updateSpellProgressionTable();
     }
 
@@ -2473,85 +2477,95 @@ document.addEventListener('DOMContentLoaded', () => {
             counterDiv.innerHTML = parts.join('');
         };
         
-        // Group by Level
-        const levels = {};
-        availableSpells.forEach(s => {
-            if (!levels[s.level]) levels[s.level] = [];
-            levels[s.level].push(s);
-        });
+        const SCHOOL_ABBR = { A:'Abjuration', C:'Conjuration', D:'Divination', E:'Enchantment', V:'Evocation', I:'Illusion', N:'Necromancy', T:'Transmutation' };
 
-        Object.keys(levels).sort((a,b) => parseInt(a)-parseInt(b)).forEach(lvl => {
-            const lvlHeader = document.createElement('div');
-            lvlHeader.style.gridColumn = "1 / -1";
-            lvlHeader.style.fontWeight = "bold";
-            lvlHeader.style.color = "var(--red-dark)";
-            lvlHeader.style.marginTop = "10px";
-            lvlHeader.style.borderBottom = "1px solid var(--gold)";
-            lvlHeader.textContent = lvl === "0" ? "Cantrips" : `Level ${lvl}`;
-            container.appendChild(lvlHeader);
+        const spellTable = document.createElement('table');
+        spellTable.style.cssText = 'width:100%; border-collapse:collapse; font-size:0.8rem;';
 
-            const grid = document.createElement('div');
-            grid.style.display = "grid";
-            grid.style.gridTemplateColumns = "repeat(auto-fill, minmax(180px, 1fr))";
-            grid.style.gap = "8px";
-            grid.style.gridColumn = "1 / -1";
+        const thead = document.createElement('thead');
+        thead.innerHTML = `<tr style="background:var(--parchment-dark); border-bottom:2px solid var(--gold-dark); text-align:left;">
+            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600; white-space:nowrap;">Lvl</th>
+            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600;">Time</th>
+            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600;">Name</th>
+            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600;">School</th>
+            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600; text-align:center;" title="Ritual">R</th>
+            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600; text-align:center;" title="Concentration">C</th>
+            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600; text-align:center;" title="Material Component">M</th>
+            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600;">Range</th>
+            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600;">Source</th>
+        </tr>`;
+        spellTable.appendChild(thead);
 
-            levels[lvl].forEach(s => {
-                const spellDiv = document.createElement('div');
-                spellDiv.textContent = s.name;
-                spellDiv.style.padding = "4px 8px"; 
-                spellDiv.style.borderRadius = "4px";
-                spellDiv.style.fontSize = "0.9rem";
-                spellDiv.style.cursor = "pointer";
-                spellDiv.style.userSelect = "none";
+        const tbody = document.createElement('tbody');
 
-                const updateStyle = () => {
-                    const isSelected = selectedSpells.has(s.name);
-                    spellDiv.style.background = isSelected ? "var(--red)" : "var(--parchment-dark)";
-                    spellDiv.style.color = isSelected ? "white" : "var(--ink)";
-                    spellDiv.style.border = isSelected ? "1px solid var(--red-dark)" : "1px solid var(--gold-dark)";
-                };
-                updateStyle();
+        availableSpells.forEach((s, idx) => {
+            const row = document.createElement('tr');
+            row.style.cssText = `border-bottom:1px solid var(--gold-light,#e8d9a0); cursor:pointer; transition:background 0.1s;`;
 
-                spellDiv.onclick = () => {
-                    if (selectedSpells.has(s.name)) selectedSpells.delete(s.name);
-                    else {
-                        // Check limits
-                        const currentSelected = Array.from(selectedSpells).map(name => allSpells.find(sp => sp.name === name)).filter(Boolean);
-                        
-                        // Filter out feature spells from the count
-                        const activeFeats = getActiveFeatures();
-                        const featureSpells = getFeatureSpells(activeFeats);
-                        const countedSelected = currentSelected.filter(sp => !featureSpells.has(sp.name));
-                        
-                        if (s.level === 0) {
-                            const cantripCount = countedSelected.filter(sp => sp.level === 0).length;
-                            if (cantripLimit !== Infinity && cantripCount >= cantripLimit) {
-                                alert(`You can only select ${cantripLimit} cantrips.`);
-                                return;
-                            }
-                        } else if (specificSpellLevel === null) {
-                            // Only enforce table limit for general spellcasting (not specific feature grants like Mystic Arcanum)
-                            // Count only spells within the max spell level (e.g. Warlock 1-5)
-                            const relevantSpellCount = countedSelected.filter(sp => sp.level > 0 && sp.level <= maxSpellLevel).length;
-                            if (spellLimit !== Infinity && relevantSpellCount >= spellLimit) {
-                                alert(`You can only select ${spellLimit} spells.`);
-                                return;
-                            }
+            const isRitual   = !!(s.meta && s.meta.ritual);
+            const isConc     = !!(s.duration && s.duration.some(d => d.concentration));
+            const hasMat     = !!(s.components && s.components.m);
+            const school     = SCHOOL_ABBR[s.school] || s.school || '';
+            const schoolAbr  = s.school || '';
+            const timeStr    = s.time ? s.time.map(t => `${t.number === 1 ? '' : t.number + ' '}${t.unit}${t.condition ? '*' : ''}`).join('/').trim() : '—';
+            const rangeStr   = s.range ? (s.range.type === 'point' && s.range.distance ? (s.range.distance.type === 'self' ? 'Self' : s.range.distance.type === 'touch' ? 'Touch' : `${s.range.distance.amount || ''} ${s.range.distance.type}`.trim()) : s.range.type || '—') : '—';
+
+            const updateRowStyle = () => {
+                const sel = selectedSpells.has(s.name);
+                row.style.background = sel ? 'var(--red)' : (idx % 2 === 0 ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.1)');
+                row.style.color = sel ? 'white' : 'var(--ink)';
+            };
+            updateRowStyle();
+
+            row.innerHTML = `
+                <td style="padding:3px 6px; white-space:nowrap;">${s.level === 0 ? 'C' : s.level}</td>
+                <td style="padding:3px 6px; white-space:nowrap;">${timeStr}</td>
+                <td style="padding:3px 6px; font-weight:500;">${s.name}</td>
+                <td style="padding:3px 6px; white-space:nowrap;" title="${school}">${schoolAbr}</td>
+                <td style="padding:3px 6px; text-align:center;">${isRitual ? '✦' : ''}</td>
+                <td style="padding:3px 6px; text-align:center;">${isConc ? '●' : ''}</td>
+                <td style="padding:3px 6px; text-align:center;">${hasMat ? '◆' : ''}</td>
+                <td style="padding:3px 6px; white-space:nowrap;">${rangeStr}</td>
+                <td style="padding:3px 6px; white-space:nowrap; font-size:0.75rem; opacity:0.7;">${s.source || ''}</td>
+            `;
+
+            row.onmouseenter = () => { if (!selectedSpells.has(s.name)) row.style.background = 'rgba(180,140,60,0.15)'; };
+            row.onmouseleave = () => updateRowStyle();
+
+            row.onclick = () => {
+                if (selectedSpells.has(s.name)) selectedSpells.delete(s.name);
+                else {
+                    const currentSelected = Array.from(selectedSpells).map(name => allSpells.find(sp => sp.name === name)).filter(Boolean);
+                    const activeFeats = getActiveFeatures();
+                    const featureSpells = getFeatureSpells(activeFeats);
+                    const countedSelected = currentSelected.filter(sp => !featureSpells.has(sp.name));
+
+                    if (s.level === 0) {
+                        const cantripCount = countedSelected.filter(sp => sp.level === 0).length;
+                        if (cantripLimit !== Infinity && cantripCount >= cantripLimit) {
+                            alert(`You can only select ${cantripLimit} cantrips.`);
+                            return;
                         }
-                        selectedSpells.add(s.name);
+                    } else if (specificSpellLevel === null) {
+                        const relevantSpellCount = countedSelected.filter(sp => sp.level > 0 && sp.level <= maxSpellLevel).length;
+                        if (spellLimit !== Infinity && relevantSpellCount >= spellLimit) {
+                            alert(`You can only select ${spellLimit} spells.`);
+                            return;
+                        }
                     }
-                    updateStyle();
-                    updateCounter();
-                    renderGrantedSpells();
-                    renderClassFeatures(true);
-                    renderSpellDescription(s);
-                };
+                    selectedSpells.add(s.name);
+                }
+                updateRowStyle();
+                updateCounter();
+                renderGrantedSpells(); renderSidebarSpellChoices();
+                renderSpellDescription(s);
+            };
 
-                grid.appendChild(spellDiv);
-            });
-            container.appendChild(grid);
+            tbody.appendChild(row);
         });
+
+        spellTable.appendChild(tbody);
+        container.appendChild(spellTable);
         updateCounter();
         parentElement.appendChild(container);
     }
@@ -3342,9 +3356,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         // For now, let's store the version name as the feature name if possible, or a composite.
                         selectedOptionalFeatures.add(`${selectionKey}: ${selectedVersionName}`);
                     }
-                    
+
                     // Don't call updateFeatDetails(selectedVersionName) here because it might reset the UI if the version isn't a top-level feat
                     renderClassFeatures();
+                    renderSidebarSpellChoices();
                     // We might want to trigger ASI updates if the version has specific ASI, but usually ASI is on parent or consistent.
                 });
 
@@ -3477,7 +3492,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     } else {
                                         delete select.dataset.prev;
                                     }
-                                    renderGrantedSpells();
+                                    renderGrantedSpells(); renderSidebarSpellChoices();
                                 });
                                 div.appendChild(select);
                             }
@@ -3648,7 +3663,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // A simpler way: Just let the user pick from the main spell list UI if we can trigger it,
                     // OR just use this UI to populate selectedSpells.
                     if (sel.value) selectedSpells.add(sel.value);
-                    renderGrantedSpells();
+                    renderGrantedSpells(); renderSidebarSpellChoices();
                 });
 
                 div.appendChild(sel);
@@ -3680,6 +3695,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 selectedOptionalFeatures.add(`${selectionKey}: ${selectedFeatName}`);
             }
             renderClassFeatures();
+            renderSidebarSpellChoices();
         });
 
         if (parentFeatName) {
@@ -3881,6 +3897,182 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return [];
     };
+
+    // Builds the list of features that may grant additional spells (shared by both spell renderers)
+    function buildSpellGrantFeatures() {
+        const result = [];
+
+        selectedOptionalFeatures.forEach(name => {
+            const candidates = allOptionalFeatures.filter(f => f.name === name);
+            let feat = candidates.find(f => f.source === 'XPHB') || candidates.find(f => f.source === 'PHB') || candidates[0];
+            if (feat) { result.push({ feature: feat, contextName: name }); return; }
+            const cf = allClassFeatures.find(f => f.name === name && f.className && f.className.toLowerCase() === (selectedClass || '').toLowerCase() && f.source === currentClassSource);
+            if (cf) result.push({ feature: cf, contextName: name });
+        });
+
+        if (selectedClass) {
+            const referencedFeatures = getReferencedClassFeatures(selectedClass, currentClassSource);
+            allClassFeatures.filter(f =>
+                f.className && f.className.toLowerCase() === selectedClass.toLowerCase() &&
+                f.source === currentClassSource && !f.subclassShortName &&
+                f.level <= selectedLevel && !referencedFeatures.has(f.name)
+            ).forEach(f => result.push({ feature: f, contextName: f.name }));
+        }
+
+        if (selectedClass && selectedSubclass) {
+            allSubclassFeatures.filter(f =>
+                f.className && f.className.toLowerCase() === selectedClass.toLowerCase() &&
+                f.subclassShortName === selectedSubclass && f.source === selectedSubclassSource &&
+                f.level <= selectedLevel
+            ).forEach(f => result.push({ feature: f, contextName: f.name }));
+            const subclassObj = allSubclasses.find(s =>
+                s.className && s.className.toLowerCase() === selectedClass.toLowerCase() &&
+                s.shortName === selectedSubclass && s.source === selectedSubclassSource
+            );
+            if (subclassObj) result.push({ feature: subclassObj, contextName: subclassObj.name });
+        }
+
+        if (selectedSpecies) {
+            const candidates = allSpecies.filter(r => r.name === selectedSpecies);
+            const race = candidates.find(r => r.source === 'XPHB') || candidates.find(r => r.source === 'PHB') || candidates[0];
+            if (race) result.push({ feature: race, contextName: race.name });
+        }
+        if (selectedSubrace) result.push({ feature: selectedSubrace, contextName: selectedSubrace.name });
+
+        const resolveFeat = (featName) => {
+            let feat = allFeats.find(f => f.name === featName);
+            if (!feat) {
+                for (const f of allFeats) {
+                    if (f._versions) { const v = f._versions.find(v => v.name === featName); if (v) { feat = v; break; } }
+                }
+            }
+            if (!feat && featName.startsWith('Magic Initiate (')) feat = allFeats.find(f => f.name === 'Magic Initiate');
+            if (!feat && featName.includes(' (')) feat = allFeats.find(f => f.name === featName.substring(0, featName.lastIndexOf(' (')));
+            return feat;
+        };
+
+        selectedOptionalFeatures.forEach(name => {
+            if (name.startsWith('ASI Level ')) {
+                const featName = name.substring(name.indexOf(':') + 2);
+                const feat = resolveFeat(featName);
+                if (feat) result.push({ feature: feat, contextName: featName, isFeat: true });
+            } else if (name.startsWith('OriginFeat:')) {
+                const featName = name.substring('OriginFeat:'.length);
+                const feat = resolveFeat(featName);
+                if (feat) result.push({ feature: feat, contextName: featName, isFeat: true });
+            }
+        });
+
+        return result;
+    }
+
+    // Renders interactive "choose X spells from Y" selectors from species/feats/features into the sidebar
+    function renderSidebarSpellChoices() {
+        const target = document.getElementById('spells-sidebar-choices');
+        if (!target) return;
+        target.innerHTML = '';
+
+        const formatChoose = (str) => {
+            if (!str) return '';
+            return str.split('|').map(part => {
+                const [key, val] = part.split('=');
+                if (key === 'level') return val === '0' ? 'Cantrips' : `Level ${val} Spells`;
+                if (key === 'class') return `${val} Spells`;
+                if (key === 'components & miscellaneous' && val === 'ritual') return 'Rituals';
+                return part;
+            }).join(', ');
+        };
+
+        const features = buildSpellGrantFeatures();
+        console.log('[renderSidebarSpellChoices] features:', features.map(f => ({ contextName: f.contextName, keys: Object.keys(f.feature), additionalSpells: f.feature.additionalSpells })));
+        let hasContent = false;
+
+        features.forEach(item => {
+            if (!item.feature.additionalSpells) return;
+
+            item.feature.additionalSpells.forEach(entry => {
+                // Context/name filter
+                if (entry.name) {
+                    const entryName = entry.name.toLowerCase();
+                    const ctx = item.contextName.toLowerCase();
+                    const specOpt = (selectedSpeciesOption || '').toLowerCase();
+                    if (!ctx.includes(entryName) && specOpt !== entryName) return;
+                }
+                if (item.feature._versions && entry.name) return;
+
+                const extract = (obj) => {
+                    if (!obj) return;
+                    Object.entries(obj).forEach(([key, val]) => {
+                        const lvl = parseInt(key);
+                        if (!isNaN(lvl) && selectedLevel < lvl) return;
+                        if (!Array.isArray(val)) { if (typeof val === 'object') extract(val); return; }
+                        val.forEach(v => {
+                            if (!v || (!v.choose && !v.fromSpells)) return;
+                            let matches, criteria;
+                            if (v.fromSpells) {
+                                matches = allSpells.filter(s => v.fromSpells.map(n => n.toLowerCase()).includes(s.name.toLowerCase()));
+                                criteria = v.fromSpells.join(', ');
+                            } else {
+                                matches = getSpellsFromFilter(v.choose);
+                                criteria = formatChoose(v.choose);
+                            }
+                            console.log(`[renderSidebarSpellChoices] ${item.contextName} → ${matches.length} spells`, matches.map(s => s.name));
+                            if (!matches.length) return;
+
+                            const count = v.count || 1;
+
+                            const section = document.createElement('div');
+                            section.style.cssText = 'margin-bottom:12px; padding-bottom:10px; border-bottom:1px dashed var(--gold);';
+
+                            const lbl = document.createElement('div');
+                            lbl.style.cssText = 'font-size:0.82em; font-weight:bold; color:var(--red-dark); margin-bottom:6px;';
+                            lbl.textContent = `${item.contextName}: Choose ${count} — ${criteria}`;
+                            section.appendChild(lbl);
+
+                            for (let i = 0; i < count; i++) {
+                                const select = document.createElement('select');
+                                select.className = 'styled-select';
+                                select.style.cssText = 'width:100%; margin-bottom:4px; font-size:0.85em;';
+                                select.innerHTML = `<option value="">— Select Spell —</option>` +
+                                    matches.map(s => `<option value="${s.name}">${s.name}${s.level === 0 ? ' (cantrip)' : ` (lvl ${s.level})`}</option>`).join('');
+
+                                // Restore previous selection
+                                const prevSelected = matches.find(s => selectedSpells.has(s.name));
+                                if (prevSelected) {
+                                    select.value = prevSelected.name;
+                                    select.dataset.prev = prevSelected.name;
+                                }
+
+                                select.addEventListener('change', () => {
+                                    const prev = select.dataset.prev;
+                                    if (prev) selectedSpells.delete(prev);
+                                    if (select.value) {
+                                        selectedSpells.add(select.value);
+                                        select.dataset.prev = select.value;
+                                    } else {
+                                        delete select.dataset.prev;
+                                    }
+                                    renderGrantedSpells(); renderSidebarSpellChoices();
+                                    renderClassFeatures(true);
+                                });
+
+                                section.appendChild(select);
+                            }
+
+                            target.appendChild(section);
+                            hasContent = true;
+                        });
+                    });
+                };
+
+                if (entry.innate) extract(entry.innate);
+                if (entry.known) extract(entry.known);
+                if (entry.prepared) extract(entry.prepared);
+            });
+        });
+
+        target.style.display = hasContent ? 'block' : 'none';
+    }
 
     function renderGrantedSpells() {
         const container = document.getElementById('creator-granted-spells');
@@ -4876,6 +5068,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 selectedSpecies = r.name;
                 renderSpeciesInfo();
                 renderClassFeatures(); // Re-check feat prerequisites
+                renderSidebarSpellChoices();
             };
             list.appendChild(div);
         });
@@ -5283,6 +5476,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     selectedOptionalFeatures.add(`${selectionKey}:${ft.name}`);
                     renderList(searchInput.value);
+                    renderSidebarSpellChoices();
                     // Show detail
                     const desc = processEntries(ft.entries || ft.entry);
                     detailDiv.style.display = 'block';
@@ -6089,7 +6283,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.warn(`[Item Lookup] No data found for "${name}" (lookup: "${lookupName}")`);
                 }
 
-                inventory.push({ name: name, qty: qty, weight: 0, equipped: false, description: desc });
+                inventory.push({ name: name, qty: qty, weight: foundItem?.weight ?? 0, equipped: false, description: desc });
             });
         };
 

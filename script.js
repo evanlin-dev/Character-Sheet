@@ -175,6 +175,8 @@ const conditionIcons = {
 // State Variables
 const skillProficiency = {};
 const saveProficiency = {};
+const skillExpertise = {};
+const saveExpertise = {};
 const advantageState = { skills: {}, saves: {}, initiative: false };
 const deathSaves = {
   successes: [false, false, false],
@@ -350,7 +352,8 @@ window.updateModifiers = function () {
     }
 
     const isSaveProf = saveProficiency[ability] || false;
-    const saveTotal = mod + (isSaveProf ? profBonus : 0);
+    const isSaveExp = saveExpertise[ability] || false;
+    const saveTotal = mod + (isSaveProf ? (isSaveExp ? profBonus * 2 : profBonus) : 0);
     const saveEl = document.getElementById(`saveMod_${ability}`);
     if (saveEl) {
         if (saveEl.tagName === 'INPUT') saveEl.value = formatMod(saveTotal);
@@ -363,7 +366,8 @@ window.updateModifiers = function () {
     const abilityScore = parseInt(document.getElementById(ability)?.value) || 10;
     const abilityMod = calcMod(abilityScore);
     const isProf = skillProficiency[skillName] || false;
-    const total = abilityMod + (isProf ? profBonus : 0);
+    const isExp = skillExpertise[skillName] || false;
+    const total = abilityMod + (isProf ? (isExp ? profBonus * 2 : profBonus) : 0);
     const skillEl = document.getElementById(`skillMod_${skillName}`);
     if (skillEl) {
         if (skillEl.tagName === 'INPUT') skillEl.value = formatMod(total);
@@ -670,14 +674,65 @@ window.applyHpChange = function(type) {
 window.toggleSkill = function (skillName) {
   skillProficiency[skillName] = !skillProficiency[skillName];
   document.getElementById(`skillCheck_${skillName}`)?.classList.toggle("checked", skillProficiency[skillName]);
+  if (!skillProficiency[skillName]) {
+    skillExpertise[skillName] = false;
+    document.getElementById(`expertiseBtn_${skillName}`)?.classList.remove('expertise-active');
+  }
   updateModifiers();
   saveCharacter();
 };
 window.toggleSave = function (ability) {
   saveProficiency[ability] = !saveProficiency[ability];
   document.getElementById(`saveCheck_${ability}`)?.classList.toggle("checked", saveProficiency[ability]);
+  if (!saveProficiency[ability]) {
+    saveExpertise[ability] = false;
+    document.getElementById(`expertiseBtnSave_${ability}`)?.classList.remove('expertise-active');
+  }
   updateModifiers();
   saveCharacter();
+};
+window.toggleExpertise = function(type, name) {
+  if (type === 'skill') {
+    skillExpertise[name] = !skillExpertise[name];
+    document.getElementById(`expertiseBtn_${name}`)?.classList.toggle('expertise-active', skillExpertise[name]);
+  } else {
+    saveExpertise[name] = !saveExpertise[name];
+    document.getElementById(`expertiseBtnSave_${name}`)?.classList.toggle('expertise-active', saveExpertise[name]);
+  }
+  updateModifiers();
+  saveCharacter();
+};
+
+window.injectExpertiseButtons = function() {
+  Object.keys(skillsMap).forEach(skillName => {
+    const checkbox = document.getElementById(`skillCheck_${skillName}`);
+    if (!checkbox) return;
+    const item = checkbox.closest('.skill-item');
+    if (!item || item.querySelector('.expertise-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'expertise-btn';
+    btn.id = `expertiseBtn_${skillName}`;
+    btn.textContent = 'E';
+    btn.title = 'Expertise (doubles proficiency bonus)';
+    btn.onclick = (e) => { e.stopPropagation(); window.toggleExpertise('skill', skillName); };
+    checkbox.after(btn);
+    if (skillExpertise[skillName]) btn.classList.add('expertise-active');
+  });
+  const abList = ['str','dex','con','int','wis','cha'];
+  abList.forEach(ability => {
+    const checkbox = document.getElementById(`saveCheck_${ability}`);
+    if (!checkbox) return;
+    const item = checkbox.closest('.skill-item');
+    if (!item || item.querySelector('.expertise-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'expertise-btn';
+    btn.id = `expertiseBtnSave_${ability}`;
+    btn.textContent = 'E';
+    btn.title = 'Expertise (doubles proficiency bonus)';
+    btn.onclick = (e) => { e.stopPropagation(); window.toggleExpertise('save', ability); };
+    checkbox.after(btn);
+    if (saveExpertise[ability]) btn.classList.add('expertise-active');
+  });
 };
 window.toggleDeathSave = function (type, index) {
   const arr = type === "success" ? deathSaves.successes : deathSaves.failures;
@@ -3410,9 +3465,11 @@ window.saveCharacter = function () {
     spellAttackBonus: document.getElementById("spellAttackBonus")?.value || "",
     skillProficiency,
     saveProficiency,
+    skillExpertise,
+    saveExpertise,
     deathSaves,
     advantageState,
-    currentTheme: document.body.className,
+    currentTheme: document.body.className.replace(/\bapp-view-active\b/g, '').trim(),
     activeTab: document.querySelector(".tab-content.active")?.id,
     featuresFilter: window._featuresFilter || 'all',
     attacksPerAction: document.getElementById('attacksPerAction')?.value || '1',
@@ -5055,11 +5112,40 @@ window.openManageSpellsModal = function() {
     modal.style.display = 'flex';
 };
 
+window.calcMaxPreparedSpells = function() {
+    const className = (document.getElementById('charClass')?.value || '').toLowerCase().trim();
+    const level = parseInt(document.getElementById('level')?.value) || 1;
+    const spellAbility = (document.getElementById('spellAbility')?.value || '').toLowerCase();
+    const abilityScore = parseInt(document.getElementById(spellAbility)?.value) || 10;
+    const abilityMod = Math.floor((abilityScore - 10) / 2);
+    const halfLevel = Math.max(1, Math.floor(level / 2));
+
+    const formulas = {
+        wizard: abilityMod + level,
+        cleric: abilityMod + level,
+        druid: abilityMod + level,
+        paladin: abilityMod + halfLevel,
+        ranger: abilityMod + halfLevel,
+        artificer: abilityMod + halfLevel,
+    };
+    const keys = Object.keys(formulas);
+    const match = keys.find(k => className.includes(k));
+    if (!match) return null;
+    return Math.max(1, formulas[match]);
+};
+
 window.refreshManageSpellsModal = function() {
     const preparedCount = document.querySelectorAll('#preparedSpellsList .spell-row').length;
-    const totalKnown = document.querySelectorAll('#preparedSpellsList .spell-row, #spellList .spell-row').length;
+    const maxPrepared = window.calcMaxPreparedSpells();
     const countEl = document.getElementById('msv-prep-count');
-    if (countEl) countEl.textContent = `${preparedCount} / ${totalKnown} spells prepared`;
+    if (countEl) {
+        if (maxPrepared !== null) {
+            const over = preparedCount > maxPrepared;
+            countEl.innerHTML = `<span style="${over ? 'color:var(--red-dark);font-weight:bold;' : ''}">${preparedCount} / ${maxPrepared}</span> spells prepared`;
+        } else {
+            countEl.textContent = `${preparedCount} spells prepared`;
+        }
+    }
 
     const actionsEl = document.getElementById('msv-manage-actions');
     if (actionsEl) {
@@ -5739,6 +5825,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Inject mobile mod labels globally for grid layout (mobile/tablet only)
   if (window.injectMobileModLabels && window.matchMedia('(max-width: 900px)').matches) window.injectMobileModLabels();
+  if (window.injectExpertiseButtons) window.injectExpertiseButtons();
 
   // Guard clause: Only run initialization if we are on the character sheet (checking for charName input)
   if (!document.getElementById("charName")) return;
@@ -5965,6 +6052,18 @@ document.addEventListener("DOMContentLoaded", () => {
         Object.keys(saveProficiency).forEach((k) => {
           if (saveProficiency[k])
             document.getElementById(`saveCheck_${k}`)?.classList.add("checked");
+        });
+      }
+      if (data.skillExpertise) {
+        Object.assign(skillExpertise, data.skillExpertise);
+        Object.keys(skillExpertise).forEach(k => {
+          if (skillExpertise[k]) document.getElementById(`expertiseBtn_${k}`)?.classList.add('expertise-active');
+        });
+      }
+      if (data.saveExpertise) {
+        Object.assign(saveExpertise, data.saveExpertise);
+        Object.keys(saveExpertise).forEach(k => {
+          if (saveExpertise[k]) document.getElementById(`expertiseBtnSave_${k}`)?.classList.add('expertise-active');
         });
       }
       if (data.deathSaves) {
@@ -8093,13 +8192,66 @@ window.uploadCustomJson = async function() {
     }
 };
 
+window._deleteDataFile = async function(filename, rowEl) {
+    if (!confirm(`Delete "${filename}" from the database?\n\nThis cannot be undone.`)) return;
+    try {
+        const db = await openDB();
+        const rTx = db.transaction(STORE_NAME, 'readonly');
+        const rStore = rTx.objectStore(STORE_NAME);
+        const [currentData, manifest] = await Promise.all([
+            new Promise(res => { const r = rStore.get('currentData'); r.onsuccess = () => res(r.result || []); r.onerror = () => res([]); }),
+            new Promise(res => { const r = rStore.get('fileManifest'); r.onsuccess = () => res(r.result || []); r.onerror = () => res([]); }),
+        ]);
+
+        const entry = manifest.find(m => m.name === filename);
+        const filesToRemove = new Set(entry ? entry.files : [filename]);
+        const newData = currentData.filter(f => !filesToRemove.has(f.name));
+        const newManifest = manifest.filter(m => m.name !== filename);
+
+        const wTx = db.transaction(STORE_NAME, 'readwrite');
+        const wStore = wTx.objectStore(STORE_NAME);
+        wStore.put(newData, 'currentData');
+        wStore.put(newManifest, 'fileManifest');
+        await new Promise((res, rej) => { wTx.oncomplete = res; wTx.onerror = () => rej(wTx.error); });
+
+        if (rowEl) rowEl.remove();
+        const fileStats = document.getElementById('dbFileStats');
+        const term = document.getElementById('dbFileSearch')?.value || '';
+        const shown = term ? newManifest.filter(e => e.name.toLowerCase().includes(term.toLowerCase())).length : newManifest.length;
+        if (fileStats) fileStats.textContent = term
+            ? `${shown} of ${newManifest.length} file${newManifest.length !== 1 ? 's' : ''}`
+            : `${newManifest.length} file${newManifest.length !== 1 ? 's' : ''} uploaded.`;
+    } catch(e) {
+        alert('Error deleting file: ' + e.message);
+    }
+};
+
+window._dbSwitchTab = function(tab) {
+    const browsePanel = document.getElementById('dbBrowsePanel');
+    const filesPanel = document.getElementById('dbFilesPanel');
+    const browseBtn = document.getElementById('dbTabBrowse');
+    const filesBtn = document.getElementById('dbTabFiles');
+    if (!browsePanel || !filesPanel) return;
+    if (tab === 'browse') {
+        filesPanel.style.display = 'none';
+        browsePanel.style.display = 'flex';
+        filesBtn.classList.add('btn-secondary');
+        browseBtn.classList.remove('btn-secondary');
+    } else {
+        browsePanel.style.display = 'none';
+        filesPanel.style.display = 'flex';
+        browseBtn.classList.add('btn-secondary');
+        filesBtn.classList.remove('btn-secondary');
+    }
+};
+
 window.openDataBrowser = async function() {
     let modal = document.getElementById('dataBrowserModal');
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'dataBrowserModal';
         modal.className = 'info-modal-overlay';
-        modal.style.zIndex = '2020'; // Ensure it appears above the Custom Data Manager
+        modal.style.zIndex = '2020';
         document.body.appendChild(modal);
     }
 
@@ -8107,16 +8259,27 @@ window.openDataBrowser = async function() {
         <div class="info-modal-content" style="max-width: 600px; max-height: 85vh; display: flex; flex-direction: column;">
             <button class="close-modal-btn" onclick="document.getElementById('dataBrowserModal').style.display='none'">&times;</button>
             <h3 class="info-modal-title" style="text-align: center">Data Browser</h3>
+            <div style="display:flex; gap:6px; margin-bottom:12px;">
+                <button id="dbTabFiles" onclick="window._dbSwitchTab('files')" class="btn" style="flex:1;">Uploaded Files</button>
+                <button id="dbTabBrowse" onclick="window._dbSwitchTab('browse')" class="btn btn-secondary" style="flex:1;">Browse Data</button>
+            </div>
             <div id="dataBrowserLoading" style="text-align:center; padding:20px; color:var(--ink-light);">Loading database...</div>
             <div id="dataBrowserContent" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
-                <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
-                    <select id="dbCategorySelect" class="styled-select" style="flex:1; min-width:200px;">
-                        <option value="">-- Select Category --</option>
-                    </select>
-                    <input type="text" id="dbSearchInput" placeholder="Search..." class="styled-select" style="flex:1; min-width:200px;">
+                <div id="dbBrowsePanel" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+                    <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+                        <select id="dbCategorySelect" class="styled-select" style="flex:1; min-width:200px;">
+                            <option value="">-- Select Category --</option>
+                        </select>
+                        <input type="text" id="dbSearchInput" placeholder="Search..." class="styled-select" style="flex:1; min-width:200px;">
+                    </div>
+                    <div id="dbStats" style="font-size:0.85rem; color:var(--ink-light); margin-bottom:10px; font-style:italic;"></div>
+                    <div id="dataBrowserList" class="checklist-grid" style="grid-template-columns: 1fr; flex: 1; overflow-y: auto; gap: 8px; align-content: flex-start;"></div>
                 </div>
-                <div id="dbStats" style="font-size:0.85rem; color:var(--ink-light); margin-bottom:10px; font-style:italic;"></div>
-                <div id="dataBrowserList" class="checklist-grid" style="grid-template-columns: 1fr; flex: 1; overflow-y: auto; gap: 8px; align-content: flex-start;"></div>
+                <div id="dbFilesPanel" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+                    <input type="text" id="dbFileSearch" placeholder="Search files..." class="styled-select" style="margin-bottom:8px;">
+                    <div id="dbFileStats" style="font-size:0.85rem; color:var(--ink-light); margin-bottom:8px; font-style:italic;"></div>
+                    <div id="dbFileList" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px;"></div>
+                </div>
             </div>
         </div>
     `;
@@ -8136,6 +8299,57 @@ window.openDataBrowser = async function() {
             document.getElementById('dataBrowserLoading').innerHTML = '<span style="color:var(--red);">No data found in the database. Please initialize or upload data first.</span>';
             return;
         }
+
+        // Populate Files panel from manifest
+        const fileList = document.getElementById('dbFileList');
+        const fileStats = document.getElementById('dbFileStats');
+        const fileSearch = document.getElementById('dbFileSearch');
+
+        let manifest = [];
+        try {
+            const mTx = db.transaction(STORE_NAME, 'readonly');
+            const mStore = mTx.objectStore(STORE_NAME);
+            manifest = await new Promise(res => {
+                const r = mStore.get('fileManifest');
+                r.onsuccess = () => res(r.result || []);
+                r.onerror = () => res([]);
+            });
+        } catch(e) { manifest = []; }
+
+        // If no manifest, fall back to raw currentData file names (legacy uploads)
+        let displayList = manifest;
+        if (manifest.length === 0 && data && data.length > 0) {
+            displayList = data.map(f => ({ name: f.name, type: 'json', files: [f.name], _legacy: true }));
+        }
+
+        const renderFileList = (term) => {
+            fileList.innerHTML = '';
+            const filtered = term
+                ? displayList.filter(e => e.name.toLowerCase().includes(term.toLowerCase()))
+                : displayList;
+            if (displayList.length === 0) {
+                fileStats.textContent = 'No files found in the database.';
+                return;
+            }
+            fileStats.textContent = `${filtered.length} of ${displayList.length} file${displayList.length !== 1 ? 's' : ''}`;
+            filtered.forEach(entry => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 10px; background:white; border:1px solid var(--gold); border-radius:6px; font-size:0.9rem;';
+                const badge = entry.type === 'zip'
+                    ? `<span style="font-size:0.7rem; background:var(--parchment-dark); border:1px solid var(--gold); border-radius:4px; padding:1px 5px; white-space:nowrap; flex-shrink:0;">ZIP · ${(entry.files||[]).length} files</span>`
+                    : `<span style="font-size:0.7rem; background:var(--parchment-dark); border:1px solid var(--gold); border-radius:4px; padding:1px 5px; white-space:nowrap; flex-shrink:0;">JSON</span>`;
+                row.innerHTML = `
+                    <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${entry.name}">${entry.name}</span>
+                    ${badge}
+                    <button class="btn btn-secondary" style="padding:2px 8px; font-size:0.8rem; color:var(--red-dark); border-color:var(--red-dark); flex-shrink:0;">Delete</button>
+                `;
+                row.querySelector('button').addEventListener('click', () => window._deleteDataFile(entry.name, row));
+                fileList.appendChild(row);
+            });
+        };
+
+        renderFileList('');
+        if (fileSearch) fileSearch.addEventListener('input', e => renderFileList(e.target.value));
 
         const categoryMap = {
             'spell': 'Spells', 'spells': 'Spells',

@@ -158,20 +158,24 @@ body.app-view-active .character-sheet > *:not(#mobile-sync-header):not(#app-view
 }
 
 .mobile-skills-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
+    columns: 2;
+    column-gap: 6px;
     margin-bottom: 24px;
+}
+.mobile-skills-grid > * {
+    break-inside: avoid;
+    margin-bottom: 6px;
+    display: flex;
 }
 
 /* Saves stay single column; only skills go 2-col */
 #mobile-saves-wrapper {
-    grid-template-columns: 1fr;
+    columns: 1;
 }
 
 @media (max-width: 480px) {
     .mobile-skills-grid {
-        grid-template-columns: 1fr;
+        columns: 1;
     }
 }
 
@@ -439,6 +443,11 @@ body.app-view-active #view-stats .skill-item .adv-toggle {
     grid-column: 2; grid-row: 1; align-self: center; margin: 0 auto; width: 18px; height: 18px; min-height: unset; font-size: 0.6rem;
     display: flex; align-items: center; justify-content: center;
 }
+body.app-view-active #view-stats .skill-item .expertise-btn {
+    grid-column: 1; grid-row: 1; align-self: end; justify-self: end;
+    width: 13px; height: 13px; font-size: 0.45rem; padding: 0;
+    z-index: 2; border-radius: 2px;
+}
 
 body.app-view-active #view-stats .skill-item .mobile-mod-label {
     grid-column: 3;
@@ -469,6 +478,27 @@ body.app-view-active #view-stats .stat-modifier { margin: 0; }
 body.app-view-active #view-stats .stat-modifier input { font-size: 0.85rem; margin-bottom: 0; width: auto !important; min-width: 0; padding: 0; }
 body.swap-scores.app-view-active #view-stats .stat-modifier input { font-size: 1.3rem !important; }
 body.swap-scores.app-view-active #view-stats .stat-value { font-size: 0.75rem !important; }
+
+/* Inventory view: header aligned to compact item columns */
+body.app-view-active #view-inventory .inventory-header {
+    display: grid;
+    grid-template-columns: 20px 1fr 36px 36px 24px 24px 20px;
+    gap: 6px;
+    padding: 2px 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--ink-light);
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+body.app-view-active #view-inventory .inventory-header span:nth-child(1) { grid-column: 1; }
+body.app-view-active #view-inventory .inventory-header span:nth-child(2) { grid-column: 5; text-align: center; font-size: 0.65rem; }
+body.app-view-active #view-inventory .inventory-header span:nth-child(3) { grid-column: 2; text-align: left; }
+body.app-view-active #view-inventory .inventory-header span:nth-child(4) { grid-column: 3; text-align: center; }
+body.app-view-active #view-inventory .inventory-header span:nth-child(5) { grid-column: 4; text-align: center; }
+body.app-view-active #view-inventory .inventory-header span:nth-child(6) { grid-column: 6; text-align: center; }
+body.app-view-active #view-inventory .inventory-header span:nth-child(7) { grid-column: 7; }
 
 /* Inventory view: single-row compact items matching skill/save row style */
 body.app-view-active #view-inventory .inventory-item {
@@ -554,6 +584,33 @@ body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) {
 .skill-item:active { background: var(--parchment-dark); transform: scale(0.98); }
 
 .skill-checkbox { width: 20px; height: 20px; border: 2px solid var(--gold-dark); border-radius: 4px; position: relative; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.expertise-btn {
+    display: none;
+    background: none;
+    border: 1px solid var(--gold-dark);
+    border-radius: 3px;
+    font-size: 0.6rem;
+    font-weight: bold;
+    color: var(--ink-light);
+    cursor: pointer;
+    padding: 1px 3px;
+    margin-left: 6px;
+    line-height: 1;
+    flex-shrink: 0;
+    min-height: 0 !important;
+    height: auto;
+    align-items: center;
+    justify-content: center;
+}
+.skill-item:has(.skill-checkbox.checked) .expertise-btn {
+    display: inline-flex;
+}
+.expertise-btn.expertise-active {
+    background: var(--gold-dark);
+    color: white;
+    border-color: var(--gold-dark);
+}
+.expertise-btn:hover { opacity: 0.7; }
 .skill-checkbox.checked { background: var(--red); border-color: var(--red-dark); }
 .checkmark { display: none; color: white; font-size: 0.95rem; font-weight: 700; }
 .skill-checkbox.checked .checkmark { display: block; }
