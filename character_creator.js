@@ -5980,6 +5980,34 @@ document.addEventListener('DOMContentLoaded', () => {
             if (optionSets.length > 0 && optionSets.some(s => s.choices.some(c => c.type !== 'optionalfeature'))) {
                 renderExplicitOptions(parentEl, optionSets, selectedClass, selectedLevel, selectedSubclass);
             }
+
+            // ── Named action / bonus action / reaction features ──────────────
+            const ACTION_NAME_RE = /\b(action|bonus action|reaction)\b/i;
+            const ACTION_TEXT_RE = /\{@action\b|\bbonus action\b|\breaction\b|\bas an action\b/i;
+            const topEntries = Array.isArray(feat.entries) ? feat.entries : (feat.entry ? [feat.entry] : []);
+            const actionFeatures = topEntries.filter(e =>
+                e && typeof e === 'object' && e.name &&
+                (ACTION_NAME_RE.test(e.name) || ACTION_TEXT_RE.test(JSON.stringify(e.entries || e.entry || '')))
+            );
+
+            if (actionFeatures.length > 0) {
+                const sec = document.createElement('div');
+                sec.style.cssText = 'margin-bottom:10px;';
+                const hdr = document.createElement('div');
+                hdr.style.cssText = 'font-size:0.8em; font-weight:bold; color:var(--red-dark); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.03em;';
+                hdr.textContent = 'Actions & Reactions';
+                sec.appendChild(hdr);
+
+                actionFeatures.forEach(f => {
+                    const card = document.createElement('div');
+                    card.style.cssText = 'margin-bottom:6px; padding:7px 9px; background:rgba(255,255,255,0.45); border:1px solid var(--gold); border-radius:4px; font-size:0.82rem; line-height:1.45;';
+                    const rawHtml = processEntries(f);
+                    card.innerHTML = formatDescription(rawHtml);
+                    sec.appendChild(card);
+                });
+
+                parentEl.appendChild(sec);
+            }
         }
 
         // ── Section 0: Background Origin Feat (display only) ────────────────
