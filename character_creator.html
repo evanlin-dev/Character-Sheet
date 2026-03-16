@@ -258,10 +258,19 @@
 
             <!-- FEATS TAB -->
             <div id="tab-feats" class="tab-pane">
-                <div class="content-pane">
-                    <h2>Feats</h2>
-                    <div id="creator-feats-container">
-                        <em style="color: var(--text-muted);">Loading feats...</em>
+                <div class="split-view equal-split">
+                    <div class="sidebar">
+                        <div class="sidebar-header">
+                            <h3 style="margin:0; font-size:1.2em; color:var(--red-dark);">Feats</h3>
+                        </div>
+                        <div id="creator-feats-container" class="sidebar-list">
+                            <em style="color: var(--text-muted);">Loading feats...</em>
+                        </div>
+                    </div>
+                    <div class="content-pane">
+                        <div id="feat-spell-detail-view" style="margin-bottom:20px;">
+                            <em style="color:var(--text-muted); font-size:0.9rem;">Click a spell to see its description.</em>
+                        </div>
                     </div>
                 </div>
             </div>

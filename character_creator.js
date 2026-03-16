@@ -1006,12 +1006,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (CHOICE_RE.test(clean)) {
                         const next = arr[i + 1];
                         if (next && typeof next === 'object' && next.type === 'list' && Array.isArray(next.items)) {
-                            // Adjacent list node — prefer named items, fall back to string items
-                            const namedItems = next.items.filter(it => typeof it === 'object' && it.name);
+                            // Adjacent list node — prefer named items, fall back to string items.
+                            // Filter out named items that are sentences (end in . ! ?) or are long
+                            // enough to be gameplay descriptions rather than actual choice options.
+                            const namedItems = next.items.filter(it =>
+                                typeof it === 'object' && it.name &&
+                                it.name.length <= 50 &&
+                                !/[.!?]$/.test(it.name.trim()) &&
+                                !/\b(attack|saving throw|bonus action|reaction|spell slot)\b/i.test(it.name)
+                            );
                             if (namedItems.length >= 2) {
-                                results.push({ prompt: clean, items: next.items, count: parseCount(clean) });
+                                results.push({ prompt: clean, items: namedItems, count: parseCount(clean) });
                             } else if (next.items.length >= 2) {
-                                const strItems = next.items.map(it => typeof it === 'string' ? { name: stripTags(it), type: 'item' } : it).filter(it => it && it.name);
+                                const strItems = next.items
+                                    .map(it => typeof it === 'string' ? { name: stripTags(it), type: 'item' } : it)
+                                    .filter(it => it && it.name &&
+                                        it.name.length <= 60 &&
+                                        !/[.!?]$/.test(it.name.trim()) &&
+                                        !/\b(attack|saving throw|bonus action|reaction|spell slot|make a|force a|take a)\b/i.test(it.name)
+                                    );
                                 if (strItems.length >= 2) results.push({ prompt: clean, items: strItems, count: parseCount(clean) });
                             }
                         } else {
@@ -1544,12 +1557,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // If spellsContainer is still empty (e.g. "Spellcasting" was in referencedFeatures
         // and got excluded from uniqueFeatures), fall back to a direct scan of allClassFeatures.
+        // Note: intentionally skips source filter so mismatched source won't block the fallback.
         if (spellsContainer && !spellsContainer.hasChildNodes()) {
             const hasSpellcasting = allClassFeatures.some(f =>
                 f.className && f.className.toLowerCase() === className.toLowerCase() &&
-                f.source === currentClassSource &&
-                !f.subclassShortName &&
-                f.level <= selectedLevel &&
+                !f.subclassShortName && f.level <= selectedLevel &&
                 (f.name.includes("Spellcasting") || f.name === "Pact Magic")
             );
             if (hasSpellcasting) {
@@ -1559,9 +1571,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Also catch Mystic Arcanum levels that were excluded
             allClassFeatures.filter(f =>
                 f.className && f.className.toLowerCase() === className.toLowerCase() &&
-                f.source === currentClassSource &&
-                !f.subclassShortName &&
-                f.level <= selectedLevel &&
+                !f.subclassShortName && f.level <= selectedLevel &&
                 f.name.includes("Mystic Arcanum")
             ).forEach(f => {
                 const match = f.name.match(/(\d+)(?:st|nd|rd|th)\s+level/i);
@@ -2222,20 +2232,26 @@ document.addEventListener('DOMContentLoaded', () => {
             let matchesClass = false;
             const targetClass = cls.toLowerCase();
 
-            // Helper to check a class entry safely
-            const check = (c) => {
+            const checkEntry = (c) => {
                 if (!c) return false;
-                const cName = (typeof c === 'string' ? c : c.name).toLowerCase();
-                return cName === targetClass;
+                return (typeof c === 'string' ? c : c.name).toLowerCase() === targetClass;
             };
 
-            // Check Class List
-            if (s._normalizedClasses && s._normalizedClasses.has(targetClass)) matchesClass = true;
+            // Check base class spell list only (fromClassList / fromClassListVariant).
+            // Intentionally NOT using _normalizedClasses because that set also includes
+            // class names sourced from fromSubclass entries, which would cause Warlock to
+            // see Wizard spells that a Warlock subclass can access, etc.
+            if (s.classes) {
+                if (s.classes.fromClassList && s.classes.fromClassList.some(checkEntry)) matchesClass = true;
+                if (!matchesClass && s.classes.fromClassListVariant && s.classes.fromClassListVariant.some(checkEntry)) matchesClass = true;
+                // Fallback for old flat array format
+                if (!matchesClass && Array.isArray(s.classes) && s.classes.some(checkEntry)) matchesClass = true;
+            }
 
-            // Check Subclass
+            // Check subclass-specific spell list only when the user's subclass matches exactly
             if (!matchesClass && subclass && s.classes && s.classes.fromSubclass) {
                 if (s.classes.fromSubclass.some(sc => {
-                    return sc.class && sc.class.name.toLowerCase() === targetClass && 
+                    return sc.class && sc.class.name.toLowerCase() === targetClass &&
                            sc.subclass && sc.subclass.shortName.toLowerCase() === subclass.toLowerCase();
                 })) {
                     matchesClass = true;
@@ -2358,6 +2374,197 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const SCHOOL_ABBR = { A:'Abjuration', C:'Conjuration', D:'Divination', E:'Enchantment', V:'Evocation', I:'Illusion', N:'Necromancy', T:'Transmutation' };
 
+        // ── Helpers for normalized filter values ─────────────────────────────
+        const getTimeStr = s => s.time ? s.time.map(t => `${t.number} ${t.unit}${t.condition ? '*' : ''}`).join('/').trim() : '—';
+        const getRangeStr = s => {
+            if (!s.range) return '—';
+            if (s.range.type === 'point' && s.range.distance) {
+                const d = s.range.distance;
+                if (d.type === 'self') return 'Self';
+                if (d.type === 'touch') return 'Touch';
+                if (d.type === 'sight') return 'Sight';
+                if (d.type === 'unlimited') return 'Unlimited';
+                if (d.amount) return `${d.amount} ${d.type}`;
+                return d.type || '—';
+            }
+            return s.range.type || '—';
+        };
+
+        // Pre-compute unique filter options
+        const levelsPresent  = [...new Set(availableSpells.map(s => s.level))].sort((a,b) => a-b);
+        const schoolsPresent = [...new Set(availableSpells.map(s => s.school).filter(Boolean))].sort();
+        const timesPresent   = [...new Set(availableSpells.map(getTimeStr))].filter(t => t !== '—').sort();
+        const rangesPresent  = [...new Set(availableSpells.map(getRangeStr))].filter(r => r !== '—').sort((a, b) => {
+            const order = ['Self', 'Touch'];
+            const ai = order.indexOf(a), bi = order.indexOf(b);
+            if (ai !== -1 && bi !== -1) return ai - bi;
+            if (ai !== -1) return -1; if (bi !== -1) return 1;
+            const am = a.match(/^(\d+)/), bm = b.match(/^(\d+)/);
+            if (am && bm) return parseInt(am[1]) - parseInt(bm[1]);
+            return a.localeCompare(b);
+        });
+
+        // Filter state
+        const filters = { levels: new Set(), schools: new Set(), times: new Set(), ranges: new Set(), conc: false, ritual: false, mat: false };
+
+        // Declared early so popup onclick closures can reference it; assigned after tbody exists
+        let applyFilter = () => {};
+
+        // ── Search + Filter popup bar ────────────────────────────────────────
+        const filterBar = document.createElement('div');
+        filterBar.style.cssText = 'position:relative; display:flex; gap:6px; align-items:center; margin-bottom:8px;';
+
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Search spells…';
+        searchInput.className = 'search-input';
+        searchInput.style.cssText = 'flex:1; min-width:120px; font-size:0.82rem;';
+
+        const filterBtn = document.createElement('button');
+        filterBtn.className = 'filter-btn';
+        filterBtn.style.cssText = 'font-size:0.78rem; padding:3px 10px; white-space:nowrap; flex-shrink:0;';
+        filterBtn.textContent = 'Filter ▾';
+
+        filterBar.appendChild(searchInput);
+        filterBar.appendChild(filterBtn);
+        container.appendChild(filterBar);
+
+        // ── Filter popup panel ───────────────────────────────────────────────
+        const popup = document.createElement('div');
+        popup.style.cssText = [
+            'position:absolute; top:calc(100% + 4px); right:0; z-index:200;',
+            'background:var(--parchment); border:1px solid var(--gold-dark);',
+            'border-radius:6px; padding:10px 12px; min-width:300px; max-width:400px;',
+            'box-shadow:0 4px 16px rgba(0,0,0,0.3); display:none; font-size:0.8rem;'
+        ].join('');
+        filterBar.appendChild(popup);
+
+        function makeFilterSection(title, items, filterSet) {
+            const sec = document.createElement('div');
+            sec.style.cssText = 'margin-bottom:8px;';
+            const hdr = document.createElement('div');
+            hdr.style.cssText = 'font-weight:700; font-size:0.72rem; color:var(--red-dark); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;';
+            hdr.textContent = title;
+            sec.appendChild(hdr);
+            const grid = document.createElement('div');
+            grid.style.cssText = 'display:flex; flex-wrap:wrap; gap:3px;';
+            items.forEach(item => {
+                const label = (item && item.label !== undefined) ? item.label : item;
+                const value = (item && item.value !== undefined) ? item.value : item;
+                const pill = document.createElement('button');
+                pill.textContent = label;
+                pill.className = 'filter-btn';
+                pill.style.cssText = 'font-size:0.72rem; padding:2px 7px;';
+                if (filterSet.has(value)) pill.classList.add('active');
+                pill.onclick = () => {
+                    if (filterSet.has(value)) { filterSet.delete(value); pill.classList.remove('active'); }
+                    else { filterSet.add(value); pill.classList.add('active'); }
+                    updateFilterBtn(); applyFilter();
+                };
+                grid.appendChild(pill);
+            });
+            sec.appendChild(grid);
+            return sec;
+        }
+
+        function makeToggleBtn(label, key) {
+            const btn = document.createElement('button');
+            btn.className = 'filter-btn' + (filters[key] ? ' active' : '');
+            btn.style.cssText = 'font-size:0.72rem; padding:2px 10px;';
+            btn.textContent = label;
+            btn.onclick = () => {
+                filters[key] = !filters[key];
+                btn.classList.toggle('active', filters[key]);
+                updateFilterBtn(); applyFilter();
+            };
+            return btn;
+        }
+
+        // Level section
+        popup.appendChild(makeFilterSection('Level',
+            levelsPresent.map(l => ({ label: l === 0 ? 'Cantrip' : `Level ${l}`, value: l })),
+            filters.levels));
+
+        // School section
+        if (schoolsPresent.length) {
+            popup.appendChild(makeFilterSection('School',
+                schoolsPresent.map(s => ({ label: SCHOOL_ABBR[s] || s, value: s })),
+                filters.schools));
+        }
+
+        // Casting time section
+        if (timesPresent.length) popup.appendChild(makeFilterSection('Casting Time', timesPresent, filters.times));
+
+        // Range section
+        if (rangesPresent.length) popup.appendChild(makeFilterSection('Range', rangesPresent, filters.ranges));
+
+        // C / R / M toggles
+        const propSec = document.createElement('div');
+        propSec.style.cssText = 'margin-bottom:8px;';
+        const propHdr = document.createElement('div');
+        propHdr.style.cssText = 'font-weight:700; font-size:0.72rem; color:var(--red-dark); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;';
+        propHdr.textContent = 'Properties';
+        propSec.appendChild(propHdr);
+        const propRow = document.createElement('div');
+        propRow.style.cssText = 'display:flex; gap:4px;';
+        propRow.appendChild(makeToggleBtn('Concentration', 'conc'));
+        propRow.appendChild(makeToggleBtn('Ritual', 'ritual'));
+        propRow.appendChild(makeToggleBtn('Material', 'mat'));
+        propSec.appendChild(propRow);
+        popup.appendChild(propSec);
+
+        // Clear all
+        const clearAllBtn = document.createElement('button');
+        clearAllBtn.textContent = 'Clear All';
+        clearAllBtn.className = 'filter-btn';
+        clearAllBtn.style.cssText = 'width:100%; font-size:0.75rem; padding:4px; margin-top:2px;';
+        clearAllBtn.onclick = () => {
+            filters.levels.clear(); filters.schools.clear(); filters.times.clear(); filters.ranges.clear();
+            filters.conc = false; filters.ritual = false; filters.mat = false;
+            popup.querySelectorAll('.filter-btn.active').forEach(b => b.classList.remove('active'));
+            updateFilterBtn(); applyFilter();
+        };
+        popup.appendChild(clearAllBtn);
+
+        function updateFilterBtn() {
+            const n = filters.levels.size + filters.schools.size + filters.times.size + filters.ranges.size
+                    + (filters.conc ? 1 : 0) + (filters.ritual ? 1 : 0) + (filters.mat ? 1 : 0);
+            filterBtn.textContent = n > 0 ? `Filter ▾ (${n})` : 'Filter ▾';
+            filterBtn.classList.toggle('active', n > 0);
+        }
+
+        filterBtn.onclick = e => { e.stopPropagation(); popup.style.display = popup.style.display === 'none' ? 'block' : 'none'; };
+        const _closePopup = e => { if (!filterBar.contains(e.target)) popup.style.display = 'none'; };
+        document.addEventListener('click', _closePopup, true);
+
+        // Applied after table is built — filters rows by all active filters
+        applyFilter = () => {
+            const term = searchInput.value.toLowerCase();
+            const rows = tbody.querySelectorAll('tr');
+            const visibleLevels = new Set();
+            rows.forEach(row => {
+                if (row.dataset.level === undefined) return;
+                const lvl = parseInt(row.dataset.level);
+                const show =
+                    (!term  || (row.dataset.name || '').toLowerCase().includes(term)) &&
+                    (filters.levels.size  === 0 || filters.levels.has(lvl)) &&
+                    (filters.schools.size === 0 || filters.schools.has(row.dataset.school)) &&
+                    (filters.times.size   === 0 || filters.times.has(row.dataset.time)) &&
+                    (filters.ranges.size  === 0 || filters.ranges.has(row.dataset.range)) &&
+                    (!filters.conc   || row.dataset.conc   === '1') &&
+                    (!filters.ritual || row.dataset.ritual === '1') &&
+                    (!filters.mat    || row.dataset.mat    === '1');
+                row.style.display = show ? '' : 'none';
+                if (show) visibleLevels.add(lvl);
+            });
+            rows.forEach(row => {
+                if (row.dataset.headerLevel === undefined) return;
+                row.style.display = visibleLevels.has(parseInt(row.dataset.headerLevel)) ? '' : 'none';
+            });
+        };
+
+        searchInput.oninput = applyFilter;
+
         const spellTable = document.createElement('table');
         spellTable.style.cssText = 'width:100%; border-collapse:collapse; font-size:0.8rem;';
 
@@ -2389,20 +2596,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 const headerRow = document.createElement('tr');
                 const label = s.level === 0 ? 'Cantrips' : `${ORDINALS[s.level] || s.level} Level`;
                 headerRow.innerHTML = `<td colspan="9" style="padding:6px 6px 3px; font-weight:700; font-size:0.78rem; color:var(--red-dark); background:var(--parchment-dark); border-top:2px solid var(--gold-dark); letter-spacing:0.04em; text-transform:uppercase;">${label}</td>`;
+                headerRow.dataset.headerLevel = s.level;
                 tbody.appendChild(headerRow);
             }
 
             const idx = groupIdx++;
             const row = document.createElement('tr');
             row.style.cssText = `border-bottom:1px solid var(--gold-light,#e8d9a0); cursor:pointer; transition:background 0.1s;`;
+            row.dataset.level  = s.level;
+            row.dataset.name   = s.name;
 
             const isRitual  = !!(s.meta && s.meta.ritual);
             const isConc    = !!(s.duration && s.duration.some(d => d.concentration));
             const hasMat    = !!(s.components && s.components.m);
             const school    = SCHOOL_ABBR[s.school] || s.school || '';
             const schoolAbr = s.school || '';
-            const timeStr   = s.time ? s.time.map(t => `${t.number} ${t.unit}${t.condition ? '*' : ''}`).join('/').trim() : '—';
-            const rangeStr  = s.range ? (s.range.type === 'point' && s.range.distance ? (s.range.distance.type === 'self' ? 'Self' : s.range.distance.type === 'touch' ? 'Touch' : `${s.range.distance.amount || ''} ${s.range.distance.type}`.trim()) : s.range.type || '—') : '—';
+            const timeStr   = getTimeStr(s);
+            const rangeStr  = getRangeStr(s);
+
+            row.dataset.school = schoolAbr;
+            row.dataset.time   = timeStr;
+            row.dataset.range  = rangeStr;
+            row.dataset.conc   = isConc  ? '1' : '0';
+            row.dataset.ritual = isRitual ? '1' : '0';
+            row.dataset.mat    = hasMat  ? '1' : '0';
 
             const updateRowStyle = () => {
                 const sel = selectedSpells.has(s.name);
@@ -2415,7 +2632,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td style="padding:3px 6px; white-space:nowrap;">${s.level === 0 ? 'C' : s.level}</td>
                 <td style="padding:3px 6px; white-space:nowrap;">${timeStr}</td>
                 <td style="padding:3px 6px; font-weight:500;">${s.name}</td>
-                <td style="padding:3px 6px; white-space:nowrap;" title="${school}">${schoolAbr}</td>
+                <td style="padding:3px 6px; white-space:nowrap;">${school}</td>
                 <td style="padding:3px 6px; text-align:center;">${isRitual ? '✦' : ''}</td>
                 <td style="padding:3px 6px; text-align:center;">${isConc ? '●' : ''}</td>
                 <td style="padding:3px 6px; text-align:center;">${hasMat ? '◆' : ''}</td>
@@ -2501,6 +2718,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div style="line-height:1.6;">${desc}</div>
             </div>
         `;
+    }
+
+    function renderFeatSpellDescription(spell) {
+        const container = document.getElementById('feat-spell-detail-view');
+        if (!container) return;
+        let desc = processEntries(spell.entries);
+        desc = formatDescription(desc);
+        let metaHtml = '';
+        if (spell.level !== undefined) metaHtml += `<div><strong>Level:</strong> ${spell.level === 0 ? 'Cantrip' : spell.level}</div>`;
+        if (spell.school) metaHtml += `<div><strong>School:</strong> ${spell.school}</div>`;
+        if (spell.time) metaHtml += `<div><strong>Casting Time:</strong> ${spell.time.map(t => `${t.number} ${t.unit}`).join(', ')}</div>`;
+        if (spell.range) {
+            const rd = spell.range.distance;
+            const rangeStr = rd ? (rd.type === 'self' ? 'Self' : rd.type === 'touch' ? 'Touch' : `${rd.amount || ''} ${rd.type}`.trim()) : spell.range.type;
+            metaHtml += `<div><strong>Range:</strong> ${rangeStr}</div>`;
+        }
+        if (spell.components) {
+            const comps = [];
+            if (spell.components.v) comps.push('V');
+            if (spell.components.s) comps.push('S');
+            if (spell.components.m) comps.push(`M (${typeof spell.components.m === 'string' ? spell.components.m : spell.components.m.text || ''})`);
+            metaHtml += `<div><strong>Components:</strong> ${comps.join(', ')}</div>`;
+        }
+        if (spell.duration) {
+            const durStr = spell.duration.map(d => d.type === 'instant' ? 'Instantaneous' : `${d.duration ? d.duration.amount + ' ' + d.duration.type : d.type}${d.concentration ? ' (Concentration)' : ''}`).join(', ');
+            metaHtml += `<div><strong>Duration:</strong> ${durStr}</div>`;
+        }
+        container.innerHTML = `
+            <div style="background:rgba(255,255,255,0.5); padding:15px; border:1px solid var(--gold); border-radius:4px;">
+                <h3 style="color:var(--red-dark); border-bottom:1px solid var(--gold); margin-top:0;">${spell.name}</h3>
+                <div style="font-size:0.9rem; color:var(--ink-light); margin-bottom:10px; border-bottom:1px dashed var(--gold); padding-bottom:10px;">${metaHtml}</div>
+                <div style="line-height:1.6;">${desc}</div>
+            </div>`;
     }
 
     function updateSpellProgressionTable() {
@@ -3792,6 +4042,42 @@ document.addEventListener('DOMContentLoaded', () => {
         return [];
     };
 
+    // Resolves a feat name to its data object, handling _versions and base-name fallbacks
+    function resolveFeat(featName) {
+        if (!featName) return null;
+        let feat = allFeats.find(f => f.name === featName);
+        if (!feat) {
+            for (const f of allFeats) {
+                if (f._versions) { const v = f._versions.find(v => v.name === featName); if (v) { feat = v; break; } }
+            }
+        }
+        if (!feat && featName.startsWith('Magic Initiate (')) feat = allFeats.find(f => f.name === 'Magic Initiate');
+        if (!feat && featName.includes(' (')) feat = allFeats.find(f => f.name === featName.substring(0, featName.lastIndexOf(' (')));
+        return feat || null;
+    }
+
+    // Returns the first {@feat ...} name found in the selected background's entries, or null
+    function getBackgroundOriginFeat() {
+        if (!selectedBackground) return null;
+        const bgs = allBackgrounds.filter(b => b.name === selectedBackground);
+        const bg = bgs.find(b => b.source === 'XPHB') || bgs.find(b => b.source === 'PHB') || bgs[0];
+        if (!bg || !bg.entries) return null;
+        let found = null;
+        const scan = (obj) => {
+            if (found) return;
+            if (typeof obj === 'string') {
+                const m = obj.match(/{@feat ([^|}]+)/);
+                if (m) found = m[1].trim();
+            } else if (Array.isArray(obj)) {
+                obj.forEach(scan);
+            } else if (obj && typeof obj === 'object') {
+                Object.values(obj).forEach(scan);
+            }
+        };
+        scan(bg.entries);
+        return found;
+    }
+
     // Builds the list of features that may grant additional spells (shared by both spell renderers)
     function buildSpellGrantFeatures() {
         const result = [];
@@ -3832,18 +4118,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (race) result.push({ feature: race, contextName: race.name });
         }
         if (selectedSubrace) result.push({ feature: selectedSubrace, contextName: selectedSubrace.name });
-
-        const resolveFeat = (featName) => {
-            let feat = allFeats.find(f => f.name === featName);
-            if (!feat) {
-                for (const f of allFeats) {
-                    if (f._versions) { const v = f._versions.find(v => v.name === featName); if (v) { feat = v; break; } }
-                }
-            }
-            if (!feat && featName.startsWith('Magic Initiate (')) feat = allFeats.find(f => f.name === 'Magic Initiate');
-            if (!feat && featName.includes(' (')) feat = allFeats.find(f => f.name === featName.substring(0, featName.lastIndexOf(' (')));
-            return feat;
-        };
 
         selectedOptionalFeatures.forEach(name => {
             if (name.startsWith('ASI Level ')) {
@@ -5478,6 +5752,296 @@ document.addEventListener('DOMContentLoaded', () => {
             renderList();
         };
 
+        // ── Shared helpers for inline feat spell/option choices ─────────────
+        const FEAT_SA = { A:'Abjuration', C:'Conjuration', D:'Divination', E:'Enchantment', V:'Evocation', I:'Illusion', N:'Necromancy', T:'Transmutation' };
+
+        function renderFeatSpellTable(parentEl, spells, count) {
+            const getSelected = () => spells.filter(sp => selectedSpells.has(sp.name)).length;
+
+            const counterEl = document.createElement('span');
+            counterEl.style.cssText = 'font-size:0.78em; font-weight:bold; margin-bottom:2px; display:block;';
+            const updateCounter = () => {
+                const sel = getSelected();
+                counterEl.textContent = `${sel}/${count} selected`;
+                counterEl.style.color = sel >= count ? 'var(--red)' : 'var(--ink-light)';
+            };
+            updateCounter();
+            parentEl.appendChild(counterEl);
+
+            const tbl = document.createElement('table');
+            tbl.style.cssText = 'width:100%; border-collapse:collapse; font-size:0.78rem; margin-top:2px;';
+            tbl.innerHTML = `<thead><tr style="background:var(--parchment-dark); border-bottom:1px solid var(--gold-dark); text-align:left;">
+                <th style="padding:3px 5px; color:var(--ink-light);">Lvl</th>
+                <th style="padding:3px 5px; color:var(--ink-light);">Name</th>
+                <th style="padding:3px 5px; color:var(--ink-light);">School</th>
+                <th style="padding:3px 5px; color:var(--ink-light); text-align:center;" title="Ritual">R</th>
+                <th style="padding:3px 5px; color:var(--ink-light); text-align:center;" title="Concentration">C</th>
+                <th style="padding:3px 5px; color:var(--ink-light); text-align:center;" title="Material">M</th>
+                <th style="padding:3px 5px; color:var(--ink-light);">Range</th>
+            </tr></thead>`;
+            const tbody = document.createElement('tbody');
+            const rowUpdaters = [];
+            spells.forEach((s, idx) => {
+                const row = document.createElement('tr');
+                const school = s.school || '';
+                const isRitual = !!(s.meta && s.meta.ritual);
+                const isConc   = !!(s.duration && s.duration.some(d => d.concentration));
+                const hasMat   = !!(s.components && s.components.m);
+                const rangeStr = s.range ? (
+                    s.range.type === 'point' && s.range.distance
+                        ? (s.range.distance.type === 'self' ? 'Self' : s.range.distance.type === 'touch' ? 'Touch'
+                            : `${s.range.distance.amount || ''} ${s.range.distance.type}`.trim())
+                        : s.range.type || '—') : '—';
+                const updateStyle = () => {
+                    const sel = selectedSpells.has(s.name);
+                    const atLimit = !sel && getSelected() >= count;
+                    row.style.background = sel ? 'var(--red)' : (idx % 2 === 0 ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.1)');
+                    row.style.color = sel ? 'white' : 'var(--ink)';
+                    row.style.cursor = atLimit ? 'not-allowed' : 'pointer';
+                    row.style.opacity = atLimit ? '0.5' : '1';
+                };
+                row.style.cssText = 'border-bottom:1px solid var(--gold-light,#e8d9a0); transition:background 0.1s;';
+                row.innerHTML = `<td style="padding:2px 5px;">${s.level===0?'C':s.level}</td><td style="padding:2px 5px; font-weight:500;">${s.name}</td><td style="padding:2px 5px;" title="${FEAT_SA[school]||school}">${school}</td><td style="padding:2px 5px; text-align:center;">${isRitual?'✦':''}</td><td style="padding:2px 5px; text-align:center;">${isConc?'●':''}</td><td style="padding:2px 5px; text-align:center;">${hasMat?'◆':''}</td><td style="padding:2px 5px;">${rangeStr}</td>`;
+                row.onmouseenter = () => { if (!selectedSpells.has(s.name) && getSelected() < count) row.style.background = 'rgba(180,140,60,0.15)'; };
+                row.onmouseleave = () => updateStyle();
+                row.onclick = () => {
+                    if (selectedSpells.has(s.name)) selectedSpells.delete(s.name);
+                    else if (getSelected() < count) selectedSpells.add(s.name);
+                    else return;
+                    rowUpdaters.forEach(fn => fn());
+                    updateCounter();
+                    renderGrantedSpells();
+                    renderFeatSpellDescription(s);
+                };
+                row.ondblclick = () => renderFeatSpellDescription(s);
+                updateStyle();
+                rowUpdaters.push(updateStyle);
+                tbody.appendChild(row);
+            });
+            tbl.appendChild(tbody);
+            parentEl.appendChild(tbl);
+        }
+
+        function renderFeatChoices(parentEl, feat, contextName, re) {
+            parentEl.innerHTML = '';
+            if (!feat) return;
+
+            // ── Additional Spells ─────────────────────────────────────────────
+            if (feat.additionalSpells && feat.additionalSpells.length > 0) {
+                const entries = feat.additionalSpells;
+                const namedEntries = entries.filter(e => e.name);
+
+                const processEntry = (entry, labelPrefix) => {
+                    const extract = (obj) => {
+                        if (!obj) return;
+                        Object.entries(obj).forEach(([key, val]) => {
+                            const lvl = parseInt(key);
+                            if (!isNaN(lvl) && selectedLevel < lvl) return;
+                            if (!Array.isArray(val)) { if (typeof val === 'object') extract(val); return; }
+                            val.forEach(v => {
+                                if (!v || (!v.choose && !v.fromSpells)) return;
+                                let matches, criteria;
+                                if (v.fromSpells) {
+                                    const nameSet = new Set(v.fromSpells.map(n => n.toLowerCase()));
+                                    const seen = new Set();
+                                    matches = allSpells.filter(s => {
+                                        if (!nameSet.has(s.name.toLowerCase()) || seen.has(s.name.toLowerCase())) return false;
+                                        seen.add(s.name.toLowerCase()); return true;
+                                    });
+                                    criteria = v.fromSpells.join(', ');
+                                } else {
+                                    matches = getSpellsFromFilter(v.choose);
+                                    criteria = v.choose.split('|').map(p => {
+                                        const [k, v2] = p.split('=');
+                                        if (k === 'level') return v2 === '0' ? 'Cantrips' : `Level ${v2}`;
+                                        if (k === 'class') return v2;
+                                        return p;
+                                    }).join(' ');
+                                }
+                                if (!matches.length) return;
+                                const cnt = v.count || 1;
+                                const sec = document.createElement('div');
+                                sec.style.cssText = 'margin-bottom:10px;';
+                                const lbl = document.createElement('div');
+                                lbl.style.cssText = 'font-size:0.8em; font-weight:bold; color:var(--red-dark); margin-bottom:4px;';
+                                lbl.textContent = `${labelPrefix}: Choose ${cnt} — ${criteria}`;
+                                sec.appendChild(lbl);
+                                renderFeatSpellTable(sec, matches, cnt);
+                                parentEl.appendChild(sec);
+                            });
+                        });
+                    };
+                    if (entry.innate)   extract(entry.innate);
+                    if (entry.known)    extract(entry.known);
+                    if (entry.prepared) extract(entry.prepared);
+                };
+
+                if (namedEntries.length > 1) {
+                    const chosenClass = selectedFeatSpellClasses[contextName];
+                    const chosenEntry = namedEntries.find(e => e.name === chosenClass);
+                    const lbl = document.createElement('div');
+                    lbl.style.cssText = 'font-size:0.8em; font-weight:bold; color:var(--red-dark); margin-bottom:6px;';
+                    lbl.textContent = 'Choose Spellcasting Class:';
+                    parentEl.appendChild(lbl);
+                    const btnRow = document.createElement('div');
+                    btnRow.style.cssText = 'display:flex; flex-wrap:wrap; gap:4px; margin-bottom:10px;';
+                    namedEntries.forEach(e => {
+                        const btn = document.createElement('button');
+                        btn.textContent = e.name.replace(/ Spells$/, '');
+                        btn.className = 'filter-btn' + (e.name === chosenClass ? ' active' : '');
+                        btn.style.cssText = 'font-size:0.78rem; padding:2px 8px;';
+                        btn.onclick = () => {
+                            selectedFeatSpellClasses[contextName] = e.name;
+                            if (re) re(); else renderFeatChoices(parentEl, feat, contextName, null);
+                        };
+                        btnRow.appendChild(btn);
+                    });
+                    parentEl.appendChild(btnRow);
+                    if (chosenEntry) processEntry(chosenEntry, contextName);
+                } else {
+                    entries.forEach(e => processEntry(e, contextName));
+                }
+            }
+
+            // ── Fixed granted spells (no choose — character receives all of them) ─
+            if (feat.additionalSpells && feat.additionalSpells.length > 0) {
+                const grantedNames = [];
+                const scanGranted = (obj) => {
+                    if (!obj) return;
+                    Object.values(obj).forEach(val => {
+                        if (Array.isArray(val)) {
+                            val.forEach(v => {
+                                if (typeof v === 'string') grantedNames.push(v);
+                                else if (v && v.name && !v.choose && !v.fromSpells) grantedNames.push(v.name);
+                            });
+                        } else if (val && typeof val === 'object') { scanGranted(val); }
+                    });
+                };
+                feat.additionalSpells.forEach(entry => {
+                    if (entry.innate)   scanGranted(entry.innate);
+                    if (entry.known)    scanGranted(entry.known);
+                    if (entry.prepared) scanGranted(entry.prepared);
+                });
+
+                const cleanNames = [...new Set(grantedNames.map(n => n.split('|')[0].replace(/\s*\(.*?\)$/, '').trim()).filter(Boolean))];
+                // Look up spell objects; only keep those found in allSpells
+                const grantedSpells = cleanNames.map(name => {
+                    const lc = name.toLowerCase();
+                    return allSpells.find(s => s.name.toLowerCase() === lc && s.source === 'XPHB')
+                        || allSpells.find(s => s.name.toLowerCase() === lc);
+                }).filter(Boolean);
+                // De-dup by name
+                const seen = new Set();
+                const uniqueSpells = grantedSpells.filter(s => { if (seen.has(s.name)) return false; seen.add(s.name); return true; });
+
+                if (uniqueSpells.length > 0) {
+                    const sec = document.createElement('div');
+                    sec.style.cssText = 'margin-bottom:12px;';
+                    const lbl = document.createElement('div');
+                    lbl.style.cssText = 'font-size:0.8em; font-weight:bold; color:var(--red-dark); margin-bottom:4px;';
+                    lbl.textContent = `Granted Spells (${uniqueSpells.length}):`;
+                    sec.appendChild(lbl);
+
+                    const tbl = document.createElement('table');
+                    tbl.style.cssText = 'width:100%; border-collapse:collapse; font-size:0.78rem;';
+                    tbl.innerHTML = `<thead><tr style="background:var(--parchment-dark); border-bottom:1px solid var(--gold-dark); text-align:left;">
+                        <th style="padding:3px 5px; color:var(--ink-light);">Lvl</th>
+                        <th style="padding:3px 5px; color:var(--ink-light);">Name</th>
+                        <th style="padding:3px 5px; color:var(--ink-light);">School</th>
+                        <th style="padding:3px 5px; color:var(--ink-light); text-align:center;" title="Ritual">R</th>
+                        <th style="padding:3px 5px; color:var(--ink-light); text-align:center;" title="Concentration">C</th>
+                        <th style="padding:3px 5px; color:var(--ink-light); text-align:center;" title="Material">M</th>
+                        <th style="padding:3px 5px; color:var(--ink-light);">Range</th>
+                    </tr></thead>`;
+                    const tbody2 = document.createElement('tbody');
+                    uniqueSpells.forEach((s, idx) => {
+                        const row = document.createElement('tr');
+                        const school = s.school || '';
+                        const isRitual = !!(s.meta && s.meta.ritual);
+                        const isConc   = !!(s.duration && s.duration.some(d => d.concentration));
+                        const hasMat   = !!(s.components && s.components.m);
+                        const rd = s.range && s.range.distance;
+                        const rangeStr = rd ? (rd.type === 'self' ? 'Self' : rd.type === 'touch' ? 'Touch' : `${rd.amount||''} ${rd.type}`.trim()) : (s.range ? s.range.type : '—');
+                        row.style.cssText = `background:${idx%2===0?'rgba(255,255,255,0.35)':'rgba(255,255,255,0.1)'}; border-bottom:1px solid var(--gold-light,#e8d9a0); cursor:pointer; transition:background 0.1s;`;
+                        row.innerHTML = `<td style="padding:2px 5px;">${s.level===0?'C':s.level}</td><td style="padding:2px 5px; font-weight:500;">${s.name}</td><td style="padding:2px 5px;" title="${FEAT_SA[school]||school}">${school}</td><td style="padding:2px 5px; text-align:center;">${isRitual?'✦':''}</td><td style="padding:2px 5px; text-align:center;">${isConc?'●':''}</td><td style="padding:2px 5px; text-align:center;">${hasMat?'◆':''}</td><td style="padding:2px 5px;">${rangeStr}</td>`;
+                        row.onmouseenter = () => { row.style.background = 'rgba(180,140,60,0.15)'; };
+                        row.onmouseleave = () => { row.style.background = idx%2===0?'rgba(255,255,255,0.35)':'rgba(255,255,255,0.1)'; };
+                        row.onclick = () => renderFeatSpellDescription(s);
+                        tbody2.appendChild(row);
+                    });
+                    tbl.appendChild(tbody2);
+                    sec.appendChild(tbl);
+                    parentEl.appendChild(sec);
+                }
+            }
+
+            // ── Type:options blocks ──────────────────────────────────────────
+            const optionSets = extractOptionSets(feat.entries || feat.entry);
+            if (optionSets.length > 0 && optionSets.some(s => s.choices.some(c => c.type !== 'optionalfeature'))) {
+                renderExplicitOptions(parentEl, optionSets, selectedClass, selectedLevel, selectedSubclass);
+            }
+        }
+
+        // ── Section 0: Background Origin Feat (display only) ────────────────
+        const bgFeatName = getBackgroundOriginFeat();
+        if (bgFeatName) {
+            const bgs = allBackgrounds.filter(b => b.name === selectedBackground);
+            const bg = bgs.find(b => b.source === 'XPHB') || bgs.find(b => b.source === 'PHB') || bgs[0];
+            const bgLabel = bg ? bg.name : selectedBackground;
+
+            let feat = allFeats.find(f => f.name === bgFeatName);
+            if (!feat) {
+                const lc = bgFeatName.toLowerCase();
+                feat = allFeats.find(f => f.name.toLowerCase() === lc);
+            }
+            if (feat && !feat.entries && feat._copy) {
+                const orig = allFeats.find(f => f.name === feat._copy.name);
+                if (orig && orig.entries) feat = { ...orig, ...feat, entries: orig.entries };
+            }
+
+            const sec = document.createElement('div');
+            sec.style.cssText = 'margin-bottom:20px; padding-bottom:16px; border-bottom:2px solid var(--gold-dark);';
+
+            const hdr = document.createElement('h3');
+            hdr.style.cssText = 'margin:0 0 4px; font-size:1rem; color:var(--red-dark);';
+            hdr.textContent = 'Background Origin Feat';
+            sec.appendChild(hdr);
+
+            const sub = document.createElement('div');
+            sub.style.cssText = 'font-size:0.8rem; color:var(--ink-light); font-style:italic; margin-bottom:8px;';
+            sub.textContent = `From: ${bgLabel}`;
+            sec.appendChild(sub);
+
+            const card = document.createElement('div');
+            card.style.cssText = 'padding:10px 12px; background:rgba(255,255,255,0.5); border:1px solid var(--gold); border-radius:4px;';
+
+            const cardTitle = document.createElement('div');
+            cardTitle.style.cssText = 'font-weight:bold; color:var(--red-dark); margin-bottom:4px;';
+            cardTitle.textContent = bgFeatName;
+            card.appendChild(cardTitle);
+
+            if (feat && feat.entries) {
+                const desc = document.createElement('div');
+                desc.style.cssText = 'font-size:0.82rem; color:var(--ink); line-height:1.45;';
+                let html = processEntries(feat.entries);
+                html = formatDescription(html);
+                desc.innerHTML = html;
+                card.appendChild(desc);
+            }
+
+            sec.appendChild(card);
+
+            if (feat) {
+                const choicesArea = document.createElement('div');
+                choicesArea.style.cssText = 'margin-top:10px;';
+                const baseFeat = allFeats.find(f => f.name === bgFeatName) || feat;
+                renderFeatChoices(choicesArea, baseFeat, bgFeatName, () => renderFeatChoices(choicesArea, baseFeat, bgFeatName, null));
+                if (choicesArea.hasChildNodes()) sec.appendChild(choicesArea);
+            }
+
+            container.appendChild(sec);
+        }
+
         // ── Section 1: ASI slots from leveling ──────────────────────────────
         const asiFeatures = allClassFeatures.filter(f =>
             f.className && f.className.toLowerCase() === selectedClass.toLowerCase() &&
@@ -5598,13 +6162,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnFeat.className = 'btn btn-primary';
                 bodyDiv.innerHTML = '';
 
+                const pickerArea = document.createElement('div');
+                const choicesArea = document.createElement('div');
+                choicesArea.style.cssText = 'margin-top:10px;';
+                bodyDiv.appendChild(pickerArea);
+                bodyDiv.appendChild(choicesArea);
+
                 let pickedFeat = isFeat ? currentChoice : null;
-                makeFeatPicker(bodyDiv, pickedFeat, (featName) => {
+
+                const refreshChoices = () => {
+                    const feat = pickedFeat ? resolveFeat(pickedFeat) : null;
+                    if (feat) renderFeatChoices(choicesArea, feat, pickedFeat, refreshChoices);
+                    else choicesArea.innerHTML = '';
+                };
+
+                makeFeatPicker(pickerArea, pickedFeat, (featName) => {
                     pickedFeat = featName;
                     setChoice(featName);
+                    refreshChoices();
                     renderSidebarSpellChoices();
                     updateAbilityScoreBonuses();
                 });
+
+                refreshChoices();
             };
 
             btnASI.onclick  = showASI;
@@ -5641,8 +6221,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const renderExtraFeats = () => {
             extraListEl.innerHTML = '';
             selectedExtraFeats.forEach((featName, idx) => {
+                const wrapper = document.createElement('div');
+                wrapper.style.cssText = 'margin-bottom:10px; padding:8px 10px; background:rgba(255,255,255,0.5); border:1px solid var(--border-color); border-radius:4px;';
+
                 const row = document.createElement('div');
-                row.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:6px; padding:6px 10px; background:rgba(255,255,255,0.5); border:1px solid var(--border-color); border-radius:4px;';
+                row.style.cssText = 'display:flex; align-items:center; gap:8px;';
                 const ft = featMap.get(featName);
                 const cat = ft?.category === 'O' || ft?.category === 'Origin' ? 'Origin' : (ft?.source || '');
                 row.innerHTML = `<span style="flex:1;font-weight:500;">${featName}</span><span style="font-size:0.75rem;color:var(--ink-light);">${cat}</span>`;
@@ -5652,7 +6235,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 rmBtn.style.cssText = 'padding:2px 8px; font-size:0.8rem; color:var(--red);';
                 rmBtn.onclick = () => { selectedExtraFeats.splice(idx, 1); renderExtraFeats(); renderSidebarSpellChoices(); };
                 row.appendChild(rmBtn);
-                extraListEl.appendChild(row);
+                wrapper.appendChild(row);
+
+                const choicesArea = document.createElement('div');
+                choicesArea.style.cssText = 'margin-top:8px;';
+                const feat = resolveFeat(featName);
+                if (feat) renderFeatChoices(choicesArea, feat, featName, () => renderFeatChoices(choicesArea, feat, featName, null));
+                if (choicesArea.hasChildNodes()) wrapper.appendChild(choicesArea);
+
+                extraListEl.appendChild(wrapper);
             });
         };
 

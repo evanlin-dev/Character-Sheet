@@ -263,6 +263,23 @@ body.app-view-active .character-sheet > *:not(#mobile-sync-header):not(#app-view
 }
 .msv-filter-btn.active { background: var(--red); color: white; border-color: var(--red-dark); }
 
+.filter-btn {
+    flex-shrink: 0;
+    padding: 3px 9px;
+    font-family: 'Cinzel', serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border: 1px solid var(--gold-dark);
+    border-radius: 10px;
+    background: var(--parchment-light, #fdf6e3);
+    color: var(--ink);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.filter-btn:hover { background: var(--gold-light, #f0dfa0); }
+.filter-btn.active { background: var(--red); color: white; border-color: var(--red-dark); }
+
 /* Spell slots compact */
 .msv-slots-grid {
     display: flex;
