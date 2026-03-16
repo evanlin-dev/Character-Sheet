@@ -27,6 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedSpeciesOption = null;
     let selectedSpeciesOptionFeature = null;
     let selectedSpecies = null;
+    let selectedAsiChoices = {};   // { [level]: { mode:'two'|'oneone', stat, stat1, stat2 } }
+    let selectedExtraFeats = [];   // extra DM-granted feats, array of feat names
     let allMasteryProperties = {};
     let allItems = [];
     let lastAvailableFeatNames = null;
@@ -1366,196 +1368,22 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (f.name === "Divine Order") {
                 renderDivineOrderChoice(getChoiceTarget(), f);
                 hasChoices = true;
-            } else if (f.name === "Ability Score Improvement") {
-                renderFeatSelection(getChoiceTarget(), f, selectedClass, f.level);
-                hasChoices = true;
-                
-                // Render selected feat description if any
-                const selectionKey = `ASI Level ${f.level}`;
-                let selectedFeatName = null;
+            } else if (f.name === "Ability Score Improvement" || f.name === "Epic Boon") {
+                // Handled in the Feats tab
+                const key = `ASI Level ${f.level}`;
+                let chosenName = null;
                 for (const item of selectedOptionalFeatures) {
-                    if (item.startsWith(selectionKey + ":")) {
-                        selectedFeatName = item.substring(selectionKey.length + 2);
-                        break;
-                    }
+                    if (item.startsWith(key + ': ')) { chosenName = item.substring(key.length + 2); break; }
                 }
-
-                if (selectedFeatName) {
-                    const candidates = allFeats.filter(ft => ft.name === selectedFeatName);
-                    let feat = candidates.find(ft => ft.source === 'XPHB') || candidates.find(ft => ft.source === 'PHB') || candidates[0];
-                    let parentFeat = null;
-
-                    // If not found, check if it's a version inside another feat
-                    if (!feat) {
-                        for (const f of allFeats) {
-                            if (f._versions) {
-                                const v = f._versions.find(v => v.name === selectedFeatName);
-                                if (v) { 
-                                    feat = v; 
-                                    parentFeat = f;
-                                    break; 
-                                }
-                            }
-                        }
-                    }
-
-                    // Fallback for Magic Initiate synthetic names
-                    if (!feat && selectedFeatName.startsWith("Magic Initiate (")) {
-                        const pCandidates = allFeats.filter(ft => ft.name === "Magic Initiate");
-                        feat = pCandidates.find(ft => ft.source === 'XPHB') || pCandidates.find(ft => ft.source === 'PHB') || pCandidates[0];
-                    }
-
-                    // Generic fallback for options (e.g. "Divinely Favored (Evil)")
-                    if (!feat && selectedFeatName.includes(" (")) {
-                         const baseName = selectedFeatName.substring(0, selectedFeatName.lastIndexOf(" ("));
-                         const pCandidates = allFeats.filter(ft => ft.name === baseName);
-                         feat = pCandidates.find(ft => ft.source === 'XPHB') || pCandidates.find(ft => ft.source === 'PHB') || pCandidates[0];
-                    }
-
-                    if (feat && (!feat.entries || (feat.entries.length === 1 && typeof feat.entries[0] === 'string')) && feat._copy) {
-                        const copyName = feat._copy.name;
-                        const copySource = feat._copy.source || feat.source;
-                        const original = allFeats.find(f => f.name === copyName && (f.source === copySource || !feat._copy.source));
-                        if (original && original.entries) feat = { ...original, ...feat, entries: original.entries };
-                    }
-
-                    // Render Parent Feat Description if we have a version selected
-                    if (parentFeat) {
-                        const parentDiv = document.createElement('div');
-                        parentDiv.className = "mt-2 p-2 border rounded";
-                        parentDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
-                        
-                        let parentDesc = processEntries(parentFeat.entries);
-                        parentDesc = formatDescription(parentDesc);
-
-                        parentDiv.innerHTML = `
-                            <div class="font-bold text-red-dark border-bottom pb-1 mb-1">Feat: ${parentFeat.name}</div>
-                            <div class="text-small text-ink" style="line-height:1.4;">${parentDesc}</div>
-                        `;
-                        targetParent.appendChild(parentDiv);
-                    }
-
-                    // If it's Magic Initiate, we might want to show the specific class description if available, 
-                    // or just the parent is fine as the custom UI handles the rest.
-                    if (feat && feat.name === "Magic Initiate" && selectedFeatName.includes("(")) {
-                        // The parent description is generic. The user sees the class selection UI above.
-                        // We can append a small note or just rely on the parent description.
-                    }
-
-                    if (feat) {
-                        const featDiv = document.createElement('div');
-                        featDiv.className = "mt-2 p-2 border rounded";
-                        featDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
-                        
-                        let featDesc = processEntries(feat.entries);
-                        featDesc = formatDescription(featDesc);
-                        
-                        let prereqDisplay = "";
-                        if (feat.prerequisite) {
-                            const reqs = feat.prerequisite.map(req => {
-                                const parts = [];
-                                if (req.level) {
-                                    let lvl = req.level;
-                                    if (typeof req.level === 'object') lvl = req.level.level;
-                                    parts.push(`Level ${lvl}`);
-                                }
-                                if (req.race) {
-                                    const races = req.race.map(r => r.name + (r.subrace ? ` (${r.subrace})` : '')).join('/');
-                                    parts.push(`Race: ${races}`);
-                                }
-                                if (req.ability) {
-                                    const abs = req.ability.map(a => Object.entries(a).map(([k,v]) => `${k.toUpperCase()} ${v}`).join('/')).join(' or ');
-                                    parts.push(abs);
-                                }
-                                return parts.join(', ');
-                            }).filter(s => s).join('; ');
-                            if (reqs) prereqDisplay = `<div style="font-size:0.8rem; color:var(--red); font-style:italic; margin-bottom:6px;">Prerequisite: ${reqs}</div>`;
-                        }
-
-                        featDiv.innerHTML = `
-                            <div class="font-bold text-red-dark border-bottom pb-1 mb-1">${parentFeat ? 'Version: ' : 'Feat: '}${selectedFeatName.includes('Magic Initiate') ? selectedFeatName : feat.name} <span class="text-ink-light font-normal text-small">[${feat.source}]</span></div>
-                            ${prereqDisplay}
-                            <div class="text-small text-ink" style="line-height:1.4;">${featDesc}</div>
-                        `;
-                        targetParent.appendChild(featDiv);
-                    }
-                }
-            } else if (f.name === "Epic Boon") {
-                const selectionKey = `ASI Level ${f.level}`;
-                let selectedFeatName = null;
-                for (const item of selectedOptionalFeatures) {
-                    if (item.startsWith(selectionKey + ":")) {
-                        selectedFeatName = item.substring(selectionKey.length + 2);
-                        break;
-                    }
-                }
-
-                renderFeatSelection(getChoiceTarget(), f, selectedClass, f.level);
+                const notice = document.createElement('div');
+                notice.style.cssText = 'font-size:0.82rem; color:var(--ink-light); font-style:italic; padding:6px 0;';
+                notice.textContent = chosenName && chosenName !== 'ASI'
+                    ? `Feat: ${chosenName} (see Feats tab)`
+                    : chosenName === 'ASI'
+                        ? `+2 ability score increase (see Feats tab)`
+                        : `Not yet chosen — see Feats tab`;
+                getChoiceTarget().appendChild(notice);
                 hasChoices = true;
-
-                if (selectedFeatName) {
-                    const candidates = allFeats.filter(ft => ft.name === selectedFeatName);
-                    let feat = candidates.find(ft => ft.source === 'XPHB') || candidates.find(ft => ft.source === 'PHB') || candidates[0];
-                    let parentFeat = null;
-
-                    // If not found, check if it's a version inside another feat
-                    if (!feat) {
-                        for (const f of allFeats) {
-                            if (f._versions) {
-                                const v = f._versions.find(v => v.name === selectedFeatName);
-                                if (v) { 
-                                    feat = v; 
-                                    parentFeat = f;
-                                    break; 
-                                }
-                            }
-                        }
-                    }
-
-                    // Fallback for Magic Initiate synthetic names
-                    if (!feat && selectedFeatName.startsWith("Magic Initiate (")) {
-                        const pCandidates = allFeats.filter(ft => ft.name === "Magic Initiate");
-                        feat = pCandidates.find(ft => ft.source === 'XPHB') || pCandidates.find(ft => ft.source === 'PHB') || pCandidates[0];
-                    }
-
-                    if (feat && (!feat.entries || (feat.entries.length === 1 && typeof feat.entries[0] === 'string')) && feat._copy) {
-                        const copyName = feat._copy.name;
-                        const copySource = feat._copy.source || feat.source;
-                        const original = allFeats.find(f => f.name === copyName && (f.source === copySource || !feat._copy.source));
-                        if (original && original.entries) feat = { ...original, ...feat, entries: original.entries };
-                    }
-
-                    // Render Parent Feat Description if we have a version selected
-                    if (parentFeat) {
-                        const parentDiv = document.createElement('div');
-                        parentDiv.className = "mt-2 p-2 border rounded";
-                        parentDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
-                        
-                        let parentDesc = processEntries(parentFeat.entries);
-                        parentDesc = formatDescription(parentDesc);
-
-                        parentDiv.innerHTML = `
-                            <div class="font-bold text-red-dark border-bottom pb-1 mb-1">Feat: ${parentFeat.name}</div>
-                            <div class="text-small text-ink" style="line-height:1.4;">${parentDesc}</div>
-                        `;
-                        targetParent.appendChild(parentDiv);
-                    }
-
-                    if (feat) {
-                        const featDiv = document.createElement('div');
-                        featDiv.className = "mt-2 p-2 border rounded";
-                        featDiv.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
-                        
-                        let featDesc = processEntries(feat.entries);
-                        featDesc = formatDescription(featDesc);
-
-                        featDiv.innerHTML = `
-                            <div class="font-bold text-red-dark border-bottom pb-1 mb-1">${parentFeat ? 'Version: ' : 'Feat: '}${feat.name}</div>
-                            <div class="text-small text-ink" style="line-height:1.4;">${featDesc}</div>
-                        `;
-                        targetParent.appendChild(featDiv);
-                    }
-                }
             } else if (f.name === "Primal Knowledge") {
                 const clsObj = allClasses.find(c => c.name === selectedClass && c.source === currentClassSource);
                 if (clsObj && clsObj.startingProficiencies && clsObj.startingProficiencies.skills) {
@@ -3954,6 +3782,7 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedOptionalFeatures.forEach(name => {
             if (name.startsWith('ASI Level ')) {
                 const featName = name.substring(name.indexOf(':') + 2);
+                if (featName === 'ASI') return; // pure score increase, no feat
                 const feat = resolveFeat(featName);
                 if (feat) result.push({ feature: feat, contextName: featName, isFeat: true });
             } else if (name.startsWith('OriginFeat:')) {
@@ -3961,6 +3790,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const feat = resolveFeat(featName);
                 if (feat) result.push({ feature: feat, contextName: featName, isFeat: true });
             }
+        });
+
+        // Extra feats from feats tab
+        selectedExtraFeats.forEach(featName => {
+            const feat = resolveFeat(featName);
+            if (feat) result.push({ feature: feat, contextName: featName, isFeat: true });
         });
 
         return result;
@@ -5403,101 +5238,262 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderFeatsTab() {
         const container = document.getElementById('creator-feats-container');
         if (!container) return;
+        container.innerHTML = '';
 
-        if (allFeats.length === 0) {
-            container.innerHTML = '<em style="color:var(--text-muted);">No feat data loaded. Upload feat data in the main sheet first.</em>';
+        if (!selectedClass) {
+            container.innerHTML = '<em style="color:var(--text-muted);">Select a class first.</em>';
             return;
         }
-
-        const selectionKey = 'OriginFeat';
-        let currentFeatName = null;
-        for (const item of selectedOptionalFeatures) {
-            if (item.startsWith(selectionKey + ':')) {
-                currentFeatName = item.substring(selectionKey.length + 1);
-                break;
-            }
+        if (allFeats.length === 0) {
+            container.innerHTML = '<em style="color:var(--text-muted);">No feat data loaded.</em>';
+            return;
         }
 
         // Deduplicate feats by name (prefer XPHB > PHB > first)
         const featMap = new Map();
         allFeats.forEach(ft => {
-            if (!featMap.has(ft.name)) {
-                featMap.set(ft.name, ft);
-            } else {
-                const existing = featMap.get(ft.name);
-                const priority = (s) => s === 'XPHB' ? 2 : s === 'PHB' ? 1 : 0;
-                if (priority(ft.source) > priority(existing.source)) featMap.set(ft.name, ft);
-            }
+            if (!featMap.has(ft.name)) { featMap.set(ft.name, ft); return; }
+            const p = s => s === 'XPHB' ? 2 : s === 'PHB' ? 1 : 0;
+            if (p(ft.source) > p(featMap.get(ft.name).source)) featMap.set(ft.name, ft);
         });
+        const allFeatsSorted = [...featMap.values()].sort((a, b) => a.name.localeCompare(b.name));
 
-        // Show origin feats first, then all others
-        const originFeats = [...featMap.values()].filter(ft => ft.category === 'O' || ft.category === 'Origin');
-        const otherFeats = [...featMap.values()].filter(ft => ft.category !== 'O' && ft.category !== 'Origin');
-        const sorted = [
-            ...originFeats.sort((a, b) => a.name.localeCompare(b.name)),
-            ...otherFeats.sort((a, b) => a.name.localeCompare(b.name))
-        ];
+        // Inline feat picker helper
+        const makeFeatPicker = (parentEl, currentFeatName, onSelect) => {
+            parentEl.innerHTML = '';
+            const search = document.createElement('input');
+            search.type = 'text';
+            search.placeholder = 'Search feats…';
+            search.className = 'search-input';
+            search.style.cssText = 'width:100%; margin-bottom:6px;';
+            parentEl.appendChild(search);
 
-        container.innerHTML = `
-            <p style="color:var(--ink-light); font-style:italic; margin-bottom:12px;">
-                Select an <strong>Origin Feat</strong> (or any feat your DM allows at level 1).
-                This is stored separately from ASI feats chosen in the Class tab.
-            </p>
-            <input type="text" id="feat-tab-search" class="search-input" placeholder="Search feats..." style="margin-bottom:12px;">
-            <div id="feat-tab-list"></div>
-            <div id="feat-tab-detail" style="margin-top:20px; padding:15px; background:rgba(255,255,255,0.5); border:1px solid var(--border-color); border-radius:4px; display:none;"></div>
-        `;
+            const listEl = document.createElement('div');
+            listEl.style.cssText = 'max-height:180px; overflow-y:auto; border:1px solid var(--border-color); border-radius:4px; background:rgba(255,255,255,0.4);';
+            parentEl.appendChild(listEl);
 
-        const listDiv = document.getElementById('feat-tab-list');
-        const detailDiv = document.getElementById('feat-tab-detail');
-        const searchInput = document.getElementById('feat-tab-search');
-
-        const renderList = (filter = '') => {
-            const lc = filter.toLowerCase();
-            const visible = sorted.filter(ft => ft.name.toLowerCase().includes(lc));
-            listDiv.innerHTML = '';
-            visible.forEach(ft => {
-                const isOrigin = ft.category === 'O' || ft.category === 'Origin';
-                const isSelected = ft.name === currentFeatName;
-                const row = document.createElement('div');
-                row.className = 'list-item' + (isSelected ? ' selected' : '');
-                row.style.display = 'flex';
-                row.style.justifyContent = 'space-between';
-                row.style.alignItems = 'center';
-                row.innerHTML = `
-                    <span>${ft.name}</span>
-                    <span style="font-size:0.75rem; color:inherit; opacity:0.7;">${isOrigin ? 'Origin' : (ft.category || ft.source || '')}</span>
-                `;
-                row.onclick = () => {
-                    currentFeatName = ft.name;
-                    // Store in selectedOptionalFeatures
-                    for (const item of [...selectedOptionalFeatures]) {
-                        if (item.startsWith(selectionKey + ':')) selectedOptionalFeatures.delete(item);
-                    }
-                    selectedOptionalFeatures.add(`${selectionKey}:${ft.name}`);
-                    renderList(searchInput.value);
-                    renderSidebarSpellChoices();
-                    // Show detail
-                    const desc = processEntries(ft.entries || ft.entry);
-                    detailDiv.style.display = 'block';
-                    detailDiv.innerHTML = `<h4 style="margin-top:0;">${ft.name}</h4>${formatDescription(desc)}`;
-                };
-                listDiv.appendChild(row);
-            });
-            if (visible.length === 0) listDiv.innerHTML = '<em style="color:var(--text-muted); padding:10px; display:block;">No feats match your search.</em>';
+            const renderList = (filter = '') => {
+                const lc = filter.toLowerCase();
+                listEl.innerHTML = '';
+                allFeatsSorted.filter(ft => ft.name.toLowerCase().includes(lc)).forEach(ft => {
+                    const row = document.createElement('div');
+                    row.className = 'list-item' + (ft.name === currentFeatName ? ' selected' : '');
+                    row.style.cssText = 'padding:4px 8px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;';
+                    const cat = ft.category === 'O' || ft.category === 'Origin' ? 'Origin' : (ft.source || '');
+                    row.innerHTML = `<span>${ft.name}</span><span style="font-size:0.73rem;opacity:0.6;">${cat}</span>`;
+                    row.onclick = () => {
+                        currentFeatName = ft.name;
+                        onSelect(ft.name);
+                        renderList(search.value);
+                    };
+                    listEl.appendChild(row);
+                });
+                if (!listEl.children.length) listEl.innerHTML = '<em style="padding:8px;display:block;color:var(--text-muted);">No feats match.</em>';
+            };
+            search.oninput = () => renderList(search.value);
+            renderList();
         };
 
-        searchInput.oninput = () => renderList(searchInput.value);
-        renderList();
+        // ── Section 1: ASI slots from leveling ──────────────────────────────
+        const asiFeatures = allClassFeatures.filter(f =>
+            f.className && f.className.toLowerCase() === selectedClass.toLowerCase() &&
+            f.source === currentClassSource && !f.subclassShortName &&
+            f.level <= selectedLevel &&
+            (f.name === 'Ability Score Improvement' || f.name === 'Epic Boon')
+        ).sort((a, b) => a.level - b.level);
 
-        // If a feat was previously selected, show its detail
-        if (currentFeatName) {
-            const ft = featMap.get(currentFeatName);
-            if (ft) {
-                detailDiv.style.display = 'block';
-                detailDiv.innerHTML = `<h4 style="margin-top:0;">${ft.name}</h4>${formatDescription(processEntries(ft.entries || ft.entry))}`;
-            }
+        if (asiFeatures.length) {
+            const h = document.createElement('h3');
+            h.style.cssText = 'margin:0 0 14px; font-size:1rem; color:var(--red-dark); border-bottom:1px solid var(--gold); padding-bottom:4px;';
+            h.textContent = 'Ability Score Improvements';
+            container.appendChild(h);
         }
+
+        const ABILITIES = ['Strength','Dexterity','Constitution','Intelligence','Wisdom','Charisma'];
+
+        asiFeatures.forEach(f => {
+            const key = `ASI Level ${f.level}`;
+            let currentChoice = null;
+            for (const item of selectedOptionalFeatures) {
+                if (item.startsWith(key + ': ')) { currentChoice = item.substring(key.length + 2); break; }
+            }
+            const isASI  = currentChoice === 'ASI';
+            const isFeat = currentChoice && currentChoice !== 'ASI';
+
+            const card = document.createElement('div');
+            card.style.cssText = 'margin-bottom:14px; padding:12px; border:1px solid var(--border-color); border-radius:6px; background:rgba(255,255,255,0.45);';
+
+            const cardTitle = document.createElement('div');
+            cardTitle.style.cssText = 'font-weight:bold; margin-bottom:10px; color:var(--ink);';
+            cardTitle.textContent = `Level ${f.level} — ${f.name}`;
+            card.appendChild(cardTitle);
+
+            const toggleRow = document.createElement('div');
+            toggleRow.style.cssText = 'display:flex; gap:8px; margin-bottom:10px;';
+            const btnASI  = document.createElement('button');
+            const btnFeat = document.createElement('button');
+            btnASI.textContent  = '+ Ability Scores';
+            btnFeat.textContent = 'Take a Feat';
+            btnASI.className  = 'btn' + (isASI  ? ' btn-primary' : '');
+            btnFeat.className = 'btn' + (isFeat ? ' btn-primary' : '');
+            btnASI.style  = 'flex:1; font-size:0.85rem;';
+            btnFeat.style = 'flex:1; font-size:0.85rem;';
+            toggleRow.appendChild(btnASI);
+            toggleRow.appendChild(btnFeat);
+            card.appendChild(toggleRow);
+
+            const bodyDiv = document.createElement('div');
+            card.appendChild(bodyDiv);
+            container.appendChild(card);
+
+            const setChoice = (val) => {
+                for (const item of [...selectedOptionalFeatures]) {
+                    if (item.startsWith(key + ': ')) selectedOptionalFeatures.delete(item);
+                }
+                if (val) selectedOptionalFeatures.add(`${key}: ${val}`);
+            };
+
+            const showASI = () => {
+                setChoice('ASI');
+                btnASI.className  = 'btn btn-primary';
+                btnFeat.className = 'btn';
+
+                const saved = selectedAsiChoices[f.level] || { mode: 'two' };
+                bodyDiv.innerHTML = `
+                    <div style="display:flex; gap:6px; margin-bottom:8px;">
+                        <button class="btn${saved.mode === 'two'    ? ' btn-primary' : ''}" data-mode="two"    style="flex:1;font-size:0.8rem;">+2 to one stat</button>
+                        <button class="btn${saved.mode === 'oneone' ? ' btn-primary' : ''}" data-mode="oneone" style="flex:1;font-size:0.8rem;">+1 / +1 to two stats</button>
+                    </div>
+                    <div id="asi-inputs-${f.level}"></div>`;
+
+                const renderAsiInputs = (mode) => {
+                    const inp = document.getElementById(`asi-inputs-${f.level}`);
+                    if (!inp) return;
+                    inp.innerHTML = '';
+                    const s = selectedAsiChoices[f.level] || {};
+                    if (mode === 'two') {
+                        const sel = document.createElement('select');
+                        sel.className = 'styled-select';
+                        sel.style.width = '100%';
+                        sel.innerHTML = `<option value="">— +2 to which ability? —</option>` +
+                            ABILITIES.map(ab => `<option value="${ab}"${s.stat === ab ? ' selected' : ''}>${ab}</option>`).join('');
+                        sel.onchange = () => { selectedAsiChoices[f.level] = { mode:'two', stat:sel.value }; updateAbilityScoreBonuses(); };
+                        inp.appendChild(sel);
+                    } else {
+                        const row = document.createElement('div');
+                        row.style.cssText = 'display:flex; gap:6px;';
+                        [['stat1','First ability (+1)'],['stat2','Second ability (+1)']].forEach(([key2, ph]) => {
+                            const sel = document.createElement('select');
+                            sel.className = 'styled-select';
+                            sel.style.flex = '1';
+                            sel.innerHTML = `<option value="">— ${ph} —</option>` +
+                                ABILITIES.map(ab => `<option value="${ab}"${s[key2] === ab ? ' selected' : ''}>${ab}</option>`).join('');
+                            sel.onchange = () => {
+                                selectedAsiChoices[f.level] = { ...( selectedAsiChoices[f.level] || {mode:'oneone'}), [key2]: sel.value };
+                                updateAbilityScoreBonuses();
+                            };
+                            row.appendChild(sel);
+                        });
+                        inp.appendChild(row);
+                    }
+                };
+
+                bodyDiv.querySelectorAll('[data-mode]').forEach(btn => {
+                    btn.onclick = () => {
+                        const mode = btn.dataset.mode;
+                        selectedAsiChoices[f.level] = { ...(selectedAsiChoices[f.level] || {}), mode };
+                        bodyDiv.querySelectorAll('[data-mode]').forEach(b => b.className = 'btn' + (b.dataset.mode === mode ? ' btn-primary' : ''));
+                        renderAsiInputs(mode);
+                    };
+                });
+                renderAsiInputs(saved.mode || 'two');
+            };
+
+            const showFeat = () => {
+                btnASI.className  = 'btn';
+                btnFeat.className = 'btn btn-primary';
+                bodyDiv.innerHTML = '';
+
+                let pickedFeat = isFeat ? currentChoice : null;
+                makeFeatPicker(bodyDiv, pickedFeat, (featName) => {
+                    pickedFeat = featName;
+                    setChoice(featName);
+                    renderSidebarSpellChoices();
+                    updateAbilityScoreBonuses();
+                });
+            };
+
+            btnASI.onclick  = showASI;
+            btnFeat.onclick = showFeat;
+
+            if (isASI)  showASI();
+            else if (isFeat) showFeat();
+        });
+
+        // ── Section 2: Additional optional feats ────────────────────────────
+        const extraSection = document.createElement('div');
+        extraSection.style.cssText = 'margin-top:24px; padding-top:16px; border-top:2px solid var(--gold-dark);';
+
+        const extraH = document.createElement('h3');
+        extraH.style.cssText = 'margin:0 0 4px; font-size:1rem; color:var(--red-dark);';
+        extraH.textContent = 'Additional Feats';
+        extraSection.appendChild(extraH);
+
+        const extraNote = document.createElement('div');
+        extraNote.style.cssText = 'font-size:0.8rem; color:var(--ink-light); font-style:italic; margin-bottom:12px;';
+        extraNote.textContent = 'Optional — for DM-granted feats, homebrew, etc.';
+        extraSection.appendChild(extraNote);
+
+        const extraListEl = document.createElement('div');
+        extraSection.appendChild(extraListEl);
+
+        const addBtn = document.createElement('button');
+        addBtn.className = 'btn';
+        addBtn.style.cssText = 'font-size:0.85rem; margin-top:4px;';
+        addBtn.textContent = '+ Add Feat';
+        extraSection.appendChild(addBtn);
+        container.appendChild(extraSection);
+
+        const renderExtraFeats = () => {
+            extraListEl.innerHTML = '';
+            selectedExtraFeats.forEach((featName, idx) => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:6px; padding:6px 10px; background:rgba(255,255,255,0.5); border:1px solid var(--border-color); border-radius:4px;';
+                const ft = featMap.get(featName);
+                const cat = ft?.category === 'O' || ft?.category === 'Origin' ? 'Origin' : (ft?.source || '');
+                row.innerHTML = `<span style="flex:1;font-weight:500;">${featName}</span><span style="font-size:0.75rem;color:var(--ink-light);">${cat}</span>`;
+                const rmBtn = document.createElement('button');
+                rmBtn.textContent = '✕';
+                rmBtn.className = 'btn';
+                rmBtn.style.cssText = 'padding:2px 8px; font-size:0.8rem; color:var(--red);';
+                rmBtn.onclick = () => { selectedExtraFeats.splice(idx, 1); renderExtraFeats(); renderSidebarSpellChoices(); };
+                row.appendChild(rmBtn);
+                extraListEl.appendChild(row);
+            });
+        };
+
+        addBtn.onclick = () => {
+            const pickerDiv = document.createElement('div');
+            pickerDiv.style.cssText = 'margin-bottom:12px; padding:10px; border:1px dashed var(--gold); border-radius:4px; background:rgba(255,255,255,0.3);';
+            let pickedFeat = null;
+            makeFeatPicker(pickerDiv, null, (featName) => { pickedFeat = featName; });
+
+            const confirmRow = document.createElement('div');
+            confirmRow.style.cssText = 'display:flex; gap:8px; margin-top:8px;';
+            const confirmBtn = document.createElement('button');
+            confirmBtn.textContent = 'Add'; confirmBtn.className = 'btn btn-primary'; confirmBtn.style.fontSize = '0.85rem';
+            confirmBtn.onclick = () => {
+                if (pickedFeat) { selectedExtraFeats.push(pickedFeat); pickerDiv.remove(); renderExtraFeats(); renderSidebarSpellChoices(); }
+            };
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Cancel'; cancelBtn.className = 'btn'; cancelBtn.style.fontSize = '0.85rem';
+            cancelBtn.onclick = () => pickerDiv.remove();
+            confirmRow.appendChild(confirmBtn); confirmRow.appendChild(cancelBtn);
+            pickerDiv.appendChild(confirmRow);
+            extraSection.insertBefore(pickerDiv, addBtn);
+        };
+
+        renderExtraFeats();
     }
 
     function updateAbilityScoreBonuses() {
@@ -5517,7 +5513,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (p1 && bonuses[p1] !== undefined) bonuses[p1] += 1;
         }
 
-        // 2. Feat ASI
+        // 2. Class-level ASI (+2 or +1/+1)
+        Object.values(selectedAsiChoices).forEach(c => {
+            if (!c) return;
+            if (c.mode === 'two' && c.stat && bonuses[c.stat] !== undefined) bonuses[c.stat] += 2;
+            else if (c.mode === 'oneone') {
+                if (c.stat1 && bonuses[c.stat1] !== undefined) bonuses[c.stat1] += 1;
+                if (c.stat2 && bonuses[c.stat2] !== undefined) bonuses[c.stat2] += 1;
+            }
+        });
+
+        // 3. Feat ASI (from feat ability boosts rendered in class tab / feat tab)
         document.querySelectorAll('.feat-asi-select').forEach(sel => {
             if (sel.value && bonuses[sel.value] !== undefined) {
                 bonuses[sel.value] += parseInt(sel.dataset.amount || 1);
@@ -6028,7 +6034,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (p1 && scores[p1]) scores[p1] += 1;
         }
 
-        // 3. Feat ASI
+        // 3. Class-level ASI (+2 or +1/+1)
+        Object.values(selectedAsiChoices).forEach(c => {
+            if (!c) return;
+            if (c.mode === 'two' && c.stat) scores[c.stat] = (scores[c.stat] || 10) + 2;
+            else if (c.mode === 'oneone') {
+                if (c.stat1) scores[c.stat1] = (scores[c.stat1] || 10) + 1;
+                if (c.stat2) scores[c.stat2] = (scores[c.stat2] || 10) + 1;
+            }
+        });
+
+        // 4. Feat ASI
         document.querySelectorAll('.feat-asi-select').forEach(sel => {
             if (sel.value && scores[sel.value]) {
                 scores[sel.value] += parseInt(sel.dataset.amount || 1);
