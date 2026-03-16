@@ -127,6 +127,19 @@ textarea { resize: vertical; min-height: 60px; line-height: 1.6; overflow-y: hid
 body.app-view-active .character-sheet > *:not(#mobile-sync-header):not(#app-views-container):not(.info-modal-overlay) {
     display: none !important;
 }
+/* Always show mobile header and hide regular header when nav views are active */
+body.app-view-active #mobile-sync-header {
+    display: flex !important;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--parchment-dark);
+    border: 2px solid var(--gold);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 12px var(--shadow);
+}
+body.app-view-active .header { display: none !important; }
 
 #app-views-container {
     display: flex;
@@ -181,8 +194,8 @@ body.app-view-active .character-sheet > *:not(#mobile-sync-header):not(#app-view
 
 .mobile-list-header {
     display: grid;
-    grid-template-columns: 34px 28px 32px 1fr 45px;
-    gap: 8px;
+    grid-template-columns: 38px 28px 32px 1fr 45px;
+    gap: 4px;
     padding: 0 12px;
     font-family: 'Cinzel', serif;
     font-size: 0.75rem;
@@ -440,8 +453,8 @@ body.app-view-active .character-sheet > *:not(#mobile-sync-header):not(#app-view
 
 body.app-view-active #view-stats .skill-item {
     display: grid;
-    grid-template-columns: 34px 28px 32px 1fr 45px;
-    gap: 8px;
+    grid-template-columns: 38px 28px 32px 1fr 45px;
+    gap: 4px;
     align-items: center;
     align-content: center;
     padding: 2px 8px;
@@ -452,18 +465,19 @@ body.app-view-active #view-stats .skill-item {
     height: auto;
 }
 
+/* Checkbox and E button share col 1, pinned to opposite ends */
 body.app-view-active #view-stats .skill-item .skill-checkbox {
-    grid-column: 1; grid-row: 1; align-self: center; margin: 0 auto; width: 18px; height: 18px; min-height: unset;
+    grid-column: 1; grid-row: 1; align-self: center; justify-self: start; width: 18px; height: 18px; min-height: unset;
     display: flex; align-items: center; justify-content: center;
+}
+body.app-view-active #view-stats .skill-item .expertise-btn {
+    grid-column: 1; grid-row: 1; align-self: center; justify-self: end;
+    width: 14px; height: 14px; font-size: 0.45rem; padding: 0;
+    margin-left: 0; border-radius: 2px;
 }
 body.app-view-active #view-stats .skill-item .adv-toggle {
     grid-column: 2; grid-row: 1; align-self: center; margin: 0 auto; width: 18px; height: 18px; min-height: unset; font-size: 0.6rem;
     display: flex; align-items: center; justify-content: center;
-}
-body.app-view-active #view-stats .skill-item .expertise-btn {
-    grid-column: 1; grid-row: 1; align-self: end; justify-self: end;
-    width: 13px; height: 13px; font-size: 0.45rem; padding: 0;
-    z-index: 2; border-radius: 2px;
 }
 
 body.app-view-active #view-stats .skill-item .mobile-mod-label {
@@ -550,11 +564,11 @@ body.app-view-active #view-inventory .inventory-item .delete-btn { grid-area: de
 body.app-view-active #view-inventory .inventory-item .desc-field { display: none; }
 
 /* Saving throws: 4-column layout (no MOD column) */
-body.app-view-active #view-stats #mobile-saves-wrapper .skill-item { grid-template-columns: 34px 28px 1fr 45px; }
+body.app-view-active #view-stats #mobile-saves-wrapper .skill-item { grid-template-columns: 38px 28px 1fr 45px; }
 body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .mobile-mod-label { display: none; }
 body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .skill-name { grid-column: 3; }
 body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .skill-mod { grid-column: 4; }
-.mobile-saves-header { grid-template-columns: 34px 28px 1fr 45px; }
+.mobile-saves-header { grid-template-columns: 38px 28px 1fr 45px; gap: 4px; }
 
 /* Skills header doesn't align with 2-column layout — hide it */
 body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) { display: none; }
@@ -1615,7 +1629,6 @@ body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) {
 
   .spell-row .spell-time { grid-area: time; font-size: 0.75rem; height: 24px; min-height: 24px; color: var(--ink-light); }
   .spell-row .spell-range { grid-area: range; font-size: 0.75rem; height: 24px; min-height: 24px; text-align: right; color: var(--ink-light); }
-
   .spell-row .spell-col-prep, 
   .spell-row .spell-col-ritual, 
   .spell-row .spell-col-conc, 
@@ -2435,9 +2448,218 @@ body.swap-scores.dense-mode .stat-modifier input {
   display: none;
 }
 
+/* Mobile sync header inner element styles (used in both ≤900px and app-view-active) */
+#mobile-sync-header input {
+    background: transparent;
+    border: none;
+    color: var(--ink);
+    font-family: "Crimson Text", serif;
+    outline: none;
+    padding: 0;
+    min-height: auto;
+}
+#mobile-sync-header .mh-name {
+    font-family: "Cinzel", serif;
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: var(--red-dark);
+    text-align: center;
+    width: 100%;
+    border-bottom: 2px solid var(--gold);
+    padding-bottom: 4px;
+}
+#mobile-sync-header .mh-stats-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: stretch;
+    gap: 10px;
+}
+#mobile-sync-header .mh-class-info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+#mobile-sync-header .mh-class-info input {
+    font-weight: bold;
+    font-size: 0.95rem;
+    width: auto;
+    flex: 1;
+    min-width: 20px;
+    text-align: center;
+    border-bottom: 1px dashed var(--gold-dark);
+    text-overflow: ellipsis;
+}
+#mobile-sync-header .mh-class-info span {
+    font-weight: bold;
+    color: var(--ink-light);
+    font-family: "Cinzel", serif;
+    font-size: 0.8rem;
+}
+#mobile-sync-header #mh-level {
+    width: 30px;
+    flex: none;
+    text-align: center;
+    border-bottom: 1px dashed var(--gold-dark);
+}
+#mobile-sync-header .mh-heroic {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--gold);
+    font-family: "Cinzel", serif;
+    font-size: 0.85rem;
+    font-weight: bold;
+    white-space: nowrap;
+    width: max-content;
+}
+#mobile-sync-header .mh-heroic input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--red);
+    margin: 0;
+}
+#mobile-sync-header .mh-ac-box,
+#mobile-sync-header .mh-init-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--gold);
+    flex: 1;
+    min-width: 0;
+}
+#mobile-sync-header .mh-ac-box:hover,
+#mobile-sync-header .mh-init-box:hover {
+    border-color: var(--red);
+}
+#mobile-sync-header .mh-ac-box .mh-label,
+#mobile-sync-header .mh-init-box .mh-label {
+    font-family: "Cinzel", serif;
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: var(--red-dark);
+}
+#mobile-sync-header .mh-ac-box input,
+#mobile-sync-header .mh-init-box input {
+    min-width: 30px;
+    width: 100%;
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--red-dark);
+    text-align: right;
+    padding: 0;
+    background: transparent;
+    border: none;
+}
+#mobile-sync-header .mh-hp-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--gold);
+    cursor: pointer;
+    flex: 1;
+}
+#mobile-sync-header .mh-hp-box:hover {
+    border-color: var(--red);
+}
+#mobile-sync-header .mh-hp-box .mh-label {
+    font-family: "Cinzel", serif;
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: var(--red-dark);
+}
+#mobile-sync-header .mh-hp-box input,
+#mobile-sync-header .mh-hp-box #mh-hp {
+    min-width: 45px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--red-dark);
+    text-align: right;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+}
+#mobile-sync-header .mh-death-saves-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--red);
+    flex: 1;
+    min-width: 0;
+    gap: 6px;
+}
+#mobile-sync-header .mh-ds-tracker {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+#mobile-sync-header .mh-ds-tracker span {
+    font-weight: bold;
+    font-size: 0.85rem;
+}
+#mobile-sync-header .mh-ds-tracker input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    accent-color: var(--red);
+}
+#mobile-sync-header .mh-conditions-box {
+    display: flex;
+    align-items: center;
+    background: white;
+    padding: 6px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--gold);
+    flex: 1;
+    cursor: pointer;
+    min-width: 0;
+}
+#mobile-sync-header .mh-conditions-box:hover {
+    border-color: var(--red);
+}
+#mobile-sync-header .mh-conditions-box input {
+    flex: 1;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: var(--red);
+    font-weight: bold;
+    text-align: center;
+    text-overflow: ellipsis;
+}
+#mobile-sync-header .mh-more-btn {
+    background: transparent;
+    border: none;
+    color: var(--ink-light);
+    font-size: 1.6rem;
+    cursor: pointer;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    font-weight: bold;
+}
+#mobile-sync-header .mh-more-btn:hover {
+    color: var(--red);
+}
+
 @media (max-width: 900px) {
   .header { display: none !important; }
-  
+
   #mobile-sync-header {
       display: flex;
       flex-direction: column;
@@ -2449,7 +2671,7 @@ body.swap-scores.dense-mode .stat-modifier input {
       margin-bottom: 16px;
       box-shadow: 0 4px 12px var(--shadow);
   }
-  
+
   /* Hide original elements replaced by mobile header */
   .field:has(#charName),
   .field:has(#charClass),
@@ -2465,7 +2687,7 @@ body.swap-scores.dense-mode .stat-modifier input {
   .hp-death-grid {
       display: none !important;
   }
-  
+
   .combat-stat:has(#heroicInspiration),
   .field:has(#heroicInspiration),
   .combat-stat:has(#baseAC),
@@ -2484,217 +2706,9 @@ body.swap-scores.dense-mode .stat-modifier input {
   body.dense-mode #dense-header {
       display: none !important;
   }
-  
+
   body.dense-mode #mobile-sync-header {
       margin-top: 0;
-  }
-  
-  #mobile-sync-header input {
-      background: transparent;
-      border: none;
-      color: var(--ink);
-      font-family: "Crimson Text", serif;
-      outline: none;
-      padding: 0;
-      min-height: auto;
-  }
-  #mobile-sync-header .mh-name {
-      font-family: "Cinzel", serif;
-      font-size: 1.8rem;
-      font-weight: bold;
-      color: var(--red-dark);
-      text-align: center;
-      width: 100%;
-      border-bottom: 2px solid var(--gold);
-      padding-bottom: 4px;
-  }
-  #mobile-sync-header .mh-stats-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: stretch;
-      gap: 10px;
-  }
-  #mobile-sync-header .mh-class-info {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 4px;
-      margin-bottom: 6px;
-  }
-  #mobile-sync-header .mh-class-info input {
-      font-weight: bold;
-      font-size: 0.95rem;
-      width: auto;
-      flex: 1;
-      min-width: 20px;
-      text-align: center;
-      border-bottom: 1px dashed var(--gold-dark);
-      text-overflow: ellipsis;
-  }
-  #mobile-sync-header .mh-class-info span {
-      font-weight: bold;
-      color: var(--ink-light);
-      font-family: "Cinzel", serif;
-      font-size: 0.8rem;
-  }
-  #mobile-sync-header #mh-level {
-      width: 30px;
-      flex: none;
-      text-align: center;
-      border-bottom: 1px dashed var(--gold-dark);
-  }
-  #mobile-sync-header .mh-heroic {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      background: white;
-      padding: 4px 8px;
-      border-radius: 4px;
-      border: 1px solid var(--gold);
-      font-family: "Cinzel", serif;
-      font-size: 0.85rem;
-      font-weight: bold;
-      white-space: nowrap;
-      width: max-content;
-  }
-  #mobile-sync-header .mh-heroic input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-      accent-color: var(--red);
-      margin: 0;
-  }
-  #mobile-sync-header .mh-ac-box,
-  #mobile-sync-header .mh-init-box {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: white;
-      padding: 4px 8px;
-      border-radius: 4px;
-      border: 1px solid var(--gold);
-      flex: 1;
-      min-width: 0;
-  }
-  #mobile-sync-header .mh-ac-box:hover,
-  #mobile-sync-header .mh-init-box:hover {
-      border-color: var(--red);
-  }
-  #mobile-sync-header .mh-ac-box .mh-label,
-  #mobile-sync-header .mh-init-box .mh-label {
-      font-family: "Cinzel", serif;
-      font-size: 0.9rem;
-      font-weight: bold;
-      color: var(--red-dark);
-  }
-  #mobile-sync-header .mh-ac-box input,
-  #mobile-sync-header .mh-init-box input {
-      min-width: 30px;
-      width: 100%;
-      font-size: 1.2rem;
-      font-weight: bold;
-      color: var(--red-dark);
-      text-align: right;
-      padding: 0;
-      background: transparent;
-      border: none;
-  }
-  #mobile-sync-header .mh-hp-box {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: white;
-      padding: 4px 8px;
-      border-radius: 4px;
-      border: 1px solid var(--gold);
-      cursor: pointer;
-      flex: 1;
-  }
-  #mobile-sync-header .mh-hp-box:hover {
-      border-color: var(--red);
-  }
-  #mobile-sync-header .mh-hp-box .mh-label {
-      font-family: "Cinzel", serif;
-      font-size: 0.9rem;
-      font-weight: bold;
-      color: var(--red-dark);
-  }
-  #mobile-sync-header .mh-hp-box input,
-  #mobile-sync-header .mh-hp-box #mh-hp {
-      min-width: 45px;
-      font-size: 1.2rem;
-      font-weight: bold;
-      color: var(--red-dark);
-      text-align: right;
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 4px;
-  }
-  #mobile-sync-header .mh-death-saves-box {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: white;
-      padding: 4px 8px;
-      border-radius: 4px;
-      border: 1px solid var(--red);
-      flex: 1;
-      min-width: 0;
-      gap: 6px;
-  }
-  #mobile-sync-header .mh-ds-tracker {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-  }
-  #mobile-sync-header .mh-ds-tracker span {
-      font-weight: bold;
-      font-size: 0.85rem;
-  }
-  #mobile-sync-header .mh-ds-tracker input[type="checkbox"] {
-      width: 14px;
-      height: 14px;
-      margin: 0;
-      accent-color: var(--red);
-  }
-  #mobile-sync-header .mh-conditions-box {
-      display: flex;
-      align-items: center;
-      background: white;
-      padding: 6px 8px;
-      border-radius: 4px;
-      border: 1px solid var(--gold);
-      flex: 1;
-      cursor: pointer;
-      min-width: 0;
-  }
-  #mobile-sync-header .mh-conditions-box:hover {
-      border-color: var(--red);
-  }
-  #mobile-sync-header .mh-conditions-box input {
-      flex: 1;
-      font-size: 0.85rem;
-      cursor: pointer;
-      color: var(--red);
-      font-weight: bold;
-      text-align: center;
-      text-overflow: ellipsis;
-  }
-  #mobile-sync-header .mh-more-btn {
-      background: transparent;
-      border: none;
-      color: var(--ink-light);
-      font-size: 1.6rem;
-      cursor: pointer;
-      padding: 0 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      line-height: 1;
-      font-weight: bold;
-  }
-  #mobile-sync-header .mh-more-btn:hover {
-      color: var(--red);
   }
 }
 
@@ -2705,6 +2719,23 @@ body.swap-scores.dense-mode .stat-modifier input {
       justify-content: center;
   }
 }
+
+/* ===== LEVEL UP TABS ===== */
+.lvlup-tab {
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    padding: 8px 16px;
+    font-family: "Cinzel", serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ink-light);
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    margin-bottom: -2px;
+}
+.lvlup-tab:hover { color: var(--red-dark); }
+.lvlup-tab-active { color: var(--red-dark) !important; border-bottom-color: var(--red-dark) !important; }
 
 /* ===== HELP MODAL ===== */
 .help-modal-content {
@@ -2804,6 +2835,12 @@ body.swap-scores.dense-mode .stat-modifier input {
     gap: 8px;
 }
 .auto-spell-header:hover { background: rgba(0,0,0,0.04); }
+.auto-spell-left {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
 .auto-spell-name {
     font-family: 'Cinzel', serif;
     font-weight: 600;
@@ -2811,10 +2848,16 @@ body.swap-scores.dense-mode .stat-modifier input {
     color: var(--ink);
 }
 .auto-spell-lvl {
-    font-family: 'Cinzel', serif;
+    font-size: 0.68rem;
+    color: var(--ink-light);
+    white-space: nowrap;
+}
+.auto-spell-stats {
     font-size: 0.7rem;
     color: var(--ink-light);
     white-space: nowrap;
+    text-align: right;
+    flex-shrink: 0;
 }
 .auto-spell-desc {
     display: none;

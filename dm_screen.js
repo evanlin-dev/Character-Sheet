@@ -921,7 +921,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Helper to clean 5e-tools style tags
+            // Helper to clean style tags
             const cleanText = (str) => {
                 if (window.cleanText) return window.cleanText(str);
                 if (!str) return "";

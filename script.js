@@ -261,7 +261,7 @@ window.processEntries = function (entries) {
   return text || entries.text || "";
 };
 
-// Helper to clean 5e-tools style tags (Global)
+// Helper to clean style tags (Global)
 window.cleanText = function (str) {
   if (!str) return "";
   let cleaned = str.replace(/\{@(\w+)\s*([^}]+)?\}/g, (match, tag, content) => {
@@ -2259,7 +2259,7 @@ function renderSpellSearchPage() {
                </div>
            `;
     div.onclick = () => {
-      // Map 5e-tools data to our format
+      // Map data to our format
       let time = "";
       let desc = "";
 
@@ -3131,6 +3131,7 @@ window.addSpellRow = function (containerId, defaultLevel = 1, data = null) {
   saveCharacter();
 };
 
+
 window.showSpellInfo = function (btn) {
   const row = btn.closest(".spell-row");
   const name = row.querySelector(".spell-name").value;
@@ -3635,8 +3636,8 @@ window.saveCharacter = function () {
   };
   localStorage.setItem("dndCharacter", JSON.stringify(characterData));
 
-  // Refresh auto-spell entries in mobile actions view
-  if (window._currentMobileView === 'view-actions' && window.refreshSpellsInActionsView) {
+  // Refresh auto-spell entries in actions view (both full sheet and mobile)
+  if (window.refreshSpellsInActionsView) {
       window.refreshSpellsInActionsView();
   }
 
@@ -4980,15 +4981,37 @@ window.unmountActionsView = function() {
 };
 
 window.refreshSpellsInActionsView = function() {
-    if (window._currentMobileView !== 'view-actions') return;
-
     const classify = (time) => {
         if (!time) return null;
         const t = time.toLowerCase().trim();
-        if (t.includes('bonus action')) return 'bonus';
-        if (t.includes('action')) return 'action';
+        // Order matters: "reaction" contains "action" as a substring — check specific first.
+        // 5e-tools stores bonus actions as "1 bonus" (not "1 bonus action").
+        if (t.includes('bonus')) return 'bonus';
         if (t.includes('reaction')) return 'reaction';
+        if (t.includes('action')) return 'action';
         return null;
+    };
+
+    // Compute Hit/DC string from hitType using current character stats
+    const saveLabels = { str: 'Str', dex: 'Dex', con: 'Con', int: 'Int', wis: 'Wis', cha: 'Cha' };
+    const getHitDC = (hitType) => {
+        if (!hitType) return '';
+        if (hitType === 'atk') {
+            const raw = document.getElementById('spellAttackBonus')?.value ?? '';
+            if (raw === '') return '';
+            const n = parseInt(raw);
+            return isNaN(n) ? '' : (n >= 0 ? `+${n}` : `${n}`);
+        }
+        const dc = document.getElementById('spellDC')?.value ?? '';
+        const label = saveLabels[hitType] || hitType;
+        return dc ? `${label} DC ${dc}` : '';
+    };
+
+    // Extract damage dice from description
+    const extractDmg = (desc) => {
+        const text = desc.replace(/<[^>]+>/g, ' ');
+        const dmgMatch = text.match(/\b(\d+d\d+(?:[+\-]\d+)?)\b/);
+        return dmgMatch ? dmgMatch[1] : '';
     };
 
     const allRows = [
@@ -5002,10 +5025,12 @@ window.refreshSpellsInActionsView = function() {
         const name = row.querySelector('.spell-name')?.value || '';
         if (!name) return;
         const desc = row.querySelector('.spell-desc')?.value || '';
+        const range = row.querySelector('.spell-range')?.value || '';
+        const hitType = row.querySelector('.spell-hit-type')?.value || '';
         const lvl = parseInt(row.querySelector('.spell-lvl')?.value) || 0;
         const lvlLabel = lvl === 0 ? 'Cantrip' : `Lv ${lvl}`;
         const cat = classify(time);
-        if (cat) groups[cat].push({ name, desc, lvlLabel });
+        if (cat) groups[cat].push({ name, desc, range, hitType, lvlLabel });
     });
 
     const inject = (containerId, spells, autoId) => {
@@ -5023,10 +5048,22 @@ window.refreshSpellsInActionsView = function() {
             const descHtml = s.desc
                 ? s.desc.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
                 : '';
+            const statParts = [];
+            if (s.range) statParts.push(s.range);
+            const hitdc = getHitDC(s.hitType);
+            if (hitdc) statParts.push(hitdc);
+            const dmg = extractDmg(s.desc);
+            if (dmg) statParts.push(dmg);
+            const statsHtml = statParts.length
+                ? `<span class="auto-spell-stats">${statParts.join(' · ')}</span>`
+                : '';
             return `<div class="auto-spell-item">
                 <div class="auto-spell-header" onclick="var d=document.getElementById('${autoId}-d-${idx}');if(d)d.classList.toggle('open')">
-                    <span class="auto-spell-name">${s.name}</span>
-                    <span class="auto-spell-lvl">${s.lvlLabel}</span>
+                    <div class="auto-spell-left">
+                        <span class="auto-spell-name">${s.name}</span>
+                        <span class="auto-spell-lvl">${s.lvlLabel}</span>
+                    </div>
+                    ${statsHtml}
                 </div>
                 ${descHtml ? `<div class="auto-spell-desc" id="${autoId}-d-${idx}">${descHtml}</div>` : ''}
             </div>`;
@@ -5329,15 +5366,73 @@ window.calcMaxPreparedSpells = function() {
 
 window.refreshManageSpellsModal = function() {
     const preparedCount = document.querySelectorAll('#preparedSpellsList .spell-row').length;
-    const maxPrepared = window.calcMaxPreparedSpells();
     const countEl = document.getElementById('msv-prep-count');
-    if (countEl) {
+
+    const renderCount = (maxPrepared) => {
+        if (!countEl) return;
         if (maxPrepared !== null) {
             const over = preparedCount > maxPrepared;
             countEl.innerHTML = `<span style="${over ? 'color:var(--red-dark);font-weight:bold;' : ''}">${preparedCount} / ${maxPrepared}</span> spells prepared`;
         } else {
             countEl.textContent = `${preparedCount} spells prepared`;
         }
+    };
+
+    // Show formula-based count immediately, then try class table
+    const formulaMax = window.calcMaxPreparedSpells();
+    renderCount(formulaMax);
+
+    if (window.isDataAvailable) {
+        (async () => {
+            try {
+                const charClassRaw = document.getElementById('charClass')?.value || '';
+                const charLevel = parseInt(document.getElementById('level')?.value) || 1;
+                const spellAbility = (document.getElementById('spellAbility')?.value || '').toLowerCase();
+                const abilityScore = parseInt(document.getElementById(spellAbility)?.value) || 10;
+                const abilityMod = Math.floor((abilityScore - 10) / 2);
+
+                const db = await openDB();
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const store = tx.objectStore(STORE_NAME);
+                const data = await new Promise(resolve => {
+                    const req = store.get('currentData');
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => resolve(null);
+                });
+                if (!data) return;
+
+                let classObj = null;
+                data.forEach(file => {
+                    if (!file.name.toLowerCase().endsWith('.json')) return;
+                    try {
+                        const json = JSON.parse(file.content);
+                        if (json.class) {
+                            json.class.filter(c => c.name.toLowerCase() === charClassRaw.toLowerCase()).forEach(m => {
+                                if (!classObj) classObj = m;
+                                else if (m.source === 'XPHB') classObj = m;
+                                else if (m.source === 'PHB' && classObj.source !== 'XPHB') classObj = m;
+                            });
+                        }
+                    } catch (e) {}
+                });
+                if (!classObj || !classObj.classTableGroups) return;
+
+                const li = charLevel - 1;
+                const stripTag = s => s.replace(/{@\w+\s*([^}]+)?}/g, '$1');
+                for (const group of classObj.classTableGroups) {
+                    if (!group.colLabels) continue;
+                    const ci = group.colLabels.findIndex(l => /Spells\s*Prepared/i.test(stripTag(l)));
+                    if (ci !== -1 && group.rows && group.rows[li]) {
+                        const val = group.rows[li][ci];
+                        const v = typeof val === 'object' ? (val.value ?? val) : val;
+                        const num = parseInt(v);
+                        if (!isNaN(num) && num > 0) { renderCount(num); return; }
+                    }
+                }
+                // Class table had no "Spells Prepared" column — fall back to ability+level formula
+                // (already rendered above, no update needed)
+            } catch (e) {}
+        })();
     }
 
     const actionsEl = document.getElementById('msv-manage-actions');
@@ -5481,6 +5576,24 @@ window.switchAppView = function(viewId) {
             }
             container.appendChild(vDiv);
         });
+
+        // Swipe gesture navigation
+        let swipeTouchStartX = 0;
+        let swipeTouchStartY = 0;
+        container.addEventListener('touchstart', function(e) {
+            swipeTouchStartX = e.touches[0].clientX;
+            swipeTouchStartY = e.touches[0].clientY;
+        }, { passive: true });
+        container.addEventListener('touchend', function(e) {
+            const dx = e.changedTouches[0].clientX - swipeTouchStartX;
+            const dy = e.changedTouches[0].clientY - swipeTouchStartY;
+            if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+            const viewIds = views.map(v => v.id);
+            const cur = viewIds.indexOf(window._currentMobileView);
+            if (cur === -1) return;
+            if (dx < 0 && cur < viewIds.length - 1) window.switchAppView(viewIds[cur + 1]);
+            else if (dx > 0 && cur > 0) window.switchAppView(viewIds[cur - 1]);
+        }, { passive: true });
     }
 
     container.style.display = 'flex';
@@ -6413,7 +6526,6 @@ document.addEventListener("DOMContentLoaded", () => {
     injectAdvantageToggles();
     updateAdvantageVisuals();
     resizeAllTextareas();
-
     // Check for pending level up
     if (localStorage.getItem('pendingLevelUp') === 'true') {
         const lvl = parseInt(document.getElementById('level').value) || 1;
@@ -6590,17 +6702,36 @@ window.openLevelUpModal = async function(level) {
         modal.id = 'levelUpModal';
         modal.className = 'info-modal-overlay';
         modal.innerHTML = `
-            <div class="info-modal-content" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
+            <div class="info-modal-content" style="max-width: 700px; max-height: 85vh; display: flex; flex-direction: column;">
                 <button class="close-modal-btn" onclick="document.getElementById('levelUpModal').style.display='none'">&times;</button>
-                <h3 class="info-modal-title" style="text-align: center">Level ${level} Features</h3>
+                <h3 class="info-modal-title" style="text-align: center; margin-bottom: 0;">Level ${level} Features</h3>
+                <div id="levelUpTabs" style="display:flex; border-bottom:2px solid var(--gold); padding:0 10px; gap:4px; background:var(--parchment-dark); flex-shrink:0;">
+                    <button id="lvlup-tab-features" class="lvlup-tab lvlup-tab-active" onclick="window.switchLevelUpTab('features')">Features</button>
+                    <button id="lvlup-tab-spells" class="lvlup-tab" onclick="window.switchLevelUpTab('spells')" style="display:none;">Spells</button>
+                </div>
                 <div id="levelUpContent" style="overflow-y: auto; flex: 1; padding: 10px;">Loading...</div>
-                <div style="margin-top: 15px; text-align: center; border-top: 1px solid var(--gold); padding-top: 10px;">
+                <div id="levelUpSpellsPane" style="display:none; flex:1; overflow:hidden; flex-direction:column;">
+                    <div style="display:flex; gap:0; flex:1; overflow:hidden;">
+                        <div id="lvlup-spell-list" style="width:55%; border-right:1px solid var(--gold); display:flex; flex-direction:column; overflow:hidden;">
+                            <div id="lvlup-spell-filter-row" style="padding:6px 8px; border-bottom:1px solid var(--gold); display:flex; gap:6px; background:var(--parchment-dark); flex-shrink:0;"></div>
+                            <div id="lvlup-spell-table-wrap" style="overflow-y:auto; flex:1;"><div style="padding:10px; color:var(--ink-light); font-style:italic;">Loading spells…</div></div>
+                        </div>
+                        <div id="lvlup-spell-detail" style="width:45%; overflow-y:auto; padding:12px; font-size:0.88rem; line-height:1.55; background:white; color:var(--ink);">
+                            <div style="color:var(--ink-light); font-style:italic; margin-top:20px; text-align:center;">Click a spell to view details.</div>
+                        </div>
+                    </div>
+                    <div style="padding:6px 10px; border-top:1px solid var(--gold); background:var(--parchment-dark); display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
+                        <span id="lvlup-spell-counter" style="font-size:0.85rem; color:var(--ink-light);">0 selected</span>
+                        <span style="font-size:0.78rem; color:var(--ink-light); font-style:italic;">Click row to select · click again to deselect</span>
+                    </div>
+                </div>
+                <div style="margin-top: auto; text-align: center; border-top: 1px solid var(--gold); padding: 10px; flex-shrink:0;">
                     <button id="confirmLevelUpBtn" class="btn" style="width: 100%;">Confirm Level Up</button>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
-        
+
         document.getElementById('confirmLevelUpBtn').addEventListener('click', () => {
             localStorage.removeItem('pendingLevelUp');
             localStorage.removeItem('previousLevel');
@@ -6613,6 +6744,8 @@ window.openLevelUpModal = async function(level) {
     } else {
         modal.querySelector('.info-modal-title').textContent = `Level ${level} Features`;
         document.getElementById('levelUpContent').innerHTML = 'Loading...';
+        document.getElementById('lvlup-tab-spells').style.display = 'none';
+        window.switchLevelUpTab('features');
     }
 
     // Reset Confirm Button Listener
@@ -6870,6 +7003,257 @@ window.getSpellsFromFeature = function(feature, charLevel) {
     return spells;
 };
 
+function showSpellDetail(s, pane) {
+    const SCHOOL_FULL = { A: 'Abjuration', C: 'Conjuration', D: 'Divination', E: 'Enchantment', V: 'Evocation', I: 'Illusion', N: 'Necromancy', T: 'Transmutation' };
+    const isRitual = !!(s.meta && s.meta.ritual);
+    const isConc = !!(s.duration && s.duration.some(d => d.concentration));
+    const hasMat = !!(s.components && s.components.m);
+    let time = ''; if (s.time && s.time[0]) { const t = s.time[0]; time = `${t.number} ${t.unit}`; }
+    const rangeStr = s.range ? (s.range.type === 'point' && s.range.distance ? (s.range.distance.type === 'self' ? 'Self' : s.range.distance.type === 'touch' ? 'Touch' : `${s.range.distance.amount||''} ${s.range.distance.type}`.trim()) : (s.range.type || '—')) : '—';
+    let desc = window.processEntries ? window.processEntries(s.entries) : '';
+    if (s.entriesHigherLevel) desc += '<hr style="margin:8px 0; border-color:var(--gold);">' + (window.processEntries ? window.processEntries(s.entriesHigherLevel) : '');
+    desc = window.cleanText ? window.cleanText(desc) : desc;
+    const lvlLabel = s.level === 0 ? 'Cantrip' : `Level ${s.level}`;
+    const tags = [SCHOOL_FULL[s.school] || s.school || '', isRitual ? 'Ritual' : '', isConc ? 'Concentration' : '', hasMat ? 'Material' : ''].filter(Boolean).join(' · ');
+    pane.innerHTML = `
+        <div style="border-bottom:2px solid var(--gold); padding-bottom:8px; margin-bottom:10px;">
+            <div style="font-family:'Cinzel',serif; font-weight:700; font-size:1rem; color:var(--red-dark);">${s.name}</div>
+            <div style="font-size:0.78rem; color:var(--ink-light);">${lvlLabel} · ${tags}</div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 12px; font-size:0.8rem; margin-bottom:10px;">
+            ${time ? `<div><strong>Casting:</strong> ${time}</div>` : ''}
+            <div><strong>Range:</strong> ${rangeStr}</div>
+            ${s.duration && s.duration[0] ? `<div><strong>Duration:</strong> ${s.duration[0].type || ''} ${s.duration[0].duration ? s.duration[0].duration.amount + ' ' + s.duration[0].duration.type : ''}</div>` : ''}
+            ${s.components ? `<div><strong>Components:</strong> ${['V','S','M'].filter(c=>s.components[c.toLowerCase()]||s.components[c]).join(', ')}</div>` : ''}
+        </div>
+        <div style="font-size:0.85rem; line-height:1.6;">${desc}</div>
+    `;
+}
+
+window.switchLevelUpTab = function(tab) {
+    const featuresPane = document.getElementById('levelUpContent');
+    const spellsPane = document.getElementById('levelUpSpellsPane');
+    const tabFeatures = document.getElementById('lvlup-tab-features');
+    const tabSpells = document.getElementById('lvlup-tab-spells');
+    if (!featuresPane || !spellsPane) return;
+    if (tab === 'spells') {
+        featuresPane.style.display = 'none';
+        spellsPane.style.display = 'flex';
+        spellsPane.style.flexDirection = 'column';
+        if (tabFeatures) tabFeatures.classList.remove('lvlup-tab-active');
+        if (tabSpells) tabSpells.classList.add('lvlup-tab-active');
+    } else {
+        featuresPane.style.display = '';
+        spellsPane.style.display = 'none';
+        if (tabFeatures) tabFeatures.classList.add('lvlup-tab-active');
+        if (tabSpells) tabSpells.classList.remove('lvlup-tab-active');
+    }
+};
+
+// ── Level-up helper: parse {type:"options"} blocks from a feature's entries ──
+function lvlup_extractOptionSets(entries) {
+    const optionSets = [];
+    function walk(obj) {
+        if (!obj || typeof obj !== 'object') return;
+        if (Array.isArray(obj)) { obj.forEach(walk); return; }
+        if (obj.type === 'options') {
+            const count = obj.count != null ? obj.count : 1;
+            const choices = [];
+            if (obj.entries) {
+                obj.entries.forEach(ent => {
+                    if (ent.type === 'refOptionalfeature') choices.push({ type: 'optionalfeature', uid: ent.optionalfeature });
+                    else if (ent.type === 'refClassFeature') choices.push({ type: 'classFeature', uid: ent.classFeature });
+                    else if (ent.type === 'refSubclassFeature') choices.push({ type: 'subclassFeature', uid: ent.subclassFeature });
+                    else if (ent.name) choices.push({ type: 'entries', name: ent.name, entries: ent.entries });
+                });
+            }
+            if (choices.length > 0) {
+                const setId = choices.map(c => c.uid || c.name || '').join('|').replace(/[^a-z0-9|]/gi, '').substring(0, 32);
+                optionSets.push({ count, choices, setId });
+            }
+        }
+        Object.values(obj).forEach(walk);
+    }
+    walk(entries);
+    return optionSets;
+}
+
+// ── Level-up helper: find "choose X of the following" text patterns ──
+function lvlup_extractChoiceLists(entries) {
+    const CHOICE_RE = /\b(choose|pick|select)\b[^.]{0,60}?\b(one|two|three|four|five|\d+)\b|one of the following|\d+\s+of the following/i;
+    const results = [];
+    const wordToNum = { one: 1, two: 2, three: 3, four: 4, five: 5, a: 1, an: 1 };
+    const parseCount = t => { const m = t.match(/\b(one|two|three|four|five|a|an|\d+)\b/i); return m ? (wordToNum[m[1].toLowerCase()] || parseInt(m[1]) || 1) : 1; };
+    const stripTags = s => s.replace(/\{@[a-z]+\s([^|}]+)[^}]*\}/gi, '$1');
+
+    function extractInlineItems(raw, clean) {
+        // Try {@skill}/{@feat/{@item} tags first
+        const tagMatches = [...raw.matchAll(/\{@(?:skill|feat|item|race|class|sense|action)\s+([^|}\s][^|}]*)/gi)];
+        if (tagMatches.length >= 2) return tagMatches.map(m => ({ name: m[1].trim() }));
+        // Fall back to comma/semicolon-separated after colon or after "following:"
+        const colonIdx = clean.search(/:\s*/);
+        if (colonIdx !== -1) {
+            const after = clean.slice(colonIdx + 1);
+            const parts = after.split(/,\s*|\s+or\s+/i).map(s => s.replace(/[.!?]$/, '').trim()).filter(s => s.length > 1 && s.length < 60 && !/\b(you|your|the|a |an |and )\b/i.test(s));
+            if (parts.length >= 2) return parts.map(name => ({ name }));
+        }
+        return [];
+    }
+
+    function walk(arr, depth) {
+        if (!Array.isArray(arr) || depth > 5) return;
+        for (let i = 0; i < arr.length; i++) {
+            const entry = arr[i];
+            if (typeof entry === 'string') {
+                const clean = stripTags(entry);
+                if (CHOICE_RE.test(clean)) {
+                    const next = arr[i + 1];
+                    if (next && typeof next === 'object' && next.type === 'list' && Array.isArray(next.items)) {
+                        const namedItems = next.items.filter(it => typeof it === 'object' && it.name && it.name.length <= 50 && !/[.!?]$/.test(it.name.trim()) && !/\b(attack|saving throw|bonus action|reaction|spell slot)\b/i.test(it.name));
+                        if (namedItems.length >= 2) results.push({ prompt: clean, items: namedItems, count: parseCount(clean) });
+                        else if (next.items.length >= 2) {
+                            const strItems = next.items.map(it => typeof it === 'string' ? { name: stripTags(it) } : it).filter(it => it && it.name && it.name.length <= 60 && !/[.!?]$/.test(it.name.trim()) && !/\b(attack|saving throw|bonus action|reaction|spell slot|make a|force a|take a)\b/i.test(it.name));
+                            if (strItems.length >= 2) results.push({ prompt: clean, items: strItems, count: parseCount(clean) });
+                        }
+                    } else {
+                        // No adjacent list — try inline comma-separated items
+                        const inlineItems = extractInlineItems(entry, clean);
+                        if (inlineItems.length >= 2) results.push({ prompt: clean, items: inlineItems, count: parseCount(clean) });
+                    }
+                }
+            } else if (entry && typeof entry === 'object') {
+                if (entry.entries) walk(entry.entries, depth + 1);
+                if (entry.items && entry.type !== 'list') walk(entry.items, depth + 1);
+            }
+        }
+    }
+    if (Array.isArray(entries)) walk(entries, 0);
+    else if (entries && typeof entries === 'object') walk([entries], 0);
+    const seen = new Set();
+    return results.filter(r => { const k = r.prompt.slice(0, 80); if (seen.has(k)) return false; seen.add(k); return true; });
+}
+
+// ── Level-up helper: render choice checkboxes/radios for a feature ──
+function lvlup_renderChoices(parentEl, featureName, featureLevel, optionSets, choiceLists, pendingChoices) {
+    // Structured {type:"options"} choices
+    optionSets.forEach(optSet => {
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'margin-top:8px; padding:8px; background:rgba(255,255,255,0.5); border:1px solid var(--gold-dark); border-radius:4px;';
+        const header = document.createElement('div');
+        header.style.cssText = 'font-weight:bold; margin-bottom:6px; border-bottom:1px solid var(--gold-dark); padding-bottom:3px; font-size:0.9rem; color:var(--red-dark);';
+        header.textContent = `Choose ${optSet.count} option${optSet.count > 1 ? 's' : ''}:`;
+        wrapper.appendChild(header);
+
+        // Resolve candidate names (inline entries type don't need DB lookup)
+        const candidates = optSet.choices.filter(c => c.type === 'entries');
+        if (candidates.length === 0) {
+            // UIDs that need DB — try to extract names from UID string
+            optSet.choices.forEach(c => {
+                const name = (c.uid || '').split('|')[0];
+                if (name) candidates.push({ name, entries: null });
+            });
+        }
+
+        candidates.forEach(candidate => {
+            const key = `options:${optSet.setId}:${candidate.name}`;
+            const lbl = document.createElement('label');
+            lbl.style.cssText = 'display:flex; align-items:flex-start; gap:8px; margin-bottom:4px; cursor:pointer; padding:4px 6px; border-radius:3px;';
+            lbl.onmouseover = () => lbl.style.background = 'rgba(0,0,0,0.05)';
+            lbl.onmouseout = () => lbl.style.background = '';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.style.cssText = 'flex-shrink:0; margin-top:3px; cursor:pointer; width:14px; height:14px;';
+            cb.checked = !!(pendingChoices && pendingChoices.has(key));
+            cb.addEventListener('change', () => {
+                if (cb.checked) {
+                    const checkedCount = wrapper.querySelectorAll('input[type="checkbox"]:checked').length;
+                    if (checkedCount > optSet.count) { cb.checked = false; return; }
+                    if (pendingChoices) pendingChoices.set(key, { name: candidate.name, desc: '' });
+                } else {
+                    if (pendingChoices) pendingChoices.delete(key);
+                }
+                // Dim other checkboxes if at limit
+                const total = wrapper.querySelectorAll('input[type="checkbox"]');
+                const checked = wrapper.querySelectorAll('input[type="checkbox"]:checked').length;
+                total.forEach(c2 => { if (!c2.checked) { c2.disabled = checked >= optSet.count; c2.closest('label').style.opacity = (checked >= optSet.count) ? '0.5' : '1'; } });
+            });
+            const txt = document.createElement('div');
+            txt.style.flex = '1';
+            let descHtml = '';
+            if (candidate.entries) {
+                const raw = window.processEntries ? window.processEntries(candidate.entries) : '';
+                descHtml = window.cleanText ? window.cleanText(raw) : raw;
+            }
+            txt.innerHTML = `<strong>${candidate.name}</strong>${descHtml ? `<div style="font-size:0.82em; color:var(--ink-light); margin-top:2px; line-height:1.4;">${descHtml}</div>` : ''}`;
+            lbl.appendChild(cb);
+            lbl.appendChild(txt);
+            wrapper.appendChild(lbl);
+        });
+        if (candidates.length > 0) parentEl.appendChild(wrapper);
+    });
+
+    // Text-based "choose one of:" choices
+    choiceLists.forEach((group, groupIdx) => {
+        const groupKey = `text:${featureName}:${featureLevel}:${groupIdx}`;
+        const isMulti = group.count > 1;
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'margin-top:8px; padding:8px; background:rgba(255,255,255,0.5); border:1px solid var(--gold-dark); border-radius:4px;';
+        const cleanTags = s => s.replace(/\{@[a-z]+\s([^|}]+)[^}]*\}/gi, '$1');
+        const promptEl = document.createElement('div');
+        promptEl.style.cssText = 'font-weight:bold; margin-bottom:6px; border-bottom:1px solid var(--gold-dark); padding-bottom:3px; font-size:0.9rem; color:var(--red-dark);';
+        promptEl.textContent = cleanTags(group.prompt) + (isMulti ? ` (Choose ${group.count})` : '');
+        wrapper.appendChild(promptEl);
+
+        group.items.forEach((item, itemIdx) => {
+            if (!item) return;
+            const itemName = typeof item === 'string' ? item : (item.name || `Option ${itemIdx + 1}`);
+            const itemEntries = typeof item === 'object' ? (item.entries || item.entry) : null;
+            const selKey = `${groupKey}:${itemName}`;
+            const lbl = document.createElement('label');
+            lbl.style.cssText = 'display:flex; align-items:flex-start; gap:8px; margin-bottom:4px; cursor:pointer; padding:4px 6px; border-radius:3px;';
+            lbl.onmouseover = () => lbl.style.background = 'rgba(0,0,0,0.05)';
+            lbl.onmouseout = () => lbl.style.background = '';
+            const inp = document.createElement('input');
+            inp.type = isMulti ? 'checkbox' : 'radio';
+            inp.name = `lvlup-${groupKey}`;
+            inp.value = itemName;
+            inp.style.cssText = 'flex-shrink:0; margin-top:3px; cursor:pointer; width:14px; height:14px;';
+            inp.checked = !!(pendingChoices && pendingChoices.has(selKey));
+            inp.addEventListener('change', () => {
+                if (!isMulti && pendingChoices) {
+                    // clear others in group
+                    Array.from(pendingChoices.keys()).forEach(k => { if (k.startsWith(groupKey + ':')) pendingChoices.delete(k); });
+                }
+                if (inp.checked) {
+                    if (isMulti) {
+                        const cnt = wrapper.querySelectorAll('input:checked').length;
+                        if (cnt > group.count) { inp.checked = false; return; }
+                    }
+                    if (pendingChoices) pendingChoices.set(selKey, { name: itemName, desc: '' });
+                } else {
+                    if (pendingChoices) pendingChoices.delete(selKey);
+                }
+                if (isMulti) {
+                    const cnt = wrapper.querySelectorAll('input:checked').length;
+                    wrapper.querySelectorAll('input').forEach(i2 => { if (!i2.checked) { i2.disabled = cnt >= group.count; i2.closest('label').style.opacity = (cnt >= group.count) ? '0.5' : '1'; } });
+                }
+            });
+            const txt = document.createElement('div');
+            txt.style.flex = '1';
+            let descHtml = '';
+            if (itemEntries) {
+                const raw = window.processEntries ? window.processEntries(itemEntries) : '';
+                descHtml = window.cleanText ? window.cleanText(raw) : raw;
+            }
+            txt.innerHTML = `<strong>${itemName}</strong>${descHtml ? `<div style="font-size:0.82em; color:var(--ink-light); margin-top:2px; line-height:1.4;">${descHtml}</div>` : ''}`;
+            lbl.appendChild(inp);
+            lbl.appendChild(txt);
+            wrapper.appendChild(lbl);
+        });
+        parentEl.appendChild(wrapper);
+    });
+}
+
 window.renderLevelUpFeatures = async function(charClass, charSubclass, level, showBackBtn = false, classIndex = -1, minLevel = null, levelsAdded = 1) {
     const list = document.getElementById('levelUpContent');
     
@@ -7037,7 +7421,6 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
         if (isCaster) {
             // Calculate max spell level
             let maxLevel = 0;
-            
             if (fullCasters.includes(charClass)) {
                 maxLevel = Math.ceil(level / 2);
             } else if (charClass === "Warlock") {
@@ -7062,108 +7445,273 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
                 else if (level >= 3) maxLevel = 1;
             }
 
-            let spellText = `+ Add Spells`;
             let spellHint = "";
+            if (charClass === "Wizard") spellHint = "Wizards add 2 new spells to their spellbook.";
+            else if (["Bard", "Sorcerer", "Warlock", "Ranger"].includes(charClass) || (charClass === "Fighter" && charSubclass && charSubclass.includes("Eldritch Knight")) || (charClass === "Rogue" && charSubclass && charSubclass.includes("Arcane Trickster"))) spellHint = "You typically learn 1 new spell per level.";
+            else if (["Cleric", "Druid", "Paladin", "Artificer"].includes(charClass)) spellHint = "You have access to your full list. Add spells to prepare them.";
 
-            if (charClass === "Wizard") {
-                spellText = `+ Add 2 Spells to Spellbook`;
-                spellHint = "Wizards add 2 new spells to their spellbook.";
-            } else if (["Bard", "Sorcerer", "Warlock", "Ranger"].includes(charClass) || (charClass === "Fighter" && charSubclass && charSubclass.includes("Eldritch Knight")) || (charClass === "Rogue" && charSubclass && charSubclass.includes("Arcane Trickster"))) {
-                spellText = `+ Learn New Spell`;
-                spellHint = "You typically learn 1 new spell per level.";
-            } else if (["Cleric", "Druid", "Paladin", "Artificer"].includes(charClass)) {
-                spellText = `+ Add Spells to Sheet`;
-                spellHint = "You have access to your full list. Add spells to prepare them.";
-            }
-
-            const spellBtn = document.createElement('button');
-            spellBtn.className = 'btn';
-            spellBtn.style.width = '100%';
-            spellBtn.style.marginBottom = '5px';
-            spellBtn.innerHTML = `${spellText} <span style="font-size:0.8em; opacity:0.8;">(Max Lvl ${maxLevel})</span>`;
-            
             let filterClass = charClass;
             if (charClass === "Fighter" && charSubclass && charSubclass.includes("Eldritch Knight")) filterClass = "Wizard";
             if (charClass === "Rogue" && charSubclass && charSubclass.includes("Arcane Trickster")) filterClass = "Wizard";
 
-            const selectedSpellsDiv = document.createElement('div');
-            selectedSpellsDiv.style.display = 'flex';
-            selectedSpellsDiv.style.flexWrap = 'wrap';
-            selectedSpellsDiv.style.gap = '5px';
-            selectedSpellsDiv.style.marginBottom = '15px';
-
-            const createRemovableTag = (spellData) => {
-                const tag = document.createElement('span');
-                tag.style.background = 'var(--parchment-dark)';
-                tag.style.border = '1px solid var(--gold)';
-                tag.style.padding = '2px 6px';
-                tag.style.borderRadius = '4px';
-                tag.style.fontSize = '0.8rem';
-                tag.style.display = 'inline-flex';
-                tag.style.alignItems = 'center';
-                tag.style.gap = '4px';
-                
-                tag.innerHTML = `<strong>${spellData.name}</strong>`;
-                
-                const removeBtn = document.createElement('span');
-                removeBtn.innerHTML = '&times;';
-                removeBtn.style.cursor = 'pointer';
-                removeBtn.style.color = 'var(--red)';
-                removeBtn.style.fontWeight = 'bold';
-                removeBtn.style.marginLeft = '2px';
-                removeBtn.title = 'Remove spell';
-                
-                removeBtn.onclick = () => {
-                    if (window.pendingLevelUpChanges && window.pendingLevelUpChanges.customSpells) {
-                        const idx = window.pendingLevelUpChanges.customSpells.findIndex(s => s.spellData.name === spellData.name);
-                        if (idx > -1) {
-                            window.pendingLevelUpChanges.customSpells.splice(idx, 1);
-                            tag.remove();
-                        }
-                    }
-                };
-                
-                tag.appendChild(removeBtn);
-                return tag;
-            };
-
-            if (window.pendingLevelUpChanges && window.pendingLevelUpChanges.customSpells) {
-                window.pendingLevelUpChanges.customSpells.forEach(item => {
-                    selectedSpellsDiv.appendChild(createRemovableTag(item.spellData));
-                });
+            // Show the Spells tab button
+            const spellTabBtn = document.getElementById('lvlup-tab-spells');
+            if (spellTabBtn) {
+                spellTabBtn.style.display = '';
+                spellTabBtn.textContent = `Spells (Max Lvl ${maxLevel})`;
             }
 
-            spellBtn.onclick = () => {
-                window.openSpellSearch('spellList', 'all', maxLevel, filterClass, (spellData) => {
-                    // Check if already selected in pending changes
-                    if (window.pendingLevelUpChanges && window.pendingLevelUpChanges.customSpells) {
-                        if (window.pendingLevelUpChanges.customSpells.some(s => s.spellData.name === spellData.name)) {
-                            alert("You have already selected this spell.");
-                            return;
-                        }
-                    }
-                    // Check if already on sheet
-                    const existing = Array.from(document.querySelectorAll('.spell-name')).some(i => i.value.toLowerCase() === spellData.name.toLowerCase());
-                    if (existing) {
-                        alert("You already have this spell.");
-                        return;
-                    }
+            // Update hint in spells pane footer
+            const counterEl = document.getElementById('lvlup-spell-counter');
+            if (counterEl && spellHint) {
+                counterEl.closest('div').querySelector('span:last-child').textContent = spellHint;
+            }
 
-                    const target = (spellData.level === 0) ? 'cantripList' : 'spellList';
-                    
-                    if (window.pendingLevelUpChanges) {
-                        if (!window.pendingLevelUpChanges.customSpells) window.pendingLevelUpChanges.customSpells = [];
-                        window.pendingLevelUpChanges.customSpells.push({ target, spellData });
-                    } else {
-                        window.addSpellRow(target, spellData.level, spellData);
-                    }
-                    
-                    selectedSpellsDiv.appendChild(createRemovableTag(spellData));
-                });
+            // Populate the spell tab pane asynchronously
+            const spellTableWrap = document.getElementById('lvlup-spell-table-wrap');
+            const filterRowEl = document.getElementById('lvlup-spell-filter-row');
+            const detailPane = document.getElementById('lvlup-spell-detail');
+            if (!spellTableWrap) return; // shouldn't happen
+
+            if (!window.pendingLevelUpChanges.customSpells) window.pendingLevelUpChanges.customSpells = [];
+            const pendingSpells = window.pendingLevelUpChanges.customSpells;
+            let maxSpellsSelectable = null; // will be set from class table after data loads
+            const updateCounter = () => {
+                if (!counterEl) return;
+                if (maxSpellsSelectable !== null) {
+                    counterEl.textContent = `${pendingSpells.length} / ${maxSpellsSelectable} spell${maxSpellsSelectable !== 1 ? 's' : ''} selected`;
+                    counterEl.style.color = pendingSpells.length >= maxSpellsSelectable ? 'var(--red-dark)' : 'var(--ink-light)';
+                } else {
+                    counterEl.textContent = `${pendingSpells.length} selected`;
+                    counterEl.style.color = 'var(--ink-light)';
+                }
             };
-            list.appendChild(spellBtn);
 
-            // Fetch Class Table Data for Spell Info
+            (async () => {
+                try {
+                    const db = await openDB();
+                    const tx2 = db.transaction(STORE_NAME, 'readonly');
+                    const store2 = tx2.objectStore(STORE_NAME);
+                    const data2 = await new Promise(resolve => {
+                        const req = store2.get('currentData');
+                        req.onsuccess = () => resolve(req.result);
+                        req.onerror = () => resolve(null);
+                    });
+                    if (!data2) { spellTableWrap.innerHTML = '<div style="padding:10px; color:var(--red);">No data loaded.</div>'; return; }
+
+                    const spellMap = new Map();
+                    data2.forEach(file => {
+                        if (!file.name.toLowerCase().endsWith('.json')) return;
+                        try {
+                            const json = JSON.parse(file.content);
+                            const arr = json.spell || json.spells || json.data;
+                            if (!Array.isArray(arr)) return;
+                            arr.forEach(s => {
+                                if (!s || !s.name || s.level > maxLevel) return;
+                                const tgt = filterClass.toLowerCase();
+                                let ok = false;
+                                if (s.classes) {
+                                    const checkC = c => (typeof c === 'string' ? c : c.name).toLowerCase() === tgt;
+                                    if (s.classes.fromClassList && s.classes.fromClassList.some(checkC)) ok = true;
+                                    if (!ok && s.classes.fromClassListVariant && s.classes.fromClassListVariant.some(checkC)) ok = true;
+                                    if (!ok && Array.isArray(s.classes) && s.classes.some(checkC)) ok = true;
+                                }
+                                if (!ok && charSubclass && s.classes && s.classes.fromSubclass) {
+                                    if (s.classes.fromSubclass.some(sc => sc.class && sc.class.name.toLowerCase() === tgt && sc.subclass && sc.subclass.shortName.toLowerCase() === charSubclass.toLowerCase())) ok = true;
+                                }
+                                if (!ok) return;
+                                if (!spellMap.has(s.name)) spellMap.set(s.name, s);
+                                else {
+                                    const ex = spellMap.get(s.name);
+                                    if (s.source === 'XPHB') spellMap.set(s.name, s);
+                                    else if (s.source === 'PHB' && ex.source !== 'XPHB') spellMap.set(s.name, s);
+                                }
+                            });
+                        } catch (e) {}
+                    });
+                    const spells = Array.from(spellMap.values()).sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+                    if (spells.length === 0) { spellTableWrap.innerHTML = '<div style="padding:10px; color:var(--ink-light); font-style:italic;">No spells found for this class.</div>'; return; }
+                    // canLearnCantrips will be resolved below; trim after that lookup
+
+                    const existingOnSheet = new Set(Array.from(document.querySelectorAll('.spell-name')).map(i => i.value.toLowerCase()));
+
+                    // Determine max spells selectable + cantrip gain from class table
+                    let canLearnCantrips = true; // assume yes unless class table says no gain
+                    try {
+                        let classObj = null;
+                        data2.forEach(file => {
+                            if (!file.name.toLowerCase().endsWith('.json')) return;
+                            try {
+                                const json = JSON.parse(file.content);
+                                if (json.class) {
+                                    json.class.filter(c => c.name.toLowerCase() === charClass.toLowerCase()).forEach(m => {
+                                        if (!classObj) classObj = m;
+                                        else if (m.source === 'XPHB') classObj = m;
+                                        else if (m.source === 'PHB' && classObj.source !== 'XPHB') classObj = m;
+                                    });
+                                }
+                            } catch (e) {}
+                        });
+                        if (classObj && classObj.classTableGroups) {
+                            const li = level - 1, pi = level - 2;
+                            const stripTag = s => s.replace(/{@\w+\s*([^}]+)?}/g, '$1');
+                            const getColDiff = (regex) => {
+                                for (const group of classObj.classTableGroups) {
+                                    if (!group.colLabels) continue;
+                                    const ci = group.colLabels.findIndex(l => regex.test(stripTag(l)));
+                                    if (ci !== -1 && group.rows && group.rows[li]) {
+                                        const cur = group.rows[li][ci];
+                                        const prev = pi >= 0 && group.rows[pi] ? group.rows[pi][ci] : 0;
+                                        const curV = parseInt(typeof cur === 'object' ? (cur.value ?? cur) : cur) || 0;
+                                        const prevV = parseInt(typeof prev === 'object' ? (prev.value ?? prev) : prev) || 0;
+                                        return { cur: curV, prev: prevV, diff: curV - prevV };
+                                    }
+                                }
+                                return null;
+                            };
+
+                            const spellsKnown = getColDiff(/Spells\s*Known/i);
+                            if (spellsKnown && spellsKnown.diff > 0) maxSpellsSelectable = spellsKnown.diff;
+
+                            const cantripsKnown = getColDiff(/Cantrips\s*Known/i);
+                            if (cantripsKnown !== null) {
+                                // Class has a cantrips column — only allow cantrips if gained this level
+                                canLearnCantrips = cantripsKnown.diff > 0;
+                            }
+                            // If no cantrips column exists, leave canLearnCantrips = true (can't tell, show them)
+                        }
+                        // Wizards always learn 2 spells per level (no cantrips via leveling)
+                        if (charClass === 'Wizard' && maxSpellsSelectable === null) maxSpellsSelectable = 2;
+                        if (charClass === 'Wizard') canLearnCantrips = false;
+                        updateCounter();
+                    } catch (e) {}
+
+                    // Build search filter
+                    if (filterRowEl) {
+                        filterRowEl.innerHTML = '';
+                        filterRowEl.style.cssText = 'padding:6px 8px; border-bottom:1px solid var(--gold); display:grid; grid-template-columns:1fr 1fr; gap:6px; background:var(--parchment-dark); flex-shrink:0;';
+                        const searchInp = document.createElement('input');
+                        searchInp.type = 'text';
+                        searchInp.placeholder = 'Search spells…';
+                        searchInp.style.cssText = 'width:100%; font-size:0.82rem; padding:4px 8px; border:1px solid var(--gold); border-radius:3px; background:var(--parchment); box-sizing:border-box;';
+                        const lvlFilter = document.createElement('select');
+                        lvlFilter.style.cssText = 'width:100%; font-size:0.82rem; padding:4px 6px; border:1px solid var(--gold); border-radius:3px; background:var(--parchment); box-sizing:border-box;';
+                        lvlFilter.innerHTML = `<option value="">All Levels</option>${[...new Set(spells.map(s=>s.level))].filter(l => l !== 0 || canLearnCantrips).map(l=>`<option value="${l}">${l===0?'Cantrip':'Level '+l}</option>`).join('')}`;
+                        filterRowEl.appendChild(searchInp);
+                        filterRowEl.appendChild(lvlFilter);
+
+                        const applyFilter = () => {
+                            const q = searchInp.value.toLowerCase();
+                            const lv = lvlFilter.value;
+                            spellTableWrap.querySelectorAll('tr[data-spell]').forEach(tr2 => {
+                                const nm = tr2.dataset.spell;
+                                const sp = spells.find(x => x.name === nm);
+                                if (!sp) return;
+                                tr2.style.display = (!q || sp.name.toLowerCase().includes(q)) && (!lv || String(sp.level) === lv) ? '' : 'none';
+                            });
+                            spellTableWrap.querySelectorAll('.spell-level-section').forEach(sec => {
+                                const visible = sec.querySelectorAll('tr[data-spell]:not([style*="display: none"]):not([style*="display:none"])').length;
+                                sec.style.display = visible === 0 ? 'none' : '';
+                            });
+                        };
+                        searchInp.addEventListener('input', applyFilter);
+                        lvlFilter.addEventListener('change', applyFilter);
+                    }
+
+                    // Build spell tables grouped by level
+                    spellTableWrap.innerHTML = '';
+                    const SCHOOL_ABBR = { A: 'Abjur', C: 'Conj', D: 'Div', E: 'Ench', V: 'Evoc', I: 'Illus', N: 'Necro', T: 'Trans' };
+                    const rowMap = new Map();
+
+                    const atLimit = () => maxSpellsSelectable !== null && pendingSpells.length >= maxSpellsSelectable;
+
+                    const updateStyles = () => {
+                        rowMap.forEach((tr2, spell) => {
+                            const isPending = pendingSpells.some(p => p.spellData.name === spell.name);
+                            const isOnSheet = existingOnSheet.has(spell.name.toLowerCase());
+                            const blocked = !isPending && !isOnSheet && atLimit();
+                            tr2.style.background = isPending ? 'var(--red)' : isOnSheet ? 'rgba(200,200,200,0.15)' : '';
+                            tr2.style.color = isPending ? 'white' : (isOnSheet || blocked) ? 'var(--ink-light)' : 'var(--ink)';
+                            tr2.style.cursor = (isOnSheet || blocked) ? 'default' : 'pointer';
+                            tr2.style.opacity = (isOnSheet || blocked) ? '0.45' : '1';
+                        });
+                    };
+
+                    const levelGroups = [...new Set(spells.map(s => s.level))].filter(l => l !== 0 || canLearnCantrips).sort((a, b) => a - b);
+                    levelGroups.forEach(lvl => {
+                        const group = spells.filter(s => s.level === lvl);
+                        const section = document.createElement('div');
+                        section.className = 'spell-level-section';
+
+                        // Level heading
+                        const heading = document.createElement('div');
+                        heading.style.cssText = 'font-family:"Cinzel",serif; font-size:0.72rem; font-weight:600; color:var(--red-dark); background:var(--parchment-dark); padding:3px 8px; border-bottom:1px solid var(--gold); border-top:1px solid var(--gold); letter-spacing:0.05em; text-transform:uppercase;';
+                        heading.textContent = lvl === 0 ? 'Cantrips' : `Level ${lvl} Spells`;
+                        section.appendChild(heading);
+
+                        const tbl = document.createElement('table');
+                        tbl.style.cssText = 'width:100%; border-collapse:collapse; font-size:0.78rem;';
+                        tbl.innerHTML = `<thead><tr style="background:rgba(0,0,0,0.03); text-align:left; border-bottom:1px solid rgba(212,175,55,0.3);">
+                            <th style="padding:2px 6px; color:var(--ink-light); font-weight:500; font-size:0.72rem;">Name</th>
+                            <th style="padding:2px 6px; color:var(--ink-light); font-weight:500; font-size:0.72rem;">School</th>
+                            <th style="padding:2px 6px; color:var(--ink-light); font-weight:500; font-size:0.72rem; text-align:center;" title="Ritual">R</th>
+                            <th style="padding:2px 6px; color:var(--ink-light); font-weight:500; font-size:0.72rem; text-align:center;" title="Concentration">C</th>
+                            <th style="padding:2px 6px; color:var(--ink-light); font-weight:500; font-size:0.72rem; text-align:center;" title="Material">M</th>
+                            <th style="padding:2px 6px; color:var(--ink-light); font-weight:500; font-size:0.72rem;">Range</th>
+                        </tr></thead>`;
+                        const tbody = document.createElement('tbody');
+
+                        group.forEach(s => {
+                            const isRitual = !!(s.meta && s.meta.ritual);
+                            const isConc = !!(s.duration && s.duration.some(d => d.concentration));
+                            const hasMat = !!(s.components && s.components.m);
+                            const rangeStr = s.range ? (s.range.type === 'point' && s.range.distance ? (s.range.distance.type === 'self' ? 'Self' : s.range.distance.type === 'touch' ? 'Touch' : `${s.range.distance.amount||''} ${s.range.distance.type}`.trim()) : (s.range.type || '—')) : '—';
+                            const tr = document.createElement('tr');
+                            tr.dataset.spell = s.name;
+                            tr.style.cssText = 'border-bottom:1px solid rgba(212,175,55,0.15); transition:background 0.1s, opacity 0.1s;';
+                            tr.innerHTML = `<td style="padding:3px 6px; font-weight:500;">${s.name}</td><td style="padding:3px 6px;" title="${SCHOOL_ABBR[s.school]||s.school||''}">${s.school||''}</td><td style="padding:3px 6px; text-align:center;">${isRitual?'✦':''}</td><td style="padding:3px 6px; text-align:center;">${isConc?'●':''}</td><td style="padding:3px 6px; text-align:center;">${hasMat?'◆':''}</td><td style="padding:3px 6px;">${rangeStr}</td>`;
+
+                            tr.onmouseenter = () => {
+                                if (!pendingSpells.some(p=>p.spellData.name===s.name) && !existingOnSheet.has(s.name.toLowerCase()) && !atLimit())
+                                    tr.style.background = 'rgba(180,140,60,0.12)';
+                            };
+                            tr.onmouseleave = () => updateStyles();
+
+                            tr.onclick = () => {
+                                if (detailPane) showSpellDetail(s, detailPane);
+                                if (existingOnSheet.has(s.name.toLowerCase())) return;
+                                const idx2 = pendingSpells.findIndex(p => p.spellData.name === s.name);
+                                if (idx2 > -1) {
+                                    pendingSpells.splice(idx2, 1);
+                                } else {
+                                    if (atLimit()) return; // enforce limit
+                                    let time = ''; if (s.time && s.time[0]) { const t = s.time[0]; time = `${t.number} ${t.unit}`; }
+                                    let desc = window.processEntries ? window.processEntries(s.entries) : '';
+                                    if (s.entriesHigherLevel) desc += '<br><br>' + (window.processEntries ? window.processEntries(s.entriesHigherLevel) : '');
+                                    desc = window.cleanText ? window.cleanText(desc) : desc;
+                                    pendingSpells.push({ target: s.level === 0 ? 'cantripList' : 'spellList', spellData: { name: s.name, level: s.level, time, range: rangeStr, ritual: isRitual, concentration: isConc, material: hasMat, description: desc, prepared: s.level !== 0 } });
+                                }
+                                updateStyles();
+                                updateCounter();
+                            };
+
+                            rowMap.set(s, tr);
+                            tbody.appendChild(tr);
+                        });
+
+                        tbl.appendChild(tbody);
+                        section.appendChild(tbl);
+                        spellTableWrap.appendChild(section);
+                    });
+
+                    updateStyles();
+                    updateCounter();
+
+                } catch (e) { console.error(e); spellTableWrap.innerHTML = '<div style="padding:10px; color:var(--red);">Error loading spells.</div>'; }
+            })();
+
+            // Fetch Class Table Data for Spell Info (slot counts etc.)
+            const spellSectionDiv = null; // no longer inserting into features list
             (async () => {
                 try {
                     const db = await openDB();
@@ -7255,25 +7803,12 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
                                 infoDiv.style.fontSize = "0.9rem";
                                 infoDiv.style.border = "1px solid var(--gold)";
                                 infoDiv.innerHTML = infoHtml;
-                                list.insertBefore(infoDiv, selectedSpellsDiv);
+                                list.appendChild(infoDiv);
                             }
                         }
                     }
                 } catch (e) { console.error(e); }
             })();
-
-            if (spellHint) {
-                const hintDiv = document.createElement('div');
-                hintDiv.style.fontSize = '0.8rem';
-                hintDiv.style.color = 'var(--ink-light)';
-                hintDiv.style.fontStyle = 'italic';
-                hintDiv.style.marginBottom = '15px';
-                hintDiv.style.textAlign = 'center';
-                hintDiv.textContent = spellHint;
-                list.appendChild(hintDiv);
-            }
-
-            list.appendChild(selectedSpellsDiv);
         }
         
         for (const f of features) {
@@ -7307,7 +7842,14 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
                 </div>
                 <div style="font-size:0.9rem; line-height:1.5; overflow-wrap: break-word; word-break: break-word;">${desc}</div>
             `;
-            
+
+            // Render choice UI for this feature
+            const optSets = lvlup_extractOptionSets(f.entries || f.entry || []);
+            const choiceLists = lvlup_extractChoiceLists(f.entries || f.entry || []);
+            if ((optSets.length > 0 || choiceLists.length > 0) && !f.name.includes("Fighting Style")) {
+                lvlup_renderChoices(div, f.name, f.level, optSets, choiceLists, window.pendingLevelUpChanges ? window.pendingLevelUpChanges.choices : null);
+            }
+
             if (f.name.includes("Fighting Style")) {
                 const fsContainer = document.createElement('div');
                 fsContainer.style.marginTop = "10px";
