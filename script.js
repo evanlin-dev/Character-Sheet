@@ -4492,10 +4492,11 @@ window.openHelpPage = function() {
                     <h2 style="margin:0;font-family:'Cinzel',serif;font-size:1.2rem;color:var(--red-dark);">Character Sheet Guide</h2>
                     <button onclick="document.getElementById('helpModal').style.display='none'" style="background:none;border:none;font-size:1.8rem;cursor:pointer;color:var(--ink);line-height:1;padding:0;">&times;</button>
                 </div>
-                <div class="help-modal-body">${window._buildHelpContent()}</div>
+                <div class="help-modal-body"></div>
             </div>`;
         document.body.appendChild(modal);
     }
+    modal.querySelector('.help-modal-body').innerHTML = window._buildHelpContent();
     modal.style.display = 'flex';
 };
 
@@ -4519,27 +4520,21 @@ window._buildHelpContent = function() {
             example: 'STR 18 → modifier +4. Used for melee attacks, athletics, and strength saves.'
         },
         {
-            icon: '🛡️',
-            title: 'Saving Throws',
-            desc: 'Click the checkbox next to a save to mark proficiency. Proficiency adds your Prof Bonus to that save. Shown in the Stats nav view on mobile.',
-            example: 'WIS Save (proficient, Prof +3): WIS mod +2 + Prof +3 = +5 total.'
-        },
-        {
-            icon: '🎯',
-            title: 'Skills',
-            desc: 'Click the checkbox to mark proficiency. The circular button cycles advantage/disadvantage. Modifier is shown on the right. On tablet, skills display in 2 columns; on mobile, 1 column.',
-            example: 'Stealth (DEX prof): +2 DEX mod + +3 prof = +5. Advantage shown with ↑.'
+            icon: '🛡️🎯',
+            title: 'Saving Throws & Skills',
+            desc: 'Click the <b>checkbox</b> next to a save or skill to mark proficiency — this adds your Proficiency Bonus to that roll.<br><br>When a skill or save is proficient, an <b>E</b> button appears beside the checkbox. Click it to grant <b>Expertise</b>, which doubles the proficiency bonus for that skill or save.<br><br>The circular button on each skill cycles <b>advantage / disadvantage</b>. The modifier is displayed on the right.<br><br>On tablet, skills display in 2 columns (top-to-bottom order); on mobile, 1 column. Both are accessible via the <b>Stats</b> nav view.',
+            example: 'Stealth (DEX, proficient + Expertise, Prof +3): +2 DEX mod + +6 (3×2) = +8. WIS Save (proficient): +2 + +3 = +5.'
         },
         {
             icon: '⚔️',
-            title: 'Combat Stats',
-            desc: 'Track AC, Initiative (auto-calculated from DEX), Speed, HP, Temp HP, Hit Dice, size, and proficiency bonus. Click ⚡ to open the HP manager for healing/damage. <b>Attacks / Action</b> sets how many attacks you can make.',
+            title: 'Combat Stats & HP',
+            desc: 'Track AC, Initiative (auto-calculated from DEX), Speed, HP, Temp HP, Hit Dice, size, and proficiency bonus. <b>Attacks / Action</b> sets how many attacks you can make.<br><br>Click <b>⚡</b> next to HP to open the HP manager for healing and damage. On mobile/tablet, you can also <b>tap directly on the HP value</b> to open the same popup.',
             example: 'Fighter Lv 5: HP 44/52, AC 18, Speed 30, Attacks/Action: 2.'
         },
         {
             icon: '🗡️',
             title: 'Weapon Attacks',
-            desc: 'Add weapons with attack bonus and damage. Click ? next to the section title for weapon mastery info. Weapons appear in the Attacks section of the full sheet.',
+            desc: 'Add weapons with attack bonus and damage. Click <b>?</b> next to the section title for weapon mastery info. Weapons appear in the Attacks section of the full sheet.',
             example: 'Longsword: +6 to hit, 1d8+4 slashing. Rapier: +6 to hit, 1d8+4 piercing.'
         },
         {
@@ -4569,7 +4564,7 @@ window._buildHelpContent = function() {
         {
             icon: '🎒',
             title: 'Inventory',
-            desc: 'Track equipped items and backpack contents. Enter name, qty, weight. Check the equip box to move an item to Equipped. Click 📝 for a description. On mobile, rows are compact single-line entries.',
+            desc: 'Track equipped items and backpack contents. Enter name, qty, and weight. Check the equip box to move an item to Equipped. Click <b>📝</b> to open a <b>rich HTML editor</b> for that item\'s description — supports bold, italic, links, tables, and formatted text. On mobile, rows are compact single-line entries.',
             example: 'Equipped: Chain Mail (55 lbs). Backpack: Rope 50ft x1 (2 lbs), Potion of Healing x3.'
         },
         {
@@ -4592,14 +4587,53 @@ window._buildHelpContent = function() {
         },
     ];
 
-    return sections.map(s => `
+    const dataSections = window.isDataAvailable ? [
+        {
+            icon: '📦',
+            title: 'Adding Spells & Cantrips from Data',
+            desc: 'With compendium data loaded, you can add spells via the <b>Manage Spells</b> popup instead of typing them manually.<br><br><b>Full Sheet:</b> Click <b>+ Add Spell</b> or <b>+ Cantrip</b> in the Spells section to open the popup — search, filter by level, and click a spell to add it with all details pre-filled.<br><b>Mobile/Tablet Spells view:</b> Tap the <b>+</b> button at the top of the Spells nav view to open the same popup.',
+            example: 'Search "fire" → Fireball, Fire Bolt, Wall of Fire appear with full descriptions ready to add.'
+        },
+        {
+            icon: '🗃️',
+            title: 'Adding Items from Data',
+            desc: 'With compendium data loaded, inventory items can be added from the data browser. Click <b>+ Add Item</b> in the Inventory section (full sheet) or the <b>+</b> button in the mobile Inventory nav view to search and pick items from the loaded data.',
+            example: 'Search "sword" → Longsword, Shortsword, Greatsword listed with weight pre-filled.'
+        },
+        {
+            icon: '🗡️📦',
+            title: 'Auto-fill Weapon Attacks from Data',
+            desc: 'When adding or editing a weapon attack, a <b>Choose Weapon</b> dropdown appears (when data is loaded). Selecting a weapon from the list auto-fills the attack bonus, damage dice, damage type, and mastery — saving manual entry.',
+            example: 'Choose "Rapier" → attack bonus, 1d8 piercing, and Finesse mastery filled automatically.'
+        },
+        {
+            icon: '⬆️',
+            title: 'Uploading Custom Data',
+            desc: 'Go to <b>Menu → Data Browser</b> to upload your own compendium files. Supports individual <b>.json</b> files or <b>.zip</b> archives containing multiple JSONs. Uploaded files are listed in the <b>Uploaded Files</b> tab where you can search and delete them.',
+            example: 'Upload "my-campaign.zip" → all JSONs inside are imported; the ZIP shows as one entry you can delete as a unit.'
+        },
+    ] : [];
+
+    const renderSection = s => `
         <div class="help-section">
             <div class="help-section-title">${s.icon} ${s.title}</div>
             <div class="help-section-desc">${s.desc}</div>
             ${s.example ? `<div class="help-section-example">Example: ${s.example}</div>` : ''}
             ${s.items ? `<ul class="help-section-list">${s.items.map(i => `<li>${i}</li>`).join('')}</ul>` : ''}
         </div>
-    `).join('');
+    `;
+
+    let html = sections.map(renderSection).join('');
+
+    if (dataSections.length) {
+        html += `<div class="help-section" style="border-top:2px solid var(--gold);margin-top:12px;padding-top:12px;">
+            <div class="help-section-title" style="font-size:0.95rem;color:var(--red-dark);">📦 Using Uploaded Compendium Data</div>
+            <div class="help-section-desc" style="font-size:0.75rem;color:var(--ink-light);">The following features are available because you have data loaded.</div>
+        </div>`;
+        html += dataSections.map(renderSection).join('');
+    }
+
+    return html;
 };
 
 window.initQuickNav = function () {
