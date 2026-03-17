@@ -184,6 +184,7 @@ const deathSaves = {
 };
 let spellSlotsData = [{ level: 1, total: 1, used: 0 }];
 let resourcesData = [];
+let hitDiceUsed = 0;
 let pbScores = { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 };
 
 // Class resource definitions for auto-detection
@@ -1207,30 +1208,29 @@ window.addInventoryItem = function (
   isEquipped = false,
   description = "",
   skipSave = false,
+  targetListId = null,
 ) {
-  // Check for Equipment Pack Expansion
-  const cleanName = name.toLowerCase().trim();
-  const noPrefix = cleanName.replace(/^(?:a|an|the)\s+/i, '');
-  const packContents = (window.EQUIPMENT_PACKS || {})[cleanName] || (window.EQUIPMENT_PACKS || {})[noPrefix];
-  if (packContents) {
-      packContents.forEach(p => {
-          let pName = p;
-          let pQty = 1;
-          const match = p.match(/^(\d+)\s+(.*)$/);
-          if (match) { pQty = parseInt(match[1]); pName = match[2]; }
-          
-          let itemDesc = (window.dndItemsDB || {})[pName.toLowerCase().trim()];
-          let fullDesc = `From ${name}`;
-          if (itemDesc) {
-              fullDesc = `${fullDesc}:\n${itemDesc}`;
-          }
-          
-          addInventoryItem(pName, pQty * Math.max(1, parseInt(qty)||1), 0, isEquipped, fullDesc, skipSave);
-      });
-      return;
+  // Check for Equipment Pack Expansion (only for regular inventory)
+  if (!targetListId) {
+      const cleanName = name.toLowerCase().trim();
+      const noPrefix = cleanName.replace(/^(?:a|an|the)\s+/i, '');
+      const packContents = (window.EQUIPMENT_PACKS || {})[cleanName] || (window.EQUIPMENT_PACKS || {})[noPrefix];
+      if (packContents) {
+          packContents.forEach(p => {
+              let pName = p;
+              let pQty = 1;
+              const match = p.match(/^(\d+)\s+(.*)$/);
+              if (match) { pQty = parseInt(match[1]); pName = match[2]; }
+              let itemDesc = (window.dndItemsDB || {})[pName.toLowerCase().trim()];
+              let fullDesc = `From ${name}`;
+              if (itemDesc) fullDesc = `${fullDesc}:\n${itemDesc}`;
+              addInventoryItem(pName, pQty * Math.max(1, parseInt(qty)||1), 0, isEquipped, fullDesc, skipSave);
+          });
+          return;
+      }
   }
 
-  const listId = isEquipped ? "equippedList" : "inventoryList";
+  const listId = targetListId || (isEquipped ? "equippedList" : "inventoryList");
   const list = document.getElementById(listId);
   const div = document.createElement("div");
   div.className = "inventory-item";
@@ -1246,12 +1246,13 @@ window.addInventoryItem = function (
   dragHandle.className = "drag-handle";
   dragHandle.innerHTML = "☰";
 
-  // Equip Check
+  // Equip Check (hidden for component pouch items)
   const check = document.createElement("input");
   check.type = "checkbox";
   check.className = "equip-check";
   check.checked = isEquipped;
   check.title = "Equip/Unequip";
+  if (targetListId === 'componentPouchList') check.style.visibility = 'hidden';
   check.onchange = function () {
     // Logic to move item between lists
     div.remove();
@@ -1675,8 +1676,10 @@ async function checkDataUploadStatus() {
       console.log("DB Query Result:", hasData ? "Data Found" : "Empty");
 
       // Toggle Buttons
+      const btnItemsPouch = document.getElementById("btn-search-items-pouch");
       if (hasData) {
         if (btnItems) btnItems.style.display = "inline-block";
+        if (btnItemsPouch) btnItemsPouch.style.display = "inline-block";
         if (btnCantrips) btnCantrips.style.display = "inline-block";
         if (btnSpells) btnSpells.style.display = "inline-block";
         if (btnFeats) btnFeats.style.display = "inline-block";
@@ -1686,6 +1689,7 @@ async function checkDataUploadStatus() {
         if (btnDataBrowser) btnDataBrowser.style.display = "block";
       } else {
         if (btnItems) btnItems.style.display = "none";
+        if (btnItemsPouch) btnItemsPouch.style.display = "none";
         if (btnCantrips) btnCantrips.style.display = "none";
         if (btnSpells) btnSpells.style.display = "none";
         if (btnFeats) btnFeats.style.display = "none";
@@ -1728,6 +1732,7 @@ async function checkDataUploadStatus() {
       // Toggle Weapon Attack Inputs
       window.isDataAvailable = hasData;
       document.querySelectorAll(".weapon-name").forEach((input) => {
+        if (input.dataset.customWeapon) return; // already unlocked for custom name editing
         if (hasData) {
           input.setAttribute("readonly", "true");
           input.setAttribute("onclick", "openWeaponPicker(this)");
@@ -1791,7 +1796,9 @@ let currentSearchResults = [];
 let itemSearchPage = 1;
 const ITEMS_PER_PAGE = 50;
 
-window.openItemSearch = async function () {
+window._itemSearchTarget = 'inventoryList';
+window.openItemSearch = async function (targetListId) {
+  window._itemSearchTarget = targetListId || 'inventoryList';
   document.getElementById("itemSearchModal").style.display = "flex";
   document.getElementById("itemSearchInput").value = "";
   const list = document.getElementById("itemSearchList");
@@ -1952,7 +1959,8 @@ function renderItemSearchPage() {
                <div style="font-size:0.8rem; color:var(--ink-light); margin-top:4px;">${previewDesc}</div>
            `;
     div.onclick = () => {
-      addInventoryItem(item.name, 1, weight, false, desc);
+      const tgt = window._itemSearchTarget || 'inventoryList';
+      addInventoryItem(item.name, 1, weight, false, desc, false, tgt === 'inventoryList' ? null : tgt);
       closeItemSearch();
     };
     list.appendChild(div);
@@ -2985,6 +2993,15 @@ window.selectCustomWeapon = function () {
   const term = document.getElementById("weaponSearch").value;
   if (currentWeaponInput) {
     currentWeaponInput.value = term || "Custom Weapon";
+    // Unlock the field so the user can type a custom name directly
+    currentWeaponInput.removeAttribute("readonly");
+    currentWeaponInput.removeAttribute("onclick");
+    currentWeaponInput.onclick = null;
+    currentWeaponInput.style.cursor = "text";
+    currentWeaponInput.style.color = "var(--ink)";
+    currentWeaponInput.placeholder = "Enter custom name";
+    currentWeaponInput.dataset.customWeapon = "1";
+    currentWeaponInput.addEventListener('change', saveCharacter, { once: false });
     saveCharacter();
   }
   closeWeaponPicker();
@@ -3041,7 +3058,7 @@ window.addWeapon = function (data = null) {
   newWeapon.style.paddingRight = "40px";
   newWeapon.style.position = "relative";
 
-  const isLocked = window.isDataAvailable;
+  const isLocked = window.isDataAvailable && !(data && data.customWeapon);
   const nameField = isLocked
     ? `<input type="text" class="weapon-name" placeholder="Click to select..." onclick="openWeaponPicker(this)" readonly value="${data ? data.name : ""}" style="cursor: pointer; color: var(--red-dark); font-weight: bold;" />`
     : `<input type="text" class="weapon-name" placeholder="Enter weapon name" value="${data ? data.name : ""}" style="cursor: text; color: var(--ink); font-weight: bold;" />`;
@@ -3061,6 +3078,13 @@ window.addWeapon = function (data = null) {
     </div>`;
   if (data && data.formulaData) {
       newWeapon.dataset.wformula = JSON.stringify(data.formulaData);
+  }
+  if (data && data.customWeapon) {
+      const ni = newWeapon.querySelector('.weapon-name');
+      if (ni) {
+          ni.dataset.customWeapon = "1";
+          ni.addEventListener('change', saveCharacter);
+      }
   }
   weaponList.appendChild(newWeapon);
   newWeapon
@@ -3288,21 +3312,56 @@ window.renderResources = function() {
     resourcesData.forEach((res, index) => {
         const box = document.createElement('div');
         box.className = 'resource-item';
-        
-        let slotsHtml = '';
-        for(let i=0; i<res.max; i++) {
-            const isUsed = i < res.used ? 'used' : '';
-            slotsHtml += `<div class="resource-slot ${isUsed}" onclick="toggleResourceSlot(${index}, ${i})"></div>`;
+        box.style.position = 'relative';
+
+        const effectiveMax = window.computeResourceMax ? window.computeResourceMax(res) : (res.max || 1);
+        const usePips = effectiveMax <= 10;
+        const resetLabel = res.reset === 'sr' ? 'Short Rest' : res.reset === 'both' ? 'Both Rests' : 'Long Rest';
+        const formulaKey = res.formulaKey && res.formulaKey !== 'fixed' ? res.formulaKey : null;
+        const formulaOpt = formulaKey ? RESOURCE_FORMULA_OPTS.find(o => o.key === formulaKey) : null;
+
+        let maxInfoHtml = '';
+        if (res.auto) {
+            maxInfoHtml = `<span class="res-auto-tag" title="Auto-detected from class data">auto</span>`;
+        } else if (formulaKey) {
+            maxInfoHtml = `<span style="font-family:'Cinzel',serif; font-size:0.72rem; color:var(--ink-light); white-space:nowrap;">${formulaOpt ? formulaOpt.label : formulaKey} = ${effectiveMax}</span>`;
         }
 
+        const resetBadge = `<span class="res-badge ${res.reset === 'sr' ? 'res-badge-sr' : res.reset === 'both' ? 'res-badge-both' : 'res-badge-lr'}" style="font-size:0.6rem;">${resetLabel}</span>`;
+
+        let slotsHtml = '';
+        if (usePips) {
+            for (let i = 0; i < effectiveMax; i++) {
+                const isUsed = i < res.used ? 'used' : '';
+                slotsHtml += `<div class="resource-slot ${isUsed}" onclick="toggleResourceSlot(${index}, ${i})"></div>`;
+            }
+        } else {
+            slotsHtml = `
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="mini-btn" onclick="stepResourceDesktop(${index}, -1)">−</button>
+                    <span style="font-family:'Cinzel',serif; font-size:0.9rem; min-width:24px; text-align:center;">${res.used}</span>
+                    <span style="color:var(--ink-light);">/</span>
+                    <span style="font-family:'Cinzel',serif; font-size:0.9rem;">${effectiveMax}</span>
+                    <button class="mini-btn" onclick="stepResourceDesktop(${index}, 1)">+</button>
+                </div>`;
+        }
+
+        const settingsBtn = res.auto
+            ? ''
+            : `<button class="mini-btn" title="Resource settings" onclick="window.openResourceSettingsModal(${index})" style="padding:0 5px; font-size:0.75rem;">⚙</button>`;
+
+        const deleteBtn = res.auto
+            ? ''
+            : `<button class="delete-feature-btn" onclick="deleteResource(${index})" style="position:absolute; top:4px; right:4px; margin:0;">&times;</button>`;
+
         box.innerHTML = `
-            <div class="resource-header">
-                <input type="text" class="resource-name" value="${res.name}" onchange="updateResourceName(${index}, this.value)" placeholder="Resource Name">
-                <div class="resource-controls">
-                    <button class="mini-btn" onclick="adjustResourceMax(${index}, -1)">-</button>
-                    <input type="number" class="resource-max" value="${res.max}" onchange="updateResourceMax(${index}, this.value)" min="1" style="width:40px; text-align:center;">
-                    <button class="mini-btn" onclick="adjustResourceMax(${index}, 1)">+</button>
-                    <button class="delete-feature-btn" onclick="deleteResource(${index})">&times;</button>
+            ${deleteBtn}
+            <div class="resource-header" style="padding-right:${res.auto ? '0' : '22px'};">
+                <input type="text" class="resource-name" value="${res.name}" onchange="updateResourceName(${index}, this.value)" placeholder="Resource Name" ${res.auto ? 'readonly style="pointer-events:none;"' : ''}>
+                <div class="resource-controls" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+                    ${maxInfoHtml}
+                    ${resetBadge}
+                    ${settingsBtn}
                 </div>
             </div>
             <div class="resource-slots">${slotsHtml}</div>
@@ -3311,8 +3370,36 @@ window.renderResources = function() {
     });
 };
 
+window.stepResourceDesktop = function(index, delta) {
+    const res = resourcesData[index];
+    if (!res) return;
+    const max = window.computeResourceMax ? window.computeResourceMax(res) : res.max;
+    res.used = Math.max(0, Math.min(max, (res.used || 0) + delta));
+    renderResources();
+    if (document.getElementById('mobile-resources-card')) window.renderMobileResources();
+    saveCharacter();
+};
+
+/* ---- Component Pouch ---- */
+const SPELLCASTING_CLASSES = ['artificer','bard','cleric','druid','paladin','ranger','sorcerer','warlock','wizard','blood hunter'];
+window.isSpellcaster = function() {
+    const cls = (document.getElementById('charClass')?.value || '').toLowerCase();
+    const sub = (document.getElementById('charSubclass')?.value || '').toLowerCase();
+    if (SPELLCASTING_CLASSES.some(c => cls.includes(c))) return true;
+    if (sub.includes('eldritch knight') || sub.includes('arcane trickster')) return true;
+    if (spellSlotsData && spellSlotsData.length > 0) return true;
+    return false;
+};
+window.updateComponentPouchVisibility = function() {
+    const section = document.getElementById('component-pouch-section');
+    if (section) section.style.display = window.isSpellcaster() ? '' : 'none';
+};
+window.addComponentPouchItem = function() {
+    addInventoryItem('', 1, 0, false, '', false, 'componentPouchList');
+};
+
 window.addResource = function() {
-    resourcesData.push({ name: "New Resource", max: 3, used: 0 });
+    resourcesData.push({ name: "New Resource", max: 3, used: 0, reset: 'lr', formulaKey: 'fixed', fixedMax: 3 });
     renderResources();
     saveCharacter();
 };
@@ -3320,19 +3407,34 @@ window.deleteResource = function(index) {
     if(confirm("Delete this resource?")) {
         resourcesData.splice(index, 1);
         renderResources();
+        if (document.getElementById('mobile-resources-card')) window.renderMobileResources();
         saveCharacter();
     }
 };
-window.updateResourceName = function(index, val) { resourcesData[index].name = val; saveCharacter(); };
-window.updateResourceMax = function(index, val) { resourcesData[index].max = parseInt(val) || 1; if(resourcesData[index].used > resourcesData[index].max) resourcesData[index].used = resourcesData[index].max; renderResources(); saveCharacter(); };
+window.updateResourceName = function(index, val) {
+    resourcesData[index].name = val;
+    if (document.getElementById('mobile-resources-card')) window.renderMobileResources();
+    saveCharacter();
+};
+window.updateResourceMax = function(index, val) {
+    const res = resourcesData[index];
+    if (!res) return;
+    const n = parseInt(val) || 1;
+    res.fixedMax = n; res.max = n;
+    if (res.used > n) res.used = n;
+    renderResources();
+    if (document.getElementById('mobile-resources-card')) window.renderMobileResources();
+    saveCharacter();
+};
 window.adjustResourceMax = function(index, delta) {
     const res = resourcesData[index];
     if (!res) return;
-    let newMax = (parseInt(res.max) || 0) + delta;
+    let newMax = (parseInt(res.fixedMax ?? res.max) || 0) + delta;
     if (newMax < 1) newMax = 1;
-    res.max = newMax;
-    if (res.used > res.max) res.used = res.max;
+    res.fixedMax = newMax; res.max = newMax;
+    if (res.used > newMax) res.used = newMax;
     renderResources();
+    if (document.getElementById('mobile-resources-card')) window.renderMobileResources();
     saveCharacter();
 };
 window.toggleResourceSlot = function(index, slotIndex) {
@@ -3447,19 +3549,158 @@ window.autoDetectClassResources = async function() {
 };
 
 // Short rest: restore SR resources, re-render
+/* ---- Rest Modals ---- */
+window._srHpGained = 0; // track HP gained this short rest session
+
+function _getHitDieSize() {
+    const hd = (document.getElementById('hitDice')?.value || '1d8').toLowerCase().trim();
+    const m = /d(\d+)/.exec(hd);
+    return m ? parseInt(m[1]) : 8;
+}
+function _getConMod() {
+    const con = parseInt(document.getElementById('con')?.value) || 10;
+    return Math.floor((con - 10) / 2);
+}
+function _getLevel() {
+    return parseInt(document.getElementById('level')?.value) || 1;
+}
+function _availableHitDice() {
+    return Math.max(0, _getLevel() - hitDiceUsed);
+}
+
 window.doShortRest = function() {
-    resourcesData.forEach(r => { if (r.reset === 'sr') r.used = 0; });
-    renderResources();
-    window.renderMobileResources();
-    saveCharacter();
+    window._srHpGained = 0;
+    let modal = document.getElementById('restModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'restModal';
+        modal.className = 'info-modal-overlay';
+        document.body.appendChild(modal);
+    }
+    const _renderSR = () => {
+        const curHp = parseInt(document.getElementById('hp')?.value) || 0;
+        const maxHp = parseInt(document.getElementById('maxHp')?.value) || 1;
+        const avail = _availableHitDice();
+        const dieSize = _getHitDieSize();
+        const conMod = _getConMod();
+        const conStr = conMod >= 0 ? `+${conMod}` : `${conMod}`;
+        modal.innerHTML = `
+            <div class="info-modal-content" style="max-width:340px;">
+                <button class="info-modal-close" onclick="document.getElementById('restModal').style.display='none'">×</button>
+                <h3 class="info-modal-title">Short Rest</h3>
+                <div style="display:flex; gap:12px; margin-bottom:14px;">
+                    <div style="text-align:center; flex:1;">
+                        <div style="font-family:'Cinzel',serif; font-size:0.7rem; color:var(--ink-light); margin-bottom:4px;">HP</div>
+                        <div style="font-family:'Cinzel',serif; font-size:1.1rem; font-weight:700;">${curHp} / ${maxHp}</div>
+                    </div>
+                    <div style="text-align:center; flex:1;">
+                        <div style="font-family:'Cinzel',serif; font-size:0.7rem; color:var(--ink-light); margin-bottom:4px;">Hit Dice</div>
+                        <div style="font-family:'Cinzel',serif; font-size:1.1rem; font-weight:700;">${avail} / ${_getLevel()} (d${dieSize})</div>
+                    </div>
+                    <div style="text-align:center; flex:1;">
+                        <div style="font-family:'Cinzel',serif; font-size:0.7rem; color:var(--ink-light); margin-bottom:4px;">Gained</div>
+                        <div id="sr-gained" style="font-family:'Cinzel',serif; font-size:1.1rem; font-weight:700; color:var(--green, #3a7a3a);">+${window._srHpGained}</div>
+                    </div>
+                </div>
+                <button class="btn" style="width:100%; margin-bottom:8px;" ${avail <= 0 || curHp >= maxHp ? 'disabled style="opacity:0.5;width:100%;margin-bottom:8px;"' : ''} onclick="window._rollHitDie()">
+                    Roll Hit Die (d${dieSize} ${conStr})
+                </button>
+                <div style="font-size:0.78rem; color:var(--ink-light); margin-bottom:14px; font-style:italic;">
+                    Short rest also restores short-rest resources.
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn" style="flex:1;" onclick="window._applyShortRest()">Finish Rest</button>
+                    <button class="btn btn-secondary" style="flex:1;" onclick="document.getElementById('restModal').style.display='none'">Cancel</button>
+                </div>
+            </div>`;
+        modal.style.display = 'flex';
+    };
+    window._srRender = _renderSR;
+    _renderSR();
 };
 
-// Long rest: restore ALL resources
+window._rollHitDie = function() {
+    if (_availableHitDice() <= 0) return;
+    const dieSize = _getHitDieSize();
+    const conMod = _getConMod();
+    const roll = Math.floor(Math.random() * dieSize) + 1;
+    const gained = Math.max(1, roll + conMod);
+    hitDiceUsed++;
+    const hpEl = document.getElementById('hp');
+    const maxHp = parseInt(document.getElementById('maxHp')?.value) || 1;
+    let curHp = parseInt(hpEl?.value) || 0;
+    curHp = Math.min(maxHp, curHp + gained);
+    if (hpEl) hpEl.value = curHp;
+    window._srHpGained += gained;
+    if (window.updateHpBar) window.updateHpBar();
+    if (window._srRender) window._srRender();
+};
+
+window._applyShortRest = function() {
+    resourcesData.forEach(r => { if (r.reset === 'sr' || r.reset === 'both') r.used = 0; });
+    renderResources();
+    if (document.getElementById('mobile-resources-card')) window.renderMobileResources();
+    saveCharacter();
+    document.getElementById('restModal').style.display = 'none';
+};
+
 window.doLongRest = function() {
+    const level = _getLevel();
+    const hdRecover = Math.max(1, Math.floor(level / 2));
+    const hdNew = Math.max(0, hitDiceUsed - hdRecover);
+    const maxHp = parseInt(document.getElementById('maxHp')?.value) || 1;
+    const slotsCount = spellSlotsData.filter(s => s.used > 0).length;
+    const resCount = resourcesData.filter(r => r.used > 0).length;
+
+    let modal = document.getElementById('restModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'restModal';
+        modal.className = 'info-modal-overlay';
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+        <div class="info-modal-content" style="max-width:320px;">
+            <button class="info-modal-close" onclick="document.getElementById('restModal').style.display='none'">×</button>
+            <h3 class="info-modal-title">Long Rest</h3>
+            <div style="margin-bottom:16px; display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; align-items:center; gap:10px; font-family:'Crimson Text',serif; font-size:1rem;">
+                    <span style="color:var(--green,#3a7a3a); font-size:1.1rem;">✓</span>
+                    <span>HP restored to <strong>${maxHp}</strong></span>
+                </div>
+                ${slotsCount > 0 ? `<div style="display:flex; align-items:center; gap:10px; font-family:'Crimson Text',serif; font-size:1rem;"><span style="color:var(--green,#3a7a3a); font-size:1.1rem;">✓</span><span>All spell slots restored</span></div>` : ''}
+                <div style="display:flex; align-items:center; gap:10px; font-family:'Crimson Text',serif; font-size:1rem;">
+                    <span style="color:var(--green,#3a7a3a); font-size:1.1rem;">✓</span>
+                    <span>Recover <strong>${hdRecover}</strong> hit ${hdRecover === 1 ? 'die' : 'dice'} (${hdNew} used after)</span>
+                </div>
+                ${resCount > 0 ? `<div style="display:flex; align-items:center; gap:10px; font-family:'Crimson Text',serif; font-size:1rem;"><span style="color:var(--green,#3a7a3a); font-size:1.1rem;">✓</span><span>All class resources restored</span></div>` : ''}
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn" style="flex:1;" onclick="window._applyLongRest()">Take Long Rest</button>
+                <button class="btn btn-secondary" style="flex:1;" onclick="document.getElementById('restModal').style.display='none'">Cancel</button>
+            </div>
+        </div>`;
+    modal.style.display = 'flex';
+};
+
+window._applyLongRest = function() {
+    const level = _getLevel();
+    const hdRecover = Math.max(1, Math.floor(level / 2));
+    hitDiceUsed = Math.max(0, hitDiceUsed - hdRecover);
+    // Restore HP
+    const maxHp = parseInt(document.getElementById('maxHp')?.value) || 1;
+    const hpEl = document.getElementById('hp');
+    if (hpEl) hpEl.value = maxHp;
+    if (window.updateHpBar) window.updateHpBar();
+    // Restore spell slots
+    spellSlotsData.forEach(s => s.used = 0);
+    renderSpellSlots();
+    // Restore all resources
     resourcesData.forEach(r => r.used = 0);
     renderResources();
-    window.renderMobileResources();
+    if (document.getElementById('mobile-resources-card')) window.renderMobileResources();
     saveCharacter();
+    document.getElementById('restModal').style.display = 'none';
 };
 
 // Adjust max pips for fixed custom resources
@@ -3701,12 +3942,13 @@ window.renderMobileResources = function() {
             ? `<button class="res-settings-btn" onclick="window.openResourceSettingsModal(${i})" title="Settings">⚙</button>`
             : `<span class="res-auto-tag" title="Auto-detected from class">⚙</span>`;
 
+        const delBtn = res.auto ? '' : `<button class="res-del-btn" onclick="window.deleteMobileResource(${i})">×</button>`;
         rowsHtml += `<div class="res-row">
+            ${delBtn}
             <div class="res-row-top">
                 <input class="res-name-inp" value="${res.name.replace(/"/g, '&quot;')}" onchange="window.renameMobileResource(${i}, this.value)" ${res.auto ? 'readonly' : ''} />
                 ${settingsBtn}
                 <span class="res-badge ${resetClass}">${resetLabel}</span>
-                <button class="res-del-btn" onclick="window.deleteMobileResource(${i})">×</button>
             </div>
             ${inputHtml}
         </div>`;
@@ -4202,7 +4444,7 @@ window.saveCharacter = function () {
     background: document.getElementById("background").value,
     alignment: document.getElementById("alignment").value,
     deity: document.getElementById("deity")?.value || "",
-    xp: document.getElementById("experience").value,
+    experience: document.getElementById("experience").value,
     str: document.getElementById("str").value,
     dex: document.getElementById("dex").value,
     con: document.getElementById("con").value,
@@ -4240,6 +4482,7 @@ window.saveCharacter = function () {
         damage: item.querySelector(".weapon-damage").value,
         notes: item.querySelector(".weapon-notes").value,
         formulaData: item.dataset.wformula ? JSON.parse(item.dataset.wformula) : null,
+        customWeapon: item.querySelector(".weapon-name")?.dataset.customWeapon === "1" || undefined,
       }),
     ),
 
@@ -4252,7 +4495,8 @@ window.saveCharacter = function () {
     reactions: getFeatureData("reactionsContainer"),
 
     // Using the safe map function here
-    inventory: safeInventoryMap(".inventory-item"),
+    inventory: safeInventoryMap("#inventoryList .inventory-item, #equippedList .inventory-item"),
+    componentPouch: safeInventoryMap("#componentPouchList .inventory-item"),
 
     attunement: [
       document.getElementById("attune1").value,
@@ -4260,6 +4504,7 @@ window.saveCharacter = function () {
       document.getElementById("attune3").value,
     ],
     spellSlotsData: spellSlotsData,
+    hitDiceUsed: hitDiceUsed,
     cantripsList: Array.from(
       document.querySelectorAll("#cantripList .spell-row"),
     ).map((row) => ({
@@ -5516,7 +5761,7 @@ window.mountInventoryView = function() {
     const invView = document.getElementById('view-inventory');
     if (!invView) return;
     if (!document.getElementById('mobile-inv-wrapper')) {
-        invView.innerHTML = '<div id="mobile-inv-wrapper"><div id="mobile-inv-equipped-slot"></div><div id="mobile-inv-backpack-slot"></div></div>';
+        invView.innerHTML = '<div id="mobile-inv-wrapper"><div id="mobile-inv-equipped-slot"></div><div id="mobile-inv-backpack-slot"></div><div id="mobile-inv-pouch-slot"></div></div>';
     }
     const equippedList = document.getElementById('equippedList');
     if (equippedList) {
@@ -5541,6 +5786,15 @@ window.mountInventoryView = function() {
             section.dataset.invMoved = 'ph-inv-backpack';
             document.getElementById('mobile-inv-backpack-slot').appendChild(section);
         }
+    }
+    const pouchSection = document.getElementById('component-pouch-section');
+    if (pouchSection && !pouchSection.dataset.invMoved) {
+        const ph = document.createElement('div');
+        ph.id = 'ph-inv-pouch';
+        ph.style.display = 'none';
+        pouchSection.parentNode.insertBefore(ph, pouchSection);
+        pouchSection.dataset.invMoved = 'ph-inv-pouch';
+        document.getElementById('mobile-inv-pouch-slot').appendChild(pouchSection);
     }
 };
 
@@ -6584,6 +6838,10 @@ window.initMobileHeader = function() {
                 <input type="text" id="mh-activeConditionsInput" placeholder="Conditions" readonly style="pointer-events: none;">
             </div>
         </div>
+        <div style="display:flex; gap:6px; margin-top:6px;">
+            <button class="rest-btn rest-btn-sr" style="flex:1; padding:6px 4px;" onclick="window.doShortRest()">Short Rest</button>
+            <button class="rest-btn rest-btn-lr" style="flex:1; padding:6px 4px;" onclick="window.doLongRest()">Long Rest</button>
+        </div>
     `;
     sheet.prepend(mh);
 
@@ -6882,43 +7140,32 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("cancelExp").onclick = () =>
       (expModal.style.display = "none");
     document.getElementById("confirmExp").onclick = function () {
-      const totalXp =
+      const totalXpInput =
         parseInt(document.getElementById("expTotalInput").value) || 0;
       const partySize =
         parseInt(document.getElementById("expPartySize").value) || 1;
       if (partySize < 1) return;
-      const toAdd = Math.floor(totalXp / partySize);
+      const toAdd = Math.floor(totalXpInput / partySize);
 
-      let currentXp =
-        parseInt(document.getElementById("experience").value) || 0;
+      const leftoverStored = parseInt(document.getElementById("experience").value) || 0;
       let currentLevel = parseInt(document.getElementById("level").value) || 1;
       const oldLevel = currentLevel;
 
-      currentXp += toAdd;
-      
-      let checkedLevel = true;
-      while (checkedLevel) {
-        let nextLevelEntry = xpTable.find((x) => x.lvl === currentLevel + 1);
-        let currentLevelEntry = xpTable.find((x) => x.lvl === currentLevel);
-        
-        if (!nextLevelEntry || !currentLevelEntry) {
-          checkedLevel = false;
-          break;
-        }
-        
-        let xpNeeded = nextLevelEntry.xp - currentLevelEntry.xp;
-        
-        if (currentXp >= xpNeeded) {
-          currentXp -= xpNeeded;
-          currentLevel++;
-          let newProf = xpTable.find((x) => x.lvl === currentLevel)?.prof;
-          if (newProf) document.getElementById("profBonus").value = newProf;
-        } else {
-          checkedLevel = false;
-        }
-      }
+      // Reconstruct total XP from leftover-within-level + current level threshold
+      const curLvlEntry = xpTable.find(x => x.lvl === currentLevel) || xpTable[0];
+      let currentXp = curLvlEntry.xp + leftoverStored + toAdd;
 
-      document.getElementById("experience").value = currentXp;
+      // Determine the new level from total accumulated XP
+      let newEntry = xpTable[0];
+      for (const entry of xpTable) {
+        if (currentXp >= entry.xp) newEntry = entry;
+        else break;
+      }
+      currentLevel = newEntry.lvl;
+      if (newEntry.prof) document.getElementById("profBonus").value = newEntry.prof;
+
+      // Display leftover XP within the new level (e.g. 0 when exactly on threshold)
+      document.getElementById("experience").value = currentXp - newEntry.xp;
       document.getElementById("level").value = currentLevel;
 
       expModal.style.display = "none";
@@ -6970,8 +7217,8 @@ document.addEventListener("DOMContentLoaded", () => {
       updateSpellDC();
     });
     // Sync class inputs to array on manual edit (single class mode)
-    document.getElementById("charClass").addEventListener("change", (e) => { if(window.characterClasses.length <= 1) { window.characterClasses[0] = window.characterClasses[0] || {}; window.characterClasses[0].name = e.target.value; window.characterClasses[0].level = parseInt(document.getElementById('level').value)||1; } });
-    document.getElementById("charSubclass").addEventListener("change", (e) => { if(window.characterClasses.length <= 1) { window.characterClasses[0] = window.characterClasses[0] || {}; window.characterClasses[0].subclass = e.target.value; } });
+    document.getElementById("charClass").addEventListener("change", (e) => { if(window.characterClasses.length <= 1) { window.characterClasses[0] = window.characterClasses[0] || {}; window.characterClasses[0].name = e.target.value; window.characterClasses[0].level = parseInt(document.getElementById('level').value)||1; } if (window.updateComponentPouchVisibility) window.updateComponentPouchVisibility(); });
+    document.getElementById("charSubclass").addEventListener("change", (e) => { if(window.characterClasses.length <= 1) { window.characterClasses[0] = window.characterClasses[0] || {}; window.characterClasses[0].subclass = e.target.value; } if (window.updateComponentPouchVisibility) window.updateComponentPouchVisibility(); });
 
     document
       .getElementById("spellAbility")
@@ -7154,9 +7401,17 @@ document.addEventListener("DOMContentLoaded", () => {
           console.error("Error adding item:", item, e);
         }
       });
+      const cpList = document.getElementById("componentPouchList");
+      if (cpList) cpList.innerHTML = "";
+      (data.componentPouch || []).forEach((item) => {
+        try {
+          addInventoryItem(item.name, item.qty, item.weight, false, item.description, true, 'componentPouchList');
+        } catch (e) {}
+      });
 
       if (data.spellSlotsData) spellSlotsData = data.spellSlotsData;
       if (data.resourcesData) resourcesData = data.resourcesData;
+      if (data.hitDiceUsed !== undefined) hitDiceUsed = data.hitDiceUsed;
       
       document.getElementById("cantripList").innerHTML = "";
       (data.cantripsList || []).forEach((s) => {
@@ -7197,6 +7452,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (data.vulnerabilities !== undefined) { const el = document.getElementById('vulnerabilities'); if (el) el.value = data.vulnerabilities; }
       // Backward compat: old saved data had a single 'defenses' field
       if (data.defenses && !data.resistances) { const el = document.getElementById('resistances'); if (el) el.value = data.defenses; }
+      // Backward compat: old saves stored XP as 'xp' key; now stored as 'experience'
+      if (data.xp !== undefined && data.experience === undefined) { const el = document.getElementById('experience'); if (el) el.value = data.xp; }
       if (data.featuresFilter) window.switchFeaturesFilter(data.featuresFilter);
     } else {
       document.querySelectorAll("input, textarea, select").forEach((el) => {
@@ -7217,6 +7474,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     updateModifiers();
+    if (window.updateComponentPouchVisibility) window.updateComponentPouchVisibility();
     renderSpellSlots();
     renderResources();
     updateHpBar();
@@ -7255,7 +7513,8 @@ document.addEventListener("DOMContentLoaded", () => {
         '#expModal',
         '#languageSearchModal',
         '#hpManageModal',
-        '#hpSettingsModal'
+        '#hpSettingsModal',
+        '#restModal'
     ];
 
     const checkModals = () => {
@@ -8202,6 +8461,48 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
                     });
                     if (!data2) { spellTableWrap.innerHTML = '<div style="padding:10px; color:var(--red);">No data loaded.</div>'; return; }
 
+                    // Pass 1: Build spellClassMap from book/class description data
+                    const lvlUpSpellClassMap = {};
+                    const processLvlUpEntries = (entries, className) => {
+                        if (!entries || !Array.isArray(entries)) return;
+                        const addSpellRef = (sn, cls) => {
+                            if (!sn || !cls) return;
+                            const key = sn.toLowerCase().trim();
+                            if (!lvlUpSpellClassMap[key]) lvlUpSpellClassMap[key] = new Set();
+                            lvlUpSpellClassMap[key].add(cls.toLowerCase());
+                        };
+                        const extractSpellTags = (str, cls) => {
+                            let m;
+                            const re = /{@spell ([^}|]+)/g;
+                            while ((m = re.exec(str)) !== null) addSpellRef(m[1], cls);
+                        };
+                        entries.forEach(entry => {
+                            if (!entry) return;
+                            // String entries may contain {@spell ...} tags inline
+                            if (typeof entry === 'string') { extractSpellTags(entry, className); return; }
+                            let cls = className;
+                            if (entry.name && typeof entry.name === 'string' && entry.name.endsWith(' Spells')) {
+                                cls = entry.name.replace(' Spells', '').trim();
+                            }
+                            if (cls && entry.items && Array.isArray(entry.items)) {
+                                entry.items.forEach(itemStr => {
+                                    if (typeof itemStr === 'string') extractSpellTags(itemStr, cls);
+                                });
+                            }
+                            if (entry.entries) processLvlUpEntries(entry.entries, cls);
+                        });
+                    };
+                    data2.forEach(file => {
+                        if (!file.name.toLowerCase().endsWith('.json')) return;
+                        try {
+                            const json = JSON.parse(file.content);
+                            if (json.class) json.class.forEach(cls => processLvlUpEntries(cls.classFeatures || [], cls.name));
+                            if (json.classFeature) json.classFeature.forEach(f => processLvlUpEntries(f.entries || [], f.className));
+                            if (json.subclassFeature) json.subclassFeature.forEach(f => processLvlUpEntries(f.entries || [], f.className));
+                        } catch (e) {}
+                    });
+
+                    // Pass 2: Build spell map filtered by class
                     const spellMap = new Map();
                     data2.forEach(file => {
                         if (!file.name.toLowerCase().endsWith('.json')) return;
@@ -8218,6 +8519,11 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
                                     if (s.classes.fromClassList && s.classes.fromClassList.some(checkC)) ok = true;
                                     if (!ok && s.classes.fromClassListVariant && s.classes.fromClassListVariant.some(checkC)) ok = true;
                                     if (!ok && Array.isArray(s.classes) && s.classes.some(checkC)) ok = true;
+                                }
+                                // Enrich via book-derived class map (stored lowercase)
+                                if (!ok) {
+                                    const mapped = lvlUpSpellClassMap[s.name.toLowerCase().trim()];
+                                    if (mapped && mapped.has(filterClass.toLowerCase())) ok = true;
                                 }
                                 if (!ok && charSubclass && s.classes && s.classes.fromSubclass) {
                                     if (s.classes.fromSubclass.some(sc => sc.class && sc.class.name.toLowerCase() === tgt && sc.subclass && sc.subclass.shortName.toLowerCase() === charSubclass.toLowerCase())) ok = true;

@@ -498,6 +498,10 @@
       <div class="sheet-section">
       <h2 class="section-title" id="section-resources">Class Resources</h2>
       <div id="resourcesContainer"></div>
+      <div style="display:flex; gap:8px; margin-top:8px; margin-bottom:4px;">
+        <button class="rest-btn rest-btn-sr" style="flex:1;" onclick="window.doShortRest()">Short Rest</button>
+        <button class="rest-btn rest-btn-lr" style="flex:1;" onclick="window.doLongRest()">Long Rest</button>
+      </div>
       <button class="add-feature-btn" onclick="addResource()">+ Add Resource</button>
       </div>
 
@@ -624,6 +628,24 @@
         <div class="total-weight-box" style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
           <div style="display:flex; align-items:center; gap:6px;">Carrying Capacity: <span id="totalWeightVal">0</span> / <span id="maxWeightVal">150</span> lbs <button class="skill-info-btn" onclick="window.openEncumbranceChart()" title="View weight breakdown">ℹ</button></div>
           <div style="font-size: 0.8rem; font-style: italic; opacity: 0.8">Max Drag/Lift: <span id="maxDragVal">300</span> lbs</div>
+        </div>
+        </div>
+
+        <div class="sheet-section-col" id="component-pouch-section" style="display:none;">
+        <h3 class="section-title">Component Pouch</h3>
+        <div class="inventory-header">
+          <span></span>
+          <span></span>
+          <span>Item Name</span>
+          <span style="text-align: center">Qty</span>
+          <span style="text-align: center">Lbs</span>
+          <span style="text-align: center">Info</span>
+          <span></span>
+        </div>
+        <div id="componentPouchList" class="inventory-list" style="min-height: 40px"></div>
+        <div style="display: flex; gap: 10px;">
+          <button class="add-feature-btn" onclick="window.addComponentPouchItem()">+ Add Custom</button>
+          <button id="btn-search-items-pouch" class="add-feature-btn" onclick="window.openItemSearch('componentPouchList')" style="display: none;">Search Items</button>
         </div>
         </div>
 

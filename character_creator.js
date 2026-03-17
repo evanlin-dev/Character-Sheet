@@ -7812,6 +7812,79 @@ document.addEventListener('DOMContentLoaded', () => {
             deityContent = selectedDeity + (selectedDeitySource ? ` [${selectedDeitySource}]` : "");
         }
 
+        // ── Build class resources ────────────────────────────────────────────
+        const CREATOR_RESOURCE_DEFS = {
+            'Barbarian': [
+                { name: 'Rages', colLabel: /^Rages$/i, reset: 'lr' }
+            ],
+            'Bard': [
+                { name: 'Bardic Inspiration', formula: (lvl, chaMod) => Math.max(1, chaMod), levelMin: 1, reset: 'lr' }
+            ],
+            'Cleric': [
+                { name: 'Channel Divinity', formula: (lvl) => lvl >= 18 ? 3 : lvl >= 6 ? 2 : 1, levelMin: 2, reset: 'sr' }
+            ],
+            'Druid': [
+                { name: 'Wild Shape', formula: () => 2, levelMin: 2, reset: 'sr' }
+            ],
+            'Fighter': [
+                { name: 'Second Wind', formula: () => 1, levelMin: 1, reset: 'sr' },
+                { name: 'Action Surge', formula: (lvl) => lvl >= 17 ? 2 : 1, levelMin: 2, reset: 'sr' },
+                { name: 'Indomitable', formula: (lvl) => lvl >= 17 ? 3 : lvl >= 13 ? 2 : 1, levelMin: 9, reset: 'lr' }
+            ],
+            'Monk': [
+                { name: 'Discipline Points', colLabel: /^Discipline Points$/i, reset: 'sr' },
+                { name: 'Ki Points', colLabel: /^Ki Points$/i, reset: 'sr' }
+            ],
+            'Paladin': [
+                { name: 'Lay on Hands', formula: (lvl) => lvl * 5, levelMin: 1, reset: 'lr' },
+                { name: 'Channel Divinity', formula: () => 1, levelMin: 3, reset: 'sr' }
+            ],
+            'Ranger': [
+                { name: "Hunter's Mark", formula: () => 1, levelMin: 1, reset: 'lr' }
+            ],
+            'Rogue': [
+                { name: 'Cunning Strike', formula: () => 1, levelMin: 5, reset: 'sr' }
+            ],
+            'Sorcerer': [
+                { name: 'Sorcery Points', colLabel: /^Sorcery Points$/i, reset: 'lr' }
+            ],
+            'Warlock': [
+                { name: 'Mystic Arcanum', formula: (lvl) => Math.max(0, Math.min(4, Math.floor((lvl - 9) / 2) + 1)), levelMin: 11, reset: 'lr' }
+            ],
+            'Wizard': [
+                { name: 'Arcane Recovery', formula: () => 1, levelMin: 1, reset: 'lr' }
+            ]
+        };
+
+        const _chaMod = Math.floor((scores.Charisma - 10) / 2);
+        const _lvlIdx  = selectedLevel - 1;
+        const _stripTag = s => s.replace(/\{@\w+\s*([^}]+)?\}/g, '$1').trim();
+        const _getColVal = (regex) => {
+            const candidates = allClasses.filter(c => c.name.toLowerCase() === (selectedClass || '').toLowerCase());
+            const co = candidates.find(c => c.source === 'XPHB') || candidates.find(c => c.source === 'PHB') || candidates[0];
+            if (!co || !co.classTableGroups) return null;
+            for (const grp of co.classTableGroups) {
+                if (!grp.colLabels) continue;
+                const ci = grp.colLabels.findIndex(l => regex.test(_stripTag(l)));
+                if (ci !== -1 && grp.rows && grp.rows[_lvlIdx]) {
+                    const cell = grp.rows[_lvlIdx][ci];
+                    const v = parseInt(typeof cell === 'object' ? (cell.value ?? cell) : cell);
+                    if (!isNaN(v)) return v;
+                }
+            }
+            return null;
+        };
+
+        const resourcesData = [];
+        const _resDefs = CREATOR_RESOURCE_DEFS[selectedClass] || [];
+        for (const def of _resDefs) {
+            if (def.levelMin && selectedLevel < def.levelMin) continue;
+            let maxVal = def.colLabel ? _getColVal(def.colLabel) : null;
+            if (maxVal === null && def.formula) maxVal = def.formula(selectedLevel, _chaMod);
+            if (!maxVal || maxVal <= 0) continue;
+            resourcesData.push({ name: def.name, max: maxVal, used: 0, reset: def.reset, auto: false });
+        }
+
         const charData = {
             charID: crypto.randomUUID(),
             charName: name,
@@ -7852,6 +7925,7 @@ document.addEventListener('DOMContentLoaded', () => {
             defenses: Array.from(defenses).join(", "),
             spellAbility,
             spellSlotsData,
+            resourcesData,
             cantripsList,
             spellsList,
             preparedSpellsList: []
