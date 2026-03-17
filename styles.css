@@ -1543,13 +1543,14 @@ body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) {
   body:not(.dense-mode) .slot-btn-small { width: 22px; height: 22px; font-size: 0.8rem; }
 
   /* Compress Weapon Attacks on Mobile/Tablet */
-  body:not(.dense-mode) .weapon-item { padding: 8px !important; padding-right: 32px !important; margin-bottom: 8px; }
+  body:not(.dense-mode) .weapon-item { padding: 8px !important; padding-right: 76px !important; margin-bottom: 8px; }
   body:not(.dense-mode) .weapon-item > div { gap: 6px !important; }
   body:not(.dense-mode) .weapon-item .grid-3 { grid-template-columns: 1fr 55px 85px !important; gap: 6px !important; }
   body:not(.dense-mode) .weapon-item .field { padding: 6px 8px; }
   body:not(.dense-mode) .weapon-item .field-label { font-size: 0.65rem; margin-bottom: 2px; }
   body:not(.dense-mode) .weapon-item input { font-size: 1rem; min-height: 24px; height: 24px; padding: 0; }
-  body:not(.dense-mode) .weapon-item .delete-feature-btn { top: 6px !important; right: 4px !important; width: 24px !important; }
+  body:not(.dense-mode) .weapon-item .delete-feature-btn { width: 32px !important; height: 32px !important; }
+  body:not(.dense-mode) .weapon-item .weapon-formula-btn { width: 32px !important; height: 32px !important; }
 }
 
 @media (max-width: 768px) {
@@ -3085,8 +3086,17 @@ body.swap-scores.dense-mode .stat-modifier input {
     background: transparent; border: 1px solid var(--gold); border-radius: 3px;
     color: var(--ink-light); font-size: 0.75rem; cursor: pointer;
     padding: 1px 4px; line-height: 1; flex-shrink: 0;
+    min-width: 28px; min-height: 28px; display: inline-flex; align-items: center; justify-content: center;
 }
 .res-settings-btn:hover { background: var(--gold); color: var(--parchment); }
+@media (max-width: 900px) {
+    .res-settings-btn {
+        min-width: 36px; min-height: 36px; padding: 4px 8px; font-size: 0.9rem;
+    }
+    .weapon-formula-btn, .delete-feature-btn {
+        width: 32px !important; height: 32px !important; font-size: 1rem !important;
+    }
+}
 .res-badge-both { background: #e8e4f8; color: #5533aa; border: 1px solid #b8a8e8; }
 
 /* Update res-badge to be more compact with full text */

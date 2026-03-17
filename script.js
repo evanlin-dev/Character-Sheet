@@ -3550,16 +3550,11 @@ window.autoDetectClassResources = async function() {
 
 // Short rest: restore SR resources, re-render
 /* ---- Rest Modals ---- */
-window._srHpGained = 0; // track HP gained this short rest session
 
 function _getHitDieSize() {
     const hd = (document.getElementById('hitDice')?.value || '1d8').toLowerCase().trim();
     const m = /d(\d+)/.exec(hd);
     return m ? parseInt(m[1]) : 8;
-}
-function _getConMod() {
-    const con = parseInt(document.getElementById('con')?.value) || 10;
-    return Math.floor((con - 10) / 2);
 }
 function _getLevel() {
     return parseInt(document.getElementById('level')?.value) || 1;
@@ -3569,7 +3564,6 @@ function _availableHitDice() {
 }
 
 window.doShortRest = function() {
-    window._srHpGained = 0;
     let modal = document.getElementById('restModal');
     if (!modal) {
         modal = document.createElement('div');
@@ -3577,66 +3571,56 @@ window.doShortRest = function() {
         modal.className = 'info-modal-overlay';
         document.body.appendChild(modal);
     }
-    const _renderSR = () => {
-        const curHp = parseInt(document.getElementById('hp')?.value) || 0;
-        const maxHp = parseInt(document.getElementById('maxHp')?.value) || 1;
-        const avail = _availableHitDice();
-        const dieSize = _getHitDieSize();
-        const conMod = _getConMod();
-        const conStr = conMod >= 0 ? `+${conMod}` : `${conMod}`;
-        modal.innerHTML = `
-            <div class="info-modal-content" style="max-width:340px;">
-                <button class="info-modal-close" onclick="document.getElementById('restModal').style.display='none'">×</button>
-                <h3 class="info-modal-title">Short Rest</h3>
-                <div style="display:flex; gap:12px; margin-bottom:14px;">
-                    <div style="text-align:center; flex:1;">
-                        <div style="font-family:'Cinzel',serif; font-size:0.7rem; color:var(--ink-light); margin-bottom:4px;">HP</div>
-                        <div style="font-family:'Cinzel',serif; font-size:1.1rem; font-weight:700;">${curHp} / ${maxHp}</div>
-                    </div>
-                    <div style="text-align:center; flex:1;">
-                        <div style="font-family:'Cinzel',serif; font-size:0.7rem; color:var(--ink-light); margin-bottom:4px;">Hit Dice</div>
-                        <div style="font-family:'Cinzel',serif; font-size:1.1rem; font-weight:700;">${avail} / ${_getLevel()} (d${dieSize})</div>
-                    </div>
-                    <div style="text-align:center; flex:1;">
-                        <div style="font-family:'Cinzel',serif; font-size:0.7rem; color:var(--ink-light); margin-bottom:4px;">Gained</div>
-                        <div id="sr-gained" style="font-family:'Cinzel',serif; font-size:1.1rem; font-weight:700; color:var(--green, #3a7a3a);">+${window._srHpGained}</div>
-                    </div>
-                </div>
-                <button class="btn" style="width:100%; margin-bottom:8px;" ${avail <= 0 || curHp >= maxHp ? 'disabled style="opacity:0.5;width:100%;margin-bottom:8px;"' : ''} onclick="window._rollHitDie()">
-                    Roll Hit Die (d${dieSize} ${conStr})
-                </button>
-                <div style="font-size:0.78rem; color:var(--ink-light); margin-bottom:14px; font-style:italic;">
-                    Short rest also restores short-rest resources.
-                </div>
-                <div style="display:flex; gap:8px;">
-                    <button class="btn" style="flex:1;" onclick="window._applyShortRest()">Finish Rest</button>
-                    <button class="btn btn-secondary" style="flex:1;" onclick="document.getElementById('restModal').style.display='none'">Cancel</button>
-                </div>
-            </div>`;
-        modal.style.display = 'flex';
-    };
-    window._srRender = _renderSR;
-    _renderSR();
-};
-
-window._rollHitDie = function() {
-    if (_availableHitDice() <= 0) return;
-    const dieSize = _getHitDieSize();
-    const conMod = _getConMod();
-    const roll = Math.floor(Math.random() * dieSize) + 1;
-    const gained = Math.max(1, roll + conMod);
-    hitDiceUsed++;
-    const hpEl = document.getElementById('hp');
+    const curHp = parseInt(document.getElementById('hp')?.value) || 0;
     const maxHp = parseInt(document.getElementById('maxHp')?.value) || 1;
-    let curHp = parseInt(hpEl?.value) || 0;
-    curHp = Math.min(maxHp, curHp + gained);
-    if (hpEl) hpEl.value = curHp;
-    window._srHpGained += gained;
-    if (window.updateHpBar) window.updateHpBar();
-    if (window._srRender) window._srRender();
+    const avail = _availableHitDice();
+    const dieSize = _getHitDieSize();
+    const srRes = resourcesData.filter(r => r.reset === 'sr' || r.reset === 'both');
+    modal.innerHTML = `
+        <div class="info-modal-content" style="max-width:320px;">
+            <button class="info-modal-close" onclick="document.getElementById('restModal').style.display='none'">×</button>
+            <h3 class="info-modal-title">Short Rest</h3>
+            <div style="display:flex; gap:12px; margin-bottom:16px;">
+                <div style="text-align:center; flex:1;">
+                    <div style="font-family:'Cinzel',serif; font-size:0.7rem; color:var(--ink-light); margin-bottom:4px;">HP</div>
+                    <div style="font-family:'Cinzel',serif; font-size:1.1rem; font-weight:700;">${curHp} / ${maxHp}</div>
+                </div>
+                <div style="text-align:center; flex:1;">
+                    <div style="font-family:'Cinzel',serif; font-size:0.7rem; color:var(--ink-light); margin-bottom:4px;">Hit Dice</div>
+                    <div style="font-family:'Cinzel',serif; font-size:1.1rem; font-weight:700;">${avail} / ${_getLevel()} (d${dieSize})</div>
+                </div>
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="font-family:'Cinzel',serif; font-size:0.75rem; color:var(--ink-light); display:block; margin-bottom:6px;">HP GAINED (roll your dice, then enter total)</label>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <input id="srHpInput" type="number" min="0" value="0"
+                        style="width:80px; padding:6px 8px; border:1px solid var(--gold); border-radius:4px; background:var(--parchment); font-family:'Cinzel',serif; font-size:1.1rem; font-weight:700; text-align:center;">
+                    <span style="font-family:'Crimson Text',serif; font-size:0.9rem; color:var(--ink-light);">hit dice used:</span>
+                    <input id="srHdInput" type="number" min="0" max="${avail}" value="0"
+                        style="width:56px; padding:6px 8px; border:1px solid var(--gold); border-radius:4px; background:var(--parchment); font-family:'Cinzel',serif; font-size:1.1rem; font-weight:700; text-align:center;">
+                </div>
+            </div>
+            ${srRes.length > 0 ? `<div style="font-size:0.82rem; color:var(--ink-light); margin-bottom:14px; font-style:italic; font-family:'Crimson Text',serif;">Restores: ${srRes.map(r => r.name).join(', ')}</div>` : ''}
+            <div style="display:flex; gap:8px;">
+                <button class="btn" style="flex:1;" onclick="window._applyShortRest()">Finish Rest</button>
+                <button class="btn btn-secondary" style="flex:1;" onclick="document.getElementById('restModal').style.display='none'">Cancel</button>
+            </div>
+        </div>`;
+    modal.style.display = 'flex';
 };
 
 window._applyShortRest = function() {
+    // Apply HP gain
+    const hpGained = parseInt(document.getElementById('srHpInput')?.value) || 0;
+    const hdUsedNow = parseInt(document.getElementById('srHdInput')?.value) || 0;
+    if (hpGained > 0) {
+        const hpEl = document.getElementById('hp');
+        const maxHp = parseInt(document.getElementById('maxHp')?.value) || 1;
+        if (hpEl) hpEl.value = Math.min(maxHp, (parseInt(hpEl.value) || 0) + hpGained);
+        if (window.updateHpBar) window.updateHpBar();
+    }
+    hitDiceUsed = Math.min(_getLevel(), hitDiceUsed + hdUsedNow);
+    // Restore SR resources
     resourcesData.forEach(r => { if (r.reset === 'sr' || r.reset === 'both') r.used = 0; });
     renderResources();
     if (document.getElementById('mobile-resources-card')) window.renderMobileResources();
@@ -3645,13 +3629,7 @@ window._applyShortRest = function() {
 };
 
 window.doLongRest = function() {
-    const level = _getLevel();
-    const hdRecover = Math.max(1, Math.floor(level / 2));
-    const hdNew = Math.max(0, hitDiceUsed - hdRecover);
     const maxHp = parseInt(document.getElementById('maxHp')?.value) || 1;
-    const slotsCount = spellSlotsData.filter(s => s.used > 0).length;
-    const resCount = resourcesData.filter(r => r.used > 0).length;
-
     let modal = document.getElementById('restModal');
     if (!modal) {
         modal = document.createElement('div');
@@ -3660,20 +3638,22 @@ window.doLongRest = function() {
         document.body.appendChild(modal);
     }
     modal.innerHTML = `
-        <div class="info-modal-content" style="max-width:320px;">
+        <div class="info-modal-content" style="max-width:300px;">
             <button class="info-modal-close" onclick="document.getElementById('restModal').style.display='none'">×</button>
             <h3 class="info-modal-title">Long Rest</h3>
-            <div style="margin-bottom:16px; display:flex; flex-direction:column; gap:8px;">
+            <div style="margin-bottom:18px; display:flex; flex-direction:column; gap:10px;">
                 <div style="display:flex; align-items:center; gap:10px; font-family:'Crimson Text',serif; font-size:1rem;">
                     <span style="color:var(--green,#3a7a3a); font-size:1.1rem;">✓</span>
                     <span>HP restored to <strong>${maxHp}</strong></span>
                 </div>
-                ${slotsCount > 0 ? `<div style="display:flex; align-items:center; gap:10px; font-family:'Crimson Text',serif; font-size:1rem;"><span style="color:var(--green,#3a7a3a); font-size:1.1rem;">✓</span><span>All spell slots restored</span></div>` : ''}
                 <div style="display:flex; align-items:center; gap:10px; font-family:'Crimson Text',serif; font-size:1rem;">
                     <span style="color:var(--green,#3a7a3a); font-size:1.1rem;">✓</span>
-                    <span>Recover <strong>${hdRecover}</strong> hit ${hdRecover === 1 ? 'die' : 'dice'} (${hdNew} used after)</span>
+                    <span>All spell slots restored</span>
                 </div>
-                ${resCount > 0 ? `<div style="display:flex; align-items:center; gap:10px; font-family:'Crimson Text',serif; font-size:1rem;"><span style="color:var(--green,#3a7a3a); font-size:1.1rem;">✓</span><span>All class resources restored</span></div>` : ''}
+                <div style="display:flex; align-items:center; gap:10px; font-family:'Crimson Text',serif; font-size:1rem;">
+                    <span style="color:var(--green,#3a7a3a); font-size:1.1rem;">✓</span>
+                    <span>All resources restored</span>
+                </div>
             </div>
             <div style="display:flex; gap:8px;">
                 <button class="btn" style="flex:1;" onclick="window._applyLongRest()">Take Long Rest</button>
@@ -3684,18 +3664,12 @@ window.doLongRest = function() {
 };
 
 window._applyLongRest = function() {
-    const level = _getLevel();
-    const hdRecover = Math.max(1, Math.floor(level / 2));
-    hitDiceUsed = Math.max(0, hitDiceUsed - hdRecover);
-    // Restore HP
     const maxHp = parseInt(document.getElementById('maxHp')?.value) || 1;
     const hpEl = document.getElementById('hp');
     if (hpEl) hpEl.value = maxHp;
     if (window.updateHpBar) window.updateHpBar();
-    // Restore spell slots
     spellSlotsData.forEach(s => s.used = 0);
     renderSpellSlots();
-    // Restore all resources
     resourcesData.forEach(r => r.used = 0);
     renderResources();
     if (document.getElementById('mobile-resources-card')) window.renderMobileResources();
