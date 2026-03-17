@@ -7569,9 +7569,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const finalSpellsSet = new Set(selectedSpells);
 
-        // Gather spells from features
+        // Gather spells from features — each entry tagged with scanText:true only for
+        // species/subrace traits where {@spell} in text signals an actual grant, NOT for
+        // class features where mentions are flavor examples (e.g. Wizard Spellbook).
         const featuresForSpells = [];
-        
+
         // Optional Features
         selectedOptionalFeatures.forEach(name => {
             let featName = name;
@@ -7582,43 +7584,44 @@ document.addEventListener('DOMContentLoaded', () => {
             const featCandidates = allFeats.filter(f => f.name === featName);
             let feat = candidates.find(f => f.source === 'XPHB') || candidates.find(f => f.source === 'PHB') || candidates[0];
             if (!feat) feat = featCandidates.find(f => f.source === 'XPHB') || featCandidates.find(f => f.source === 'PHB') || featCandidates[0];
-            if (feat) featuresForSpells.push(feat);
+            if (feat) featuresForSpells.push({ feat, scanText: false });
         });
 
-        // Class Features
+        // Class Features — do NOT text-scan; skip `known` (Wizard spellbook suggestions, not grants)
         if (selectedClass) {
             const referencedFeatures = getReferencedClassFeatures(selectedClass, currentClassSource);
-            featuresForSpells.push(...allClassFeatures.filter(f => 
-                f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && 
-                f.source === currentClassSource && 
-                !f.subclassShortName && 
+            allClassFeatures.filter(f =>
+                f.className && f.className.toLowerCase() === selectedClass.toLowerCase() &&
+                f.source === currentClassSource &&
+                !f.subclassShortName &&
                 f.level <= selectedLevel &&
                 !referencedFeatures.has(f.name)
-            ));
+            ).forEach(f => featuresForSpells.push({ feat: f, scanText: false, skipKnown: true }));
         }
-        // Subclass Features
+        // Subclass Features — do NOT text-scan; DO include `known` (e.g. Bladesinger bonus spells)
         if (selectedClass && selectedSubclass) {
-            featuresForSpells.push(...allSubclassFeatures.filter(f => f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && f.subclassShortName === selectedSubclass && f.source === selectedSubclassSource && f.level <= selectedLevel));
-            
-            const subclassObj = allSubclasses.find(s => 
-                s.className && s.className.toLowerCase() === selectedClass.toLowerCase() && 
-                s.shortName === selectedSubclass && 
+            allSubclassFeatures.filter(f => f.className && f.className.toLowerCase() === selectedClass.toLowerCase() && f.subclassShortName === selectedSubclass && f.source === selectedSubclassSource && f.level <= selectedLevel)
+                .forEach(f => featuresForSpells.push({ feat: f, scanText: false, skipKnown: false }));
+
+            const subclassObj = allSubclasses.find(s =>
+                s.className && s.className.toLowerCase() === selectedClass.toLowerCase() &&
+                s.shortName === selectedSubclass &&
                 s.source === selectedSubclassSource
             );
-            if (subclassObj) featuresForSpells.push(subclassObj);
+            if (subclassObj) featuresForSpells.push({ feat: subclassObj, scanText: false, skipKnown: false });
         }
-        // Species
+        // Species — text-scan OK: racial traits use {@spell} to signal actual innate grants
         if (selectedSpecies) {
              const candidates = allSpecies.filter(r => r.name === selectedSpecies);
              let race = candidates.find(r => r.source === 'XPHB') || candidates.find(r => r.source === 'PHB') || candidates[0];
-             if (race) featuresForSpells.push(race);
+             if (race) featuresForSpells.push({ feat: race, scanText: true });
         }
-        // Subrace
+        // Subrace — text-scan OK
         if (selectedSubrace) {
-            featuresForSpells.push(selectedSubrace);
+            featuresForSpells.push({ feat: selectedSubrace, scanText: true });
         }
 
-        featuresForSpells.forEach(feat => {
+        featuresForSpells.forEach(({ feat, scanText, skipKnown }) => {
             // Check for table-based spells (e.g. Tiefling Legacies)
             if (selectedSpeciesOption && (feat.name === selectedSpecies || (feat._copy && feat._copy.name === selectedSpecies))) {
                 const tableSpells = getTableSpells(feat, selectedSpeciesOption);
@@ -7636,7 +7639,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const entryName = entry.name.toLowerCase();
                         let isMatch = false;
                         if (selectedSpeciesOption && selectedSpeciesOption.toLowerCase() === entryName) isMatch = true;
-                        
+
                         // Also check optional features context
                         if (!isMatch) {
                             for (const sel of selectedOptionalFeatures) {
@@ -7663,33 +7666,39 @@ document.addEventListener('DOMContentLoaded', () => {
                             } else if (typeof val === 'object') extract(val);
                         });
                     };
+                    // innate   = auto-granted (e.g. racial innate casting) → always include
+                    // prepared = always-prepared (e.g. Paladin oath, Cleric domain) → always include
+                    // known    = skip for base class features (Wizard spellbook suggestions);
+                    //            include for subclass features (e.g. Bladesinger bonus spells)
                     if (entry.innate) extract(entry.innate);
-                    if (entry.known) extract(entry.known);
                     if (entry.prepared) extract(entry.prepared);
+                    if (!skipKnown && entry.known) extract(entry.known);
                 });
             }
 
-            // Enhanced Spell Extraction: Scan text for {@spell name}
-            // This catches spells mentioned in traits that lack 'additionalSpells' structure
-            const scanTextForSpells = (text) => {
-                const regex = /{@spell ([^}|]+)/g;
-                let match;
-                while ((match = regex.exec(text)) !== null) {
-                    let name = match[1].trim().split('|')[0];
-                    name = name.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase());
-                    finalSpellsSet.add(name);
-                }
-            };
-            const traverseEntries = (obj) => {
-                if (!obj) return;
-                if (typeof obj === 'string') scanTextForSpells(obj);
-                else if (Array.isArray(obj)) obj.forEach(traverseEntries);
-                else if (typeof obj === 'object') {
-                    if (obj.entries) traverseEntries(obj.entries);
-                    if (obj.items) traverseEntries(obj.items);
-                }
-            };
-            traverseEntries(feat.entries);
+            // Text-scan for {@spell name} — only for species/subrace traits where
+            // {@spell} in entries text signals an innate/granted spell, not an example.
+            if (scanText) {
+                const scanTextForSpells = (text) => {
+                    const regex = /{@spell ([^}|]+)/g;
+                    let match;
+                    while ((match = regex.exec(text)) !== null) {
+                        let name = match[1].trim().split('|')[0];
+                        name = name.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase());
+                        finalSpellsSet.add(name);
+                    }
+                };
+                const traverseEntries = (obj) => {
+                    if (!obj) return;
+                    if (typeof obj === 'string') scanTextForSpells(obj);
+                    else if (Array.isArray(obj)) obj.forEach(traverseEntries);
+                    else if (typeof obj === 'object') {
+                        if (obj.entries) traverseEntries(obj.entries);
+                        if (obj.items) traverseEntries(obj.items);
+                    }
+                };
+                traverseEntries(feat.entries);
+            }
         });
 
         finalSpellsSet.forEach(sName => {
