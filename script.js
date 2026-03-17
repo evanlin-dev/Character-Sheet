@@ -5410,138 +5410,172 @@ window.openHelpPage = function() {
 };
 
 window._buildHelpContent = function() {
-    const sections = [
-        {
-            icon: '🖥️',
-            title: 'Desktop vs Mobile Layout',
-            desc: '<b>Full Sheet (Desktop/Normal Mode):</b> All sections are visible at once in a multi-column layout — ability scores, combat stats, spells, inventory, and more side by side. Best for desktops and large screens.<br><b>Mobile / Tablet:</b> The sheet is still accessible but a <b>nav button (⊞)</b> appears in the bottom-right corner. Tap it to switch between focused views (Stats, Actions, Spells, etc.) for easier one-handed use.<br><br><b>⚠️ Some edits can only be done in the full sheet view.</b> The mobile nav views are optimized for reference and quick updates during play. For things like adding new features, editing weapon stats, managing spell details, or configuring armor training, switch back to Full Sheet using the nav button.',
-        },
-        {
-            icon: '📐',
-            title: 'Dense Mode vs Normal Mode',
-            desc: '<b>Normal Mode:</b> Full layout with large fonts, spacious sections, and an expanded sidebar. Great for reading and editing at a desk.<br><b>Dense Mode:</b> A compact header bar replaces the top of the sheet, showing your character name, race/class, and level. Sections are tighter. Toggle via <b>Menu → Toggle Dense View</b>.',
-            example: 'Dense: header shows "Thorn Brightblade — Half-Elf Ranger Lv 8" at the top, freeing vertical space.'
-        },
-        {
-            icon: '🎲',
-            title: 'Ability Scores',
-            desc: 'The 6 core stats (STR, DEX, CON, INT, WIS, CHA). Type a score in the box — the modifier is calculated automatically. On mobile/tablet, use the <b>Stats</b> nav view.',
-            example: 'STR 18 → modifier +4. Used for melee attacks, athletics, and strength saves.'
-        },
-        {
-            icon: '🛡️🎯',
-            title: 'Saving Throws & Skills',
-            desc: 'Click the <b>checkbox</b> next to a save or skill to mark proficiency — this adds your Proficiency Bonus to that roll.<br><br>When a skill or save is proficient, an <b>E</b> button appears beside the checkbox. Click it to grant <b>Expertise</b>, which doubles the proficiency bonus for that skill or save.<br><br>The circular button on each skill cycles <b>advantage / disadvantage</b>. The modifier is displayed on the right.<br><br>On tablet, skills display in 2 columns (top-to-bottom order); on mobile, 1 column. Both are accessible via the <b>Stats</b> nav view.',
-            example: 'Stealth (DEX, proficient + Expertise, Prof +3): +2 DEX mod + +6 (3×2) = +8. WIS Save (proficient): +2 + +3 = +5.'
-        },
-        {
-            icon: '⚔️',
-            title: 'Combat Stats & HP',
-            desc: 'Track AC, Initiative (auto-calculated from DEX), Speed, HP, Temp HP, Hit Dice, size, and proficiency bonus. <b>Attacks / Action</b> sets how many attacks you can make.<br><br>Click <b>⚡</b> next to HP to open the HP manager for healing and damage. On mobile/tablet, you can also <b>tap directly on the HP value</b> to open the same popup.',
-            example: 'Fighter Lv 5: HP 44/52, AC 18, Speed 30, Attacks/Action: 2.'
-        },
-        {
-            icon: '🗡️',
-            title: 'Weapon Attacks',
-            desc: 'Add weapons with attack bonus and damage. Click <b>?</b> next to the section title for weapon mastery info. Weapons appear in the Attacks section of the full sheet.',
-            example: 'Longsword: +6 to hit, 1d8+4 slashing. Rapier: +6 to hit, 1d8+4 piercing.'
-        },
-        {
-            icon: '✨',
-            title: 'Class Resources',
-            desc: 'Track named resources (Ki, Bardic Inspiration, Lay on Hands, etc.). Click slots to use/restore them. Use +/- to change the max. Visible in the <b>Actions</b> nav view on mobile.',
-            example: 'Bardic Inspiration (d8): ●●●○○ — 3 used, 2 remaining.'
-        },
-        {
-            icon: '⚡',
-            title: 'Action Economy',
-            desc: 'Add your actions, bonus actions, and reactions manually. <b>Spells with matching casting times appear automatically</b> (e.g. a spell with "1 action" shows under Actions). Tap a spell to expand its description. Set <b>Attacks / Action</b> in Combat Stats to display it in the mobile view.',
-            example: 'Actions: Attack ×2, Misty Step (spell). Bonus: Cunning Action. Reaction: Shield (spell).'
-        },
-        {
-            icon: '📚',
-            title: 'Features & Traits',
-            desc: 'Add class features, species traits, background features, and feats. Filter by type using the pill buttons at the top. In the mobile Features view, the same filter applies.',
-            example: 'Class: Second Wind, Action Surge. Species: Darkvision. Feat: Alert.'
-        },
-        {
-            icon: '🔮',
-            title: 'Spells',
-            desc: 'Add spells with level, casting time, range, and description. Check <b>Prep</b> to move a spell to your prepared list. Cantrips go in the Cantrips list. Track spell slots with the visual slot tracker. Filter prepared spells by level in the mobile Spells nav view.',
-            example: 'Fireball: Lv 3, 1 action, 150 ft. Slots: Lv3 ●●○ (1 used).'
-        },
-        {
-            icon: '🎒',
-            title: 'Inventory',
-            desc: 'Track equipped items and backpack contents. Enter name, qty, and weight. Check the equip box to move an item to Equipped. Click <b>📝</b> to open a <b>rich HTML editor</b> for that item\'s description — supports bold, italic, links, tables, and formatted text. On mobile, rows are compact single-line entries.',
-            example: 'Equipped: Chain Mail (55 lbs). Backpack: Rope 50ft x1 (2 lbs), Potion of Healing x3.'
-        },
-        {
-            icon: '🧭',
-            title: 'Defenses (Mobile Nav)',
-            desc: 'The <b>Defenses</b> nav view shows your Speed and three defense fields: Resistances, Immunities, and Vulnerabilities. Edit these to reflect damage types your character is affected by.',
-            example: 'Resistances: Fire, Poison. Immunities: Charmed. Vulnerabilities: Cold.'
-        },
-        {
-            icon: '📋',
-            title: 'Proficiencies (Mobile Nav)',
-            desc: 'The <b>Proficiencies</b> nav view shows Proficiency Bonus, Armor Training checkboxes, Weapon Proficiency tags, Tool Proficiencies, and Languages — all in one place.',
-            example: 'Prof Bonus: +4. Armor: Light, Medium, Shields. Weapons: Simple, Martial.'
-        },
-        {
-            icon: '📝',
-            title: 'Notes',
-            desc: 'Record personality traits, ideals, bonds, flaws, deity, and general notes. Auto-saved. Accessible via the <b>Notes</b> nav view on mobile.',
-            example: 'Personality: Bold and direct. Flaw: Overconfident. Notes: Met Queen Miranel in session 4.'
-        },
-    ];
-
-    const dataSections = window.isDataAvailable ? [
-        {
-            icon: '📦',
-            title: 'Adding Spells & Cantrips from Data',
-            desc: 'With compendium data loaded, you can add spells via the <b>Manage Spells</b> popup instead of typing them manually.<br><br><b>Full Sheet:</b> Click <b>+ Add Spell</b> or <b>+ Cantrip</b> in the Spells section to open the popup — search, filter by level, and click a spell to add it with all details pre-filled.<br><b>Mobile/Tablet Spells view:</b> Tap the <b>+</b> button at the top of the Spells nav view to open the same popup.',
-            example: 'Search "fire" → Fireball, Fire Bolt, Wall of Fire appear with full descriptions ready to add.'
-        },
-        {
-            icon: '🗃️',
-            title: 'Adding Items from Data',
-            desc: 'With compendium data loaded, inventory items can be added from the data browser. Click <b>+ Add Item</b> in the Inventory section (full sheet) or the <b>+</b> button in the mobile Inventory nav view to search and pick items from the loaded data.',
-            example: 'Search "sword" → Longsword, Shortsword, Greatsword listed with weight pre-filled.'
-        },
-        {
-            icon: '🗡️📦',
-            title: 'Auto-fill Weapon Attacks from Data',
-            desc: 'When adding or editing a weapon attack, a <b>Choose Weapon</b> dropdown appears (when data is loaded). Selecting a weapon from the list auto-fills the attack bonus, damage dice, damage type, and mastery — saving manual entry.',
-            example: 'Choose "Rapier" → attack bonus, 1d8 piercing, and Finesse mastery filled automatically.'
-        },
-        {
-            icon: '⬆️',
-            title: 'Uploading Custom Data',
-            desc: 'Go to <b>Menu → Data Browser</b> to upload your own compendium files. Supports individual <b>.json</b> files or <b>.zip</b> archives containing multiple JSONs. Uploaded files are listed in the <b>Uploaded Files</b> tab where you can search and delete them.',
-            example: 'Upload "my-campaign.zip" → all JSONs inside are imported; the ZIP shows as one entry you can delete as a unit.'
-        },
-    ] : [];
-
     const renderSection = s => `
         <div class="help-section">
             <div class="help-section-title">${s.icon} ${s.title}</div>
             <div class="help-section-desc">${s.desc}</div>
             ${s.example ? `<div class="help-section-example">Example: ${s.example}</div>` : ''}
-            ${s.items ? `<ul class="help-section-list">${s.items.map(i => `<li>${i}</li>`).join('')}</ul>` : ''}
-        </div>
-    `;
-
-    let html = sections.map(renderSection).join('');
-
-    if (dataSections.length) {
-        html += `<div class="help-section" style="border-top:2px solid var(--gold);margin-top:12px;padding-top:12px;">
-            <div class="help-section-title" style="font-size:0.95rem;color:var(--red-dark);">📦 Using Uploaded Compendium Data</div>
-            <div class="help-section-desc" style="font-size:0.75rem;color:var(--ink-light);">The following features are available because you have data loaded.</div>
         </div>`;
-        html += dataSections.map(renderSection).join('');
-    }
 
+    const renderGroup = (title, sections) => `
+        <div class="help-group">
+            <div class="help-group-title">${title}</div>
+            ${sections.map(renderSection).join('')}
+        </div>`;
+
+    const groups = [
+        {
+            title: 'Navigation & Layout',
+            sections: [
+                {
+                    icon: '🖥️',
+                    title: 'Desktop vs Mobile',
+                    desc: '<b>Full Sheet:</b> All sections visible at once in a multi-column layout. Best for desktops and editing.<br><b>Mobile/Tablet:</b> A <b>⊞ nav button</b> appears in the bottom-right — tap it to switch between focused views (Stats, Actions, Spells, etc.).<br><b>Swipe left or right</b> anywhere on a mobile/tablet view to move between nav views.<br><br><b>⚠️ Some edits (features, weapon details, armor training) can only be done in Full Sheet view.</b>',
+                },
+                {
+                    icon: '📐',
+                    title: 'Dense Mode',
+                    desc: 'Toggle via <b>Menu → Toggle Dense View</b>. Replaces the top of the sheet with a compact header bar showing name, race/class, and level. Sections are tighter — useful for play when screen space is limited.',
+                    example: 'Dense header: "Thorn — Half-Elf Ranger Lv 8"'
+                },
+            ]
+        },
+        {
+            title: 'Combat',
+            sections: [
+                {
+                    icon: '⚔️',
+                    title: 'Combat Stats & HP',
+                    desc: 'Track AC, Initiative (auto-calculated from DEX), Speed, HP, Temp HP, Hit Dice, and Proficiency Bonus.<br><br>Click <b>⚡</b> next to HP to open the HP manager. On mobile, tap the HP value directly.<br><br>The <b>Short Rest</b> and <b>Long Rest</b> buttons open a popup — Short Rest lets you enter HP gained from dice you roll physically; Long Rest fully restores HP, spell slots, and all resources.',
+                    example: 'Fighter Lv 5: HP 44/52, AC 18, Speed 30ft.'
+                },
+                {
+                    icon: '🗡️',
+                    title: 'Weapon Attacks',
+                    desc: 'Add weapons with attack bonus and damage. Each weapon has a <b>⚙ button</b> — click it to define <b>scaling formulas</b> for ATK and damage (e.g. STR mod, DEX mod + Prof Bonus) so values update automatically when your stats change.<br><br>On mobile/tablet, weapons appear as a compact reference card in the <b>Actions</b> view.',
+                    example: 'Longsword: ATK formula = STR mod + Prof Bonus → auto-updates to +6 at level 5.'
+                },
+                {
+                    icon: '✨',
+                    title: 'Class Resources',
+                    desc: 'Track named resources (Ki, Bardic Inspiration, Lay on Hands, etc.). Click pips to use/restore them.<br><br>Each resource has a <b>⚙ settings button</b> — use it to set a <b>scaling formula</b> for the max (e.g. Proficiency Bonus, Level, ability modifier) and set whether it resets on Short Rest, Long Rest, or both.<br><br>Common class resources (like Bardic Inspiration) are <b>auto-detected</b> from your class and level when data is loaded.',
+                    example: 'Ki Points: formula = Level → auto-sets to 8 at level 8. Resets on Short Rest.'
+                },
+                {
+                    icon: '⚡',
+                    title: 'Action Economy',
+                    desc: 'Add actions, bonus actions, and reactions. Spells with matching casting times appear automatically (e.g. "1 action" spells show under Actions). Tap any spell entry to expand its description.',
+                    example: 'Actions: Attack ×2, Fireball. Bonus: Cunning Action. Reaction: Shield.'
+                },
+            ]
+        },
+        {
+            title: 'Character',
+            sections: [
+                {
+                    icon: '🎲',
+                    title: 'Ability Scores',
+                    desc: 'Enter a score — the modifier is calculated automatically. On mobile, use the <b>Stats</b> nav view.',
+                    example: 'STR 18 → +4 modifier.'
+                },
+                {
+                    icon: '🛡️',
+                    title: 'Saving Throws & Skills',
+                    desc: 'Click the <b>checkbox</b> next to a save or skill to mark proficiency. When proficient, an <b>E</b> button appears — click it to grant <b>Expertise</b> (double proficiency bonus).<br><br>The circular button cycles <b>advantage / disadvantage</b>.',
+                    example: 'Stealth (DEX, prof + Expertise, PB+3): +2 DEX +6 = +8.'
+                },
+                {
+                    icon: '📚',
+                    title: 'Features & Traits',
+                    desc: 'Add class features, species traits, background features, and feats. Filter by type using the pill buttons. Feature descriptions support a <b>rich HTML editor</b> (click the <b>📝</b> icon) for formatted text, bold, italic, tables, and links.',
+                    example: 'Class: Second Wind. Species: Darkvision. Feat: Alert.'
+                },
+                {
+                    icon: '📋',
+                    title: 'Proficiencies',
+                    desc: 'Armor Training checkboxes, Weapon Proficiency tags, Tool Proficiencies, and Languages. Accessible in the <b>Proficiencies</b> mobile nav view.',
+                    example: 'Armor: Light, Medium, Shields. Languages: Common, Elvish.'
+                },
+            ]
+        },
+        {
+            title: 'Spells & Magic',
+            sections: [
+                {
+                    icon: '🔮',
+                    title: 'Spells & Spell Slots',
+                    desc: 'Add spells with level, casting time, range, and description. Check <b>Prep</b> to move a spell to your prepared list. Cantrips go in the Cantrips list.<br><br>Track spell slots with the visual slot tracker — click a slot to mark it used.',
+                    example: 'Fireball: Lv 3, 1 action, 150ft. Slots: Lv3 ●●○'
+                },
+            ]
+        },
+        {
+            title: 'Inventory & Notes',
+            sections: [
+                {
+                    icon: '🎒',
+                    title: 'Inventory',
+                    desc: 'Track equipped items and backpack contents with name, qty, and weight. Check the equip box to move an item to Equipped.<br><br>Click <b>📝</b> on any item to open a <b>rich HTML editor</b> for formatted descriptions — bold, italic, links, tables, and more. The same editor is available on <b>feature descriptions</b> and <b>notes fields</b>.',
+                    example: 'Equipped: Chain Mail (55 lbs). Backpack: Rope x1, Potion of Healing x3.'
+                },
+                {
+                    icon: '🧭',
+                    title: 'Defenses',
+                    desc: 'Resistances, Immunities, and Vulnerabilities. Accessible via the <b>Defenses</b> mobile nav view.',
+                    example: 'Resistances: Fire, Poison. Immunities: Charmed.'
+                },
+                {
+                    icon: '📝',
+                    title: 'Notes',
+                    desc: 'Record personality traits, ideals, bonds, flaws, deity, and general notes. Accessible via the <b>Notes</b> mobile nav view. Notes fields also support the <b>rich HTML editor</b> (📝 icon).',
+                    example: 'Flaw: Overconfident. Notes: Met Queen Miranel in session 4.'
+                },
+            ]
+        },
+    ];
+
+    const dataGroups = window.isDataAvailable ? [
+        {
+            title: 'Compendium Data Features',
+            sections: [
+                {
+                    icon: '⬆️',
+                    title: 'Uploading Data',
+                    desc: 'Go to <b>Menu → Data Browser</b> to upload compendium files. Supports <b>.json</b> files or <b>.zip</b> archives. Uploaded files appear in the Uploaded Files tab.',
+                    example: 'Upload "my-campaign.zip" → all JSONs inside are imported.'
+                },
+                {
+                    icon: '⬆️',
+                    title: 'Level-Up',
+                    desc: 'When data is loaded, a <b>Level Up</b> button appears near your level field. Click it to open the level-up popup — it shows new class features gained at the next level and lets you <b>choose new spells</b> from your class spell list (for spellcasters).',
+                    example: 'Wizard level 3 → choose 2 new spells from the full wizard spell list.'
+                },
+                {
+                    icon: '📦',
+                    title: 'Adding Spells from Data',
+                    desc: 'Click <b>+ Add Spell</b> or <b>+ Cantrip</b> to open the spell picker — search, filter by level/class, and click to add with all details pre-filled.',
+                    example: 'Search "fire" → Fireball, Fire Bolt, Wall of Fire with full descriptions.'
+                },
+                {
+                    icon: '🗃️',
+                    title: 'Adding Items from Data',
+                    desc: 'Click <b>+ Add Item</b> in Inventory to search and pick items with weight pre-filled.',
+                    example: 'Search "sword" → Longsword, Shortsword, Greatsword.'
+                },
+                {
+                    icon: '🗡️',
+                    title: 'Auto-fill Weapons from Data',
+                    desc: 'When adding a weapon, click the name field to open a picker — selecting a weapon auto-fills ATK bonus, damage dice, damage type, and mastery.',
+                    example: 'Choose "Rapier" → 1d8 piercing, Finesse filled automatically.'
+                },
+            ]
+        }
+    ] : [];
+
+    let html = groups.map(g => renderGroup(g.title, g.sections)).join('');
+    if (dataGroups.length) {
+        html += dataGroups.map(g => renderGroup(g.title, g.sections)).join('');
+    }
     return html;
 };
 

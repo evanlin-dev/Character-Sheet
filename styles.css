@@ -2762,15 +2762,27 @@ body.swap-scores.dense-mode .stat-modifier input {
 .help-modal-body {
     padding: 16px 20px;
     overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+}
+.help-group {
+    margin-bottom: 16px;
+}
+.help-group-title {
+    font-family: 'Cinzel', serif;
+    font-weight: 700;
+    font-size: 0.7rem;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0 2px 6px;
+    border-bottom: 2px solid var(--gold);
+    margin-bottom: 8px;
 }
 .help-section {
     background: white;
     border: 1px solid var(--gold);
     border-radius: 6px;
     padding: 10px 14px;
+    margin-bottom: 6px;
 }
 .help-section-title {
     font-family: 'Cinzel', serif;
