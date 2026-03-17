@@ -153,6 +153,16 @@ body.app-view-active .header { display: none !important; }
     border-radius: 8px;
     padding: 0 0 20px 0;
 }
+@keyframes _appSlideFromRight {
+    from { opacity: 0; transform: translateX(32px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes _appSlideFromLeft {
+    from { opacity: 0; transform: translateX(-32px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+.app-view.slide-from-right { animation: _appSlideFromRight 0.22s ease-out both; }
+.app-view.slide-from-left  { animation: _appSlideFromLeft  0.22s ease-out both; }
 
 /* =========================================
    APP VIEWS (MOBILE TABS)
@@ -386,6 +396,7 @@ body.app-view-active .header { display: none !important; }
     color: var(--ink);
 }
 .msv-tag-conc { background: var(--parchment-dark); color: var(--ink-light); }
+.msv-tag-mat  { background: #e8f0e4; color: #3a6b2a; }
 .msv-spell-card-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .msv-spell-meta { font-size: 0.72rem; color: var(--ink-light); white-space: nowrap; }
 .msv-info-btn {
@@ -2831,6 +2842,36 @@ body.swap-scores.dense-mode .stat-modifier input {
     color: var(--red-dark);
     font-size: 1rem;
 }
+.actions-filter-bar {
+    display: flex;
+    gap: 7px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 2px 0 6px;
+    margin-bottom: 12px;
+}
+.actions-filter-bar::-webkit-scrollbar { display: none; }
+.act-filter-pill {
+    flex-shrink: 0;
+    padding: 6px 16px;
+    border: 1.5px solid var(--gold);
+    border-radius: 999px;
+    background: var(--parchment);
+    color: var(--ink-light);
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.act-filter-pill.active {
+    background: var(--red-dark);
+    color: #fff;
+    border-color: var(--red-dark);
+}
 
 /* ===== AUTO SPELL ENTRIES IN ACTIONS VIEW ===== */
 .auto-spell-item {
@@ -2894,6 +2935,66 @@ body.swap-scores.dense-mode .stat-modifier input {
 }
 
 /* ===== MOBILE RESOURCES CARD ===== */
+.mobile-money-card {
+    background: var(--parchment-dark);
+    border: 1px solid var(--gold);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+}
+.money-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--gold);
+}
+.money-card-title {
+    font-family: 'Cinzel', serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--ink);
+}
+.money-coins-row {
+    display: flex;
+    gap: 6px;
+}
+.money-coin {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+.money-coin-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--ink-light);
+}
+.money-coin[data-coin="pp"] .money-coin-label { color: #8866aa; }
+.money-coin[data-coin="gp"] .money-coin-label { color: #b8880a; }
+.money-coin[data-coin="ep"] .money-coin-label { color: #3a8a3a; }
+.money-coin[data-coin="sp"] .money-coin-label { color: #777; }
+.money-coin[data-coin="cp"] .money-coin-label { color: #a05820; }
+.money-coin-inp {
+    width: 100%;
+    text-align: center;
+    font-family: 'Cinzel', serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    border: 1px solid var(--gold);
+    border-radius: 4px;
+    background: var(--parchment);
+    color: var(--ink);
+    padding: 5px 2px;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+.money-coin-inp::-webkit-inner-spin-button,
+.money-coin-inp::-webkit-outer-spin-button { -webkit-appearance: none; appearance: none; }
+
 .res-card {
     background: var(--parchment-dark);
     border: 1px solid var(--gold);

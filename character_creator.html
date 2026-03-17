@@ -77,6 +77,41 @@
         .info-modal-content { background: var(--parchment); border: 2px solid var(--gold); color: var(--text-main); padding: 20px; width: 600px; max-height: 80vh; overflow-y: auto; position: relative; border-radius: 5px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); }
         .close-modal-btn { position: absolute; top: 10px; right: 10px; background: none; border: none; color: var(--ink-light); font-size: 20px; cursor: pointer; }
         .close-modal-btn:hover { color: var(--red); }
+
+        /* ── Mobile ─────────────────────────────────────────────────────────── */
+        @media (max-width: 700px) {
+            body { font-size: 16px; height: auto; overflow: auto; }
+
+            /* Nav: scrollable pill row */
+            .app-nav { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-shrink: 0; padding: 0 4px; gap: 2px; }
+            .nav-tab { padding: 10px 12px; font-size: 13px; white-space: nowrap; flex-shrink: 0; }
+
+            /* App window fills viewport; body scrolls */
+            .app-window { height: auto; min-height: 100vh; }
+            .app-body { overflow: visible; height: auto; }
+
+            /* Tab panes become block so they can grow naturally */
+            .tab-pane.active { display: flex; flex-direction: column; height: auto; min-height: 60vh; }
+
+            /* Split views stack vertically */
+            .split-view { flex-direction: column; height: auto; }
+            .split-view.equal-split > .sidebar,
+            .split-view.equal-split > .content-pane { width: 100% !important; flex: none !important; }
+
+            /* Sidebar: fixed max-height when stacked so content is reachable */
+            .sidebar { width: 100% !important; max-height: 45vh; border-right: none; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+            .sidebar-list { max-height: 35vh; }
+
+            /* Content pane: natural scroll */
+            .content-pane { overflow-y: visible; padding: 12px; }
+
+            /* Footer buttons: full width on small screens */
+            .app-footer { gap: 8px; padding: 8px 12px; }
+            .btn { flex: 1; padding: 10px 12px; font-size: 15px; text-align: center; }
+
+            /* Modal: use most of screen width */
+            .info-modal-content { width: 92vw; max-width: 92vw; padding: 14px; }
+        }
     </style>
 </head>
 <body>

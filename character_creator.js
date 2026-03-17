@@ -7733,7 +7733,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     desc += "<br><br>" + processEntries(spell.entriesHigherLevel);
                 }
                 desc = cleanText(desc);
+
+                // Extract material component text
+                const rawMat = spell.components && (spell.components.m || spell.components.M);
+                let matText = "";
+                if (rawMat && typeof rawMat === 'object' && rawMat.text) {
+                    matText = rawMat.text;
+                } else if (typeof rawMat === 'string') {
+                    matText = rawMat;
+                }
+                // Capitalise first letter
+                if (matText) matText = matText.charAt(0).toUpperCase() + matText.slice(1);
+
                 if (duration) desc = `**Duration:** ${duration}\n\n${desc}`;
+                if (matText) desc = `**Materials:** ${matText}\n\n${desc}`;
 
                 const spellData = {
                     name: spell.name,
@@ -7742,7 +7755,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     range: range,
                     ritual: spell.meta && spell.meta.ritual ? true : false,
                     concentration: spell.duration && spell.duration[0] && spell.duration[0].concentration ? true : false,
-                    material: spell.components && (spell.components.m || spell.components.M) ? true : false,
+                    material: !!rawMat,
                     description: desc,
                     prepared: false
                 };
@@ -7813,46 +7826,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // ── Build class resources ────────────────────────────────────────────
+        // formulaKey maps to RESOURCE_FORMULA_OPTS keys in script.js so the settings popup shows correct scaling
         const CREATOR_RESOURCE_DEFS = {
             'Barbarian': [
-                { name: 'Rages', colLabel: /^Rages$/i, reset: 'lr' }
+                { name: 'Rages', colLabel: /^Rages$/i, formula: (lvl) => lvl >= 20 ? 99 : lvl >= 17 ? 6 : lvl >= 12 ? 5 : lvl >= 6 ? 4 : lvl >= 3 ? 3 : 2, formulaKey: 'fixed', reset: 'lr' }
             ],
             'Bard': [
-                { name: 'Bardic Inspiration', formula: (lvl, chaMod) => Math.max(1, chaMod), levelMin: 1, reset: 'lr' }
+                { name: 'Bardic Inspiration', formula: (_lvl, chaMod) => Math.max(1, chaMod), formulaKey: 'cha_mod', levelMin: 1, reset: 'lr' }
             ],
             'Cleric': [
-                { name: 'Channel Divinity', formula: (lvl) => lvl >= 18 ? 3 : lvl >= 6 ? 2 : 1, levelMin: 2, reset: 'sr' }
+                { name: 'Channel Divinity', formula: (lvl) => lvl >= 18 ? 3 : lvl >= 6 ? 2 : 1, formulaKey: 'fixed', levelMin: 2, reset: 'sr' }
             ],
             'Druid': [
-                { name: 'Wild Shape', formula: () => 2, levelMin: 2, reset: 'sr' }
+                { name: 'Wild Shape', formula: () => 2, formulaKey: 'fixed', levelMin: 2, reset: 'sr' }
             ],
             'Fighter': [
-                { name: 'Second Wind', formula: () => 1, levelMin: 1, reset: 'sr' },
-                { name: 'Action Surge', formula: (lvl) => lvl >= 17 ? 2 : 1, levelMin: 2, reset: 'sr' },
-                { name: 'Indomitable', formula: (lvl) => lvl >= 17 ? 3 : lvl >= 13 ? 2 : 1, levelMin: 9, reset: 'lr' }
+                { name: 'Second Wind', formula: () => 1, formulaKey: 'fixed', levelMin: 1, reset: 'sr' },
+                { name: 'Action Surge', formula: (lvl) => lvl >= 17 ? 2 : 1, formulaKey: 'fixed', levelMin: 2, reset: 'sr' },
+                { name: 'Indomitable', formula: (lvl) => lvl >= 17 ? 3 : lvl >= 13 ? 2 : 1, formulaKey: 'fixed', levelMin: 9, reset: 'lr' }
             ],
             'Monk': [
-                { name: 'Discipline Points', colLabel: /^Discipline Points$/i, reset: 'sr' },
-                { name: 'Ki Points', colLabel: /^Ki Points$/i, reset: 'sr' }
+                { name: 'Discipline Points', colLabel: /^Discipline Points$/i, formula: (lvl) => lvl, formulaKey: 'level', levelMin: 1, reset: 'sr' },
+                { name: 'Ki Points', colLabel: /^Ki Points$/i, formula: (lvl) => lvl, formulaKey: 'level', levelMin: 2, reset: 'sr' }
             ],
             'Paladin': [
-                { name: 'Lay on Hands', formula: (lvl) => lvl * 5, levelMin: 1, reset: 'lr' },
-                { name: 'Channel Divinity', formula: () => 1, levelMin: 3, reset: 'sr' }
+                { name: 'Lay on Hands', formula: (lvl) => lvl * 5, formulaKey: 'level_x5', levelMin: 1, reset: 'lr' },
+                { name: 'Channel Divinity', formula: () => 1, formulaKey: 'fixed', levelMin: 3, reset: 'sr' }
             ],
             'Ranger': [
-                { name: "Hunter's Mark", formula: () => 1, levelMin: 1, reset: 'lr' }
+                { name: "Hunter's Mark", formula: () => 1, formulaKey: 'fixed', levelMin: 1, reset: 'lr' }
             ],
             'Rogue': [
-                { name: 'Cunning Strike', formula: () => 1, levelMin: 5, reset: 'sr' }
+                { name: 'Cunning Strike', formula: () => 1, formulaKey: 'fixed', levelMin: 5, reset: 'sr' }
             ],
             'Sorcerer': [
-                { name: 'Sorcery Points', colLabel: /^Sorcery Points$/i, reset: 'lr' }
+                { name: 'Sorcery Points', colLabel: /^Sorcery Points$/i, formula: (lvl) => lvl, formulaKey: 'level', levelMin: 2, reset: 'lr' }
             ],
             'Warlock': [
-                { name: 'Mystic Arcanum', formula: (lvl) => Math.max(0, Math.min(4, Math.floor((lvl - 9) / 2) + 1)), levelMin: 11, reset: 'lr' }
+                { name: 'Mystic Arcanum', formula: (lvl) => Math.max(0, Math.min(4, Math.floor((lvl - 9) / 2) + 1)), formulaKey: 'fixed', levelMin: 11, reset: 'lr' }
             ],
             'Wizard': [
-                { name: 'Arcane Recovery', formula: () => 1, levelMin: 1, reset: 'lr' }
+                { name: 'Arcane Recovery', formula: () => 1, formulaKey: 'fixed', levelMin: 1, reset: 'lr' }
             ]
         };
 
@@ -7882,7 +7896,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let maxVal = def.colLabel ? _getColVal(def.colLabel) : null;
             if (maxVal === null && def.formula) maxVal = def.formula(selectedLevel, _chaMod);
             if (!maxVal || maxVal <= 0) continue;
-            resourcesData.push({ name: def.name, max: maxVal, used: 0, reset: def.reset, auto: false });
+            resourcesData.push({ name: def.name, max: maxVal, used: 0, reset: def.reset, auto: false, ...(def.formulaKey ? { formulaKey: def.formulaKey } : {}) });
         }
 
         const charData = {

@@ -3017,13 +3017,12 @@ window.selectWeaponFromPicker = function (weaponName) {
   const profBonusStr = document.getElementById("profBonus").value;
   const profBonus = parseInt(profBonusStr.replace(/[^0-9-]/g, '')) || 2;
   let abilityMod = strMod;
+  let abilityKey = 'str';
   if (weaponData.props.includes("Finesse")) {
-    abilityMod = Math.max(strMod, dexMod);
-  } else if (
-    weaponData.cat === "Ranged" &&
-    !weaponData.props.some((p) => p.includes("Thrown"))
-  ) {
+    if (dexMod > strMod) { abilityMod = dexMod; abilityKey = 'dex'; }
+  } else if (weaponData.cat === "Ranged" && !weaponData.props.some(p => p.includes("Thrown"))) {
     abilityMod = dexMod;
+    abilityKey = 'dex';
   }
 
   const profString = document.getElementById("weaponProfs").value || "";
@@ -3045,7 +3044,16 @@ window.selectWeaponFromPicker = function (weaponName) {
   row.querySelector(".weapon-atk").value = atkString;
   row.querySelector(".weapon-damage").value = dmgString;
   row.querySelector(".weapon-notes").value = finalNotes.join(", ");
+  row.dataset.wformula = JSON.stringify({
+      atkAbility: abilityKey,
+      atkProf: isProficient,
+      dmgAbility: abilityKey,
+      damageDice: weaponData.dmg || '',
+      damageType: weaponData.dtype || '',
+      saveDCAbility: 'none',
+  });
   saveCharacter();
+  window.recomputeWeaponFormulas();
   closeWeaponPicker();
 };
 
@@ -3893,35 +3901,26 @@ window.renderMobileResources = function() {
                 const filled = p < res.used ? 'filled' : '';
                 pips += `<div class="res-pip ${filled}" onclick="window.toggleMobileResourcePip(${i}, ${p})"></div>`;
             }
-            // Show max +/- only for fixed custom resources
-            const maxControls = (!res.auto && !hasFormula)
-                ? `<div class="res-max-controls">
-                    <button class="res-max-btn" onclick="window.adjustMobileResourceMax(${i}, -1)">−</button>
-                    <span class="res-max-label">${effectiveMax}</span>
-                    <button class="res-max-btn" onclick="window.adjustMobileResourceMax(${i}, 1)">+</button>
-                  </div>`
-                : '';
-            inputHtml = `<div class="res-pips-row"><div class="res-pips">${pips}</div>${maxControls}</div>`;
+            inputHtml = `<div class="res-pips-row"><div class="res-pips">${pips}</div></div>`;
         } else {
             inputHtml = `<div class="res-stepper">
                 <button class="res-step-btn" onclick="window.stepMobileResource(${i}, 1)">−</button>
-                <span class="res-step-val">${res.used}</span>
+                <span class="res-step-val">${effectiveMax - res.used}</span>
                 <span class="res-step-sep">/</span>
                 <span class="res-step-max">${effectiveMax}</span>
                 <button class="res-step-btn" onclick="window.stepMobileResource(${i}, -1)">+</button>
             </div>`;
         }
 
-        const actionBtns = res.auto
-            ? `<span class="res-auto-tag" style="position:absolute;top:6px;right:6px;" title="Auto-detected from class">⚙</span>`
-            : `<div style="position:absolute;top:4px;right:4px;display:flex;gap:4px;z-index:10;">
+        const actionBtns = `<div style="position:absolute;top:4px;right:4px;display:flex;gap:4px;z-index:10;">
+                ${res.auto ? '<span class="res-auto-tag" title="Auto-detected from class" style="font-size:0.6rem;padding-top:3px;">auto</span>' : ''}
                 <button class="res-settings-btn" onclick="window.openResourceSettingsModal(${i})" title="Settings">⚙</button>
                 <button class="res-del-btn" style="position:static;" onclick="window.deleteMobileResource(${i})">×</button>
                </div>`;
         rowsHtml += `<div class="res-row">
             ${actionBtns}
             <div class="res-row-top">
-                <input class="res-name-inp" value="${res.name.replace(/"/g, '&quot;')}" onchange="window.renameMobileResource(${i}, this.value)" ${res.auto ? 'readonly' : ''} />
+                <input class="res-name-inp" value="${res.name.replace(/"/g, '&quot;')}" onchange="window.renameMobileResource(${i}, this.value)" />
                 <span class="res-badge ${resetClass}">${resetLabel}</span>
             </div>
             ${inputHtml}
@@ -4010,11 +4009,12 @@ window.addSpellRow = function (containerId, defaultLevel = 1, data = null) {
   const cChecked = data && data.concentration ? "checked" : "";
   const mChecked = data && data.material ? "checked" : "";
   
-  const descVal = data && data.description ? data.description.replace(/"/g, "&quot;") : "";
-  const hasNotes = descVal && descVal.length > 0;
+  const hasNotes = !!(data && data.description && data.description.length > 0);
   const noteBtnClass = hasNotes ? "note-btn has-notes" : "note-btn";
 
-  row.innerHTML = `<div class="drag-handle">☰</div><div class="spell-col-prep" style="${prepVisibility}"><span class="mobile-label">Prep</span><input type="checkbox" class="spell-check spell-prep" title="Prepared" ${isPrep ? "checked" : ""}></div><input type="number" class="spell-input spell-lvl" value="${lvl}" placeholder="Lvl" style="text-align:center;"><input type="text" class="spell-input spell-name" value="${data ? data.name : ""}" placeholder="Spell Name"><input type="text" class="spell-input spell-time" value="${data ? data.time : ""}" placeholder="1 Act"><input type="text" class="spell-input spell-range" value="${data ? data.range : ""}" placeholder="60 ft"><div class="spell-col-ritual"><span class="mobile-label">Ritual</span><input type="checkbox" class="spell-check spell-ritual" title="Ritual" ${rChecked}></div><div class="spell-col-conc"><span class="mobile-label">Conc</span><input type="checkbox" class="spell-check spell-conc" title="Concentration" ${cChecked}></div><div class="spell-col-mat"><span class="mobile-label">Mat</span><input type="checkbox" class="spell-check spell-mat" title="Material" ${mChecked}></div><input type="hidden" class="spell-desc" value="${descVal}"><button class="${noteBtnClass}" onclick="openSpellNoteEditor(this)" title="Edit Description">📝</button><button class="delete-feature-btn" onclick="this.parentElement.remove(); saveCharacter()">×</button>`;
+  row.innerHTML = `<div class="drag-handle">☰</div><div class="spell-col-prep" style="${prepVisibility}"><span class="mobile-label">Prep</span><input type="checkbox" class="spell-check spell-prep" title="Prepared" ${isPrep ? "checked" : ""}></div><input type="number" class="spell-input spell-lvl" value="${lvl}" placeholder="Lvl" style="text-align:center;"><input type="text" class="spell-input spell-name" value="${data ? data.name : ""}" placeholder="Spell Name"><input type="text" class="spell-input spell-time" value="${data ? data.time : ""}" placeholder="1 Act"><input type="text" class="spell-input spell-range" value="${data ? data.range : ""}" placeholder="60 ft"><div class="spell-col-ritual"><span class="mobile-label">Ritual</span><input type="checkbox" class="spell-check spell-ritual" title="Ritual" ${rChecked}></div><div class="spell-col-conc"><span class="mobile-label">Conc</span><input type="checkbox" class="spell-check spell-conc" title="Concentration" ${cChecked}></div><div class="spell-col-mat"><span class="mobile-label">Mat</span><input type="checkbox" class="spell-check spell-mat" title="Material" ${mChecked}></div><input type="hidden" class="spell-desc"><button class="${noteBtnClass}" onclick="openSpellNoteEditor(this)" title="Edit Description">📝</button><button class="delete-feature-btn" onclick="this.parentElement.remove(); saveCharacter()">×</button>`;
+  // Set description via .value (not in the attribute) so HTML content is stored verbatim
+  row.querySelector('.spell-desc').value = (data && data.description) ? data.description : '';
 
   const prepBox = row.querySelector(".spell-prep");
   if (!isCantrip) {
@@ -6124,11 +6124,47 @@ window.unmountStatsView = function() {
 };
 
 // ===== INVENTORY VIEW (Mobile) =====
+window.syncMobileMoneyField = function(id, val) {
+    const inp = document.getElementById(id);
+    if (inp) { inp.value = Math.max(0, parseInt(val) || 0); saveCharacter(); }
+};
+
 window.mountInventoryView = function() {
     const invView = document.getElementById('view-inventory');
     if (!invView) return;
+
+    // Inject money card at top
+    if (!document.getElementById('mobile-money-card')) {
+        const coins = [
+            { id: 'pp', label: 'PP' },
+            { id: 'gp', label: 'GP' },
+            { id: 'ep', label: 'EP' },
+            { id: 'sp', label: 'SP' },
+            { id: 'cp', label: 'CP' },
+        ];
+        const mc = document.createElement('div');
+        mc.id = 'mobile-money-card';
+        mc.className = 'mobile-money-card';
+        mc.innerHTML = `
+            <div class="money-card-header">
+                <span class="money-card-title">Currency</span>
+                <button class="add-feature-btn" onclick="openManageMoneyModal()" style="font-size:0.72rem;padding:3px 10px;width:auto;">Manage</button>
+            </div>
+            <div class="money-coins-row">
+                ${coins.map(c => `<div class="money-coin" data-coin="${c.id}">
+                    <label class="money-coin-label">${c.label}</label>
+                    <input class="money-coin-inp" type="number" min="0" value="${document.getElementById(c.id)?.value || 0}"
+                        onchange="window.syncMobileMoneyField('${c.id}', this.value)">
+                </div>`).join('')}
+            </div>`;
+        invView.insertBefore(mc, invView.firstChild);
+    }
+
     if (!document.getElementById('mobile-inv-wrapper')) {
-        invView.innerHTML = '<div id="mobile-inv-wrapper"><div id="mobile-inv-equipped-slot"></div><div id="mobile-inv-backpack-slot"></div><div id="mobile-inv-pouch-slot"></div></div>';
+        const wrapper = document.createElement('div');
+        wrapper.id = 'mobile-inv-wrapper';
+        wrapper.innerHTML = '<div id="mobile-inv-equipped-slot"></div><div id="mobile-inv-backpack-slot"></div><div id="mobile-inv-pouch-slot"></div>';
+        invView.appendChild(wrapper);
     }
     const equippedList = document.getElementById('equippedList');
     if (equippedList) {
@@ -6166,6 +6202,7 @@ window.mountInventoryView = function() {
 };
 
 window.unmountInventoryView = function() {
+    document.getElementById('mobile-money-card')?.remove();
     document.querySelectorAll('[data-inv-moved]').forEach(section => {
         const ph = document.getElementById(section.dataset.invMoved);
         if (ph) { ph.parentNode.insertBefore(section, ph); ph.remove(); }
@@ -6242,6 +6279,19 @@ window.mountActionsView = function() {
         if (atkInput) atkInput.addEventListener('input', window._syncAtkBadge);
     }
 
+    // Inject pill filters
+    if (!document.getElementById('actions-filter-bar')) {
+        const bar = document.createElement('div');
+        bar.id = 'actions-filter-bar';
+        bar.className = 'actions-filter-bar';
+        bar.innerHTML = ['All','Actions','Bonus Actions','Reactions'].map((label, i) => {
+            const key = ['all','action','bonus','reaction'][i];
+            return `<button class="act-filter-pill${i === 0 ? ' active' : ''}" data-filter="${key}" onclick="window.filterActionsView('${key}')">${label}</button>`;
+        }).join('');
+        const hdr = document.getElementById('act-view-header');
+        if (hdr) hdr.after(bar); else view.insertBefore(bar, view.firstChild);
+    }
+
     // Inject mobile resources card
     if (!document.getElementById('mobile-resources-card')) {
         const card = document.createElement('div');
@@ -6279,9 +6329,25 @@ window.mountActionsView = function() {
     window.refreshSpellsInActionsView();
 };
 
+window.filterActionsView = function(filter) {
+    document.querySelectorAll('#actions-filter-bar .act-filter-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+    const map = [
+        { id: 'actionsContainer',      key: 'action'   },
+        { id: 'bonusActionsContainer', key: 'bonus'    },
+        { id: 'reactionsContainer',    key: 'reaction' },
+    ];
+    map.forEach(({ id, key }) => {
+        const section = document.getElementById(id)?.closest('[data-act-moved]');
+        if (section) section.style.display = (filter === 'all' || filter === key) ? '' : 'none';
+    });
+};
+
 window.unmountActionsView = function() {
-    // Remove injected header, resources card, and weapons card
+    // Remove injected header, filter bar, resources card, and weapons card
     document.getElementById('act-view-header')?.remove();
+    document.getElementById('actions-filter-bar')?.remove();
     document.getElementById('mobile-resources-card')?.remove();
     document.getElementById('mobile-weapons-card')?.remove();
     const atkInput = document.getElementById('attacksPerAction');
@@ -6292,8 +6358,9 @@ window.unmountActionsView = function() {
         document.getElementById(id)?.remove();
     });
 
-    // Restore moved sections
+    // Restore moved sections (also reset any filter-hidden display)
     document.querySelectorAll('[data-act-moved]').forEach(el => {
+        el.style.display = '';
         const ph = document.getElementById(el.dataset.actMoved);
         if (ph) { ph.parentNode.insertBefore(el, ph); ph.remove(); }
         delete el.dataset.actMoved;
@@ -6759,7 +6826,7 @@ window.refreshManageSpellsModal = function() {
     if (actionsEl) {
         actionsEl.innerHTML = `
             <button class="add-feature-btn" onclick="window.msvAddCustomSpell()">+ Add to Spellbook</button>
-            ${window.isDataAvailable ? `<button class="add-feature-btn" onclick="window.msvSearchAndAdd('spellList','all')">Search Spells</button>` : ''}
+            ${window.isDataAvailable ? `<button class="add-feature-btn" onclick="window.msvSearchAndAdd('spellList','leveled')">Search Spells</button>` : ''}
             <button class="add-feature-btn" onclick="window.msvAddCantrip()">+ Add Cantrip</button>
             ${window.isDataAvailable ? `<button class="add-feature-btn" onclick="window.msvSearchAndAdd('cantripList','cantrip')">Search Cantrips</button>` : ''}`;
     }
@@ -6773,6 +6840,7 @@ window.refreshManageSpellsModal = function() {
         const level = isCantrip ? 'C' : (row.querySelector('.spell-lvl')?.value || '?');
         const ritual = row.querySelector('.spell-ritual')?.checked;
         const conc = row.querySelector('.spell-conc')?.checked;
+        const mat = row.querySelector('.spell-mat')?.checked;
         const div = document.createElement('div');
         div.className = 'msv-manage-row' + (prepared ? ' msv-manage-row-prep' : '');
         const removeBtn = document.createElement('button');
@@ -6785,7 +6853,7 @@ window.refreshManageSpellsModal = function() {
             window.refreshManageSpellsModal();
         };
         div.appendChild(removeBtn);
-        div.insertAdjacentHTML('beforeend', `<span class="msv-manage-level">${level}</span><span class="msv-manage-name">${name}</span><span class="msv-manage-tags">${ritual ? '<span class="msv-tag">R</span>' : ''}${conc ? '<span class="msv-tag msv-tag-conc">C</span>' : ''}</span>`);
+        div.insertAdjacentHTML('beforeend', `<span class="msv-manage-level">${level}</span><span class="msv-manage-name">${name}</span><span class="msv-manage-tags">${ritual ? '<span class="msv-tag">R</span>' : ''}${conc ? '<span class="msv-tag msv-tag-conc">C</span>' : ''}${mat ? '<span class="msv-tag msv-tag-mat">M</span>' : ''}</span>`);
         if (isCantrip) {
             const badge = document.createElement('span');
             badge.className = 'msv-manage-prep-badge';
@@ -6884,6 +6952,7 @@ window.switchAppView = function(viewId) {
             { id: 'view-proficiencies', title: 'Proficiencies & Training' },
             { id: 'view-notes', title: 'Notes' }
         ];
+        window._appViewOrder = views.map(v => v.id);
 
         const noPlaceholder = new Set(['view-stats', 'view-actions', 'view-inventory', 'view-spells', 'view-features', 'view-defenses', 'view-proficiencies', 'view-notes']);
         views.forEach(v => {
@@ -6944,7 +7013,21 @@ window.switchAppView = function(viewId) {
     window._currentMobileView = viewId;
 
     const activeView = document.getElementById(viewId);
-    if (activeView) activeView.style.display = 'block';
+    if (activeView) {
+        activeView.style.display = 'block';
+        const order = window._appViewOrder;
+        if (order && prev && prev !== viewId) {
+            const prevIdx = order.indexOf(prev);
+            const newIdx = order.indexOf(viewId);
+            if (prevIdx !== -1 && newIdx !== -1) {
+                const animClass = newIdx > prevIdx ? 'slide-from-right' : 'slide-from-left';
+                activeView.classList.remove('slide-from-right', 'slide-from-left');
+                void activeView.offsetWidth; // force reflow so animation restarts
+                activeView.classList.add(animClass);
+                setTimeout(() => activeView.classList.remove(animClass), 250);
+            }
+        }
+    }
 };
 
 window.openHpSettingsModal = function() {
@@ -8035,6 +8118,8 @@ window.openLevelUpModal = async function(level) {
                 <div id="levelUpTabs" style="display:flex; border-bottom:2px solid var(--gold); padding:0 10px; gap:4px; background:var(--parchment-dark); flex-shrink:0;">
                     <button id="lvlup-tab-features" class="lvlup-tab lvlup-tab-active" onclick="window.switchLevelUpTab('features')">Features</button>
                     <button id="lvlup-tab-spells" class="lvlup-tab" onclick="window.switchLevelUpTab('spells')" style="display:none;">Spells</button>
+                    <button id="lvlup-tab-hp" class="lvlup-tab" onclick="window.switchLevelUpTab('hp')" style="display:none;">HP</button>
+                    <button id="lvlup-tab-asi" class="lvlup-tab" onclick="window.switchLevelUpTab('asi')" style="display:none;">ASI / Feat</button>
                 </div>
                 <div id="levelUpContent" style="overflow-y: auto; flex: 1; padding: 10px;">Loading...</div>
                 <div id="levelUpSpellsPane" style="display:none; flex:1; overflow:hidden; flex-direction:column;">
@@ -8052,6 +8137,8 @@ window.openLevelUpModal = async function(level) {
                         <span style="font-size:0.78rem; color:var(--ink-light); font-style:italic;">Click row to select · click again to deselect</span>
                     </div>
                 </div>
+                <div id="levelUpHPPane" style="display:none; overflow-y:auto; flex:1; padding:10px;"></div>
+                <div id="levelUpASIPane" style="display:none; overflow-y:auto; flex:1; padding:10px;"></div>
                 <div style="margin-top: auto; text-align: center; border-top: 1px solid var(--gold); padding: 10px; flex-shrink:0;">
                     <button id="confirmLevelUpBtn" class="btn" style="width: 100%;">Confirm Level Up</button>
                 </div>
@@ -8072,6 +8159,8 @@ window.openLevelUpModal = async function(level) {
         modal.querySelector('.info-modal-title').textContent = `Level ${level} Features`;
         document.getElementById('levelUpContent').innerHTML = 'Loading...';
         document.getElementById('lvlup-tab-spells').style.display = 'none';
+        document.getElementById('lvlup-tab-hp').style.display = 'none';
+        document.getElementById('lvlup-tab-asi').style.display = 'none';
         window.switchLevelUpTab('features');
     }
 
@@ -8158,6 +8247,28 @@ window.openLevelUpModal = async function(level) {
         if (mhBtn) mhBtn.remove();
         document.getElementById('levelUpModal').style.display = 'none';
         
+        // Apply HP gain
+        if (window.pendingLevelUpChanges?.hpGain) {
+            const gain = window.pendingLevelUpChanges.hpGain;
+            const maxHpEl = document.getElementById('maxHp');
+            const hpEl = document.getElementById('hp');
+            if (maxHpEl) {
+                const newMax = (parseInt(maxHpEl.value) || 0) + gain;
+                maxHpEl.value = newMax;
+                if (hpEl) hpEl.value = (parseInt(hpEl.value) || 0) + gain;
+            }
+        }
+        // Apply ASI choices
+        if (window.pendingLevelUpChanges?.asiChoices?.length) {
+            window.pendingLevelUpChanges.asiChoices.forEach(group => {
+                if (!Array.isArray(group)) return;
+                group.forEach(({ ability, bonus }) => {
+                    const el = document.getElementById(ability);
+                    if (el) el.value = Math.min(20, (parseInt(el.value) || 10) + bonus);
+                });
+            });
+        }
+
         window.updateClassDisplay();
         window.saveCharacter();
         // Re-detect class resources for the new level
@@ -8360,22 +8471,193 @@ function showSpellDetail(s, pane) {
 }
 
 window.switchLevelUpTab = function(tab) {
-    const featuresPane = document.getElementById('levelUpContent');
-    const spellsPane = document.getElementById('levelUpSpellsPane');
-    const tabFeatures = document.getElementById('lvlup-tab-features');
-    const tabSpells = document.getElementById('lvlup-tab-spells');
-    if (!featuresPane || !spellsPane) return;
-    if (tab === 'spells') {
-        featuresPane.style.display = 'none';
-        spellsPane.style.display = 'flex';
-        spellsPane.style.flexDirection = 'column';
-        if (tabFeatures) tabFeatures.classList.remove('lvlup-tab-active');
-        if (tabSpells) tabSpells.classList.add('lvlup-tab-active');
+    const panes = {
+        features: document.getElementById('levelUpContent'),
+        spells:   document.getElementById('levelUpSpellsPane'),
+        hp:       document.getElementById('levelUpHPPane'),
+        asi:      document.getElementById('levelUpASIPane'),
+    };
+    const tabs = {
+        features: document.getElementById('lvlup-tab-features'),
+        spells:   document.getElementById('lvlup-tab-spells'),
+        hp:       document.getElementById('lvlup-tab-hp'),
+        asi:      document.getElementById('lvlup-tab-asi'),
+    };
+    Object.values(panes).forEach(p => { if (p) p.style.display = 'none'; });
+    Object.values(tabs).forEach(t => { if (t) t.classList.remove('lvlup-tab-active'); });
+    if (tab === 'spells' && panes.spells) {
+        panes.spells.style.display = 'flex';
+        panes.spells.style.flexDirection = 'column';
+    } else if (panes[tab]) {
+        panes[tab].style.display = '';
+    }
+    if (tabs[tab]) tabs[tab].classList.add('lvlup-tab-active');
+};
+
+// ── Level-up: HP pane ──
+const _LVLUP_HIT_DICE = { Barbarian:12, Fighter:10, Paladin:10, Ranger:10, Bard:8, Cleric:8, Druid:8, Monk:8, Rogue:8, Warlock:8, Sorcerer:6, Wizard:6, Artificer:8 };
+
+window.renderLevelUpHPPane = function(charClass, level, minLevel) {
+    const pane = document.getElementById('levelUpHPPane');
+    if (!pane) return;
+    const hpTabBtn = document.getElementById('lvlup-tab-hp');
+    if (hpTabBtn) hpTabBtn.style.display = '';
+
+    const hitDie = _LVLUP_HIT_DICE[charClass] || 8;
+    const levelsGained = minLevel ? Math.max(1, level - minLevel + 1) : 1;
+    const avgRoll = Math.floor(hitDie / 2) + 1;
+    const conMod = Math.floor(((parseInt(document.getElementById('con')?.value) || 10) - 10) / 2);
+    const currentMaxHp = parseInt(document.getElementById('maxHp')?.value) || 0;
+    const avgGain = (avgRoll + conMod) * levelsGained;
+
+    const abilityRows = Array.from({ length: levelsGained }, (_, i) =>
+        `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+            <span style="color:var(--ink-light);font-size:0.88rem;min-width:80px;">${levelsGained > 1 ? `Level ${(minLevel || level) + i}:` : 'Roll:'}</span>
+            <input id="hp-roll-${i}" type="number" min="1" max="${hitDie}" placeholder="1–${hitDie}"
+                style="width:64px;text-align:center;font-size:1rem;font-weight:700;padding:4px 2px;border:1px solid var(--gold);border-radius:4px;background:var(--parchment);"
+                oninput="window.updateHPPreview(${levelsGained},${hitDie},${conMod})">
+            <span style="color:var(--ink-light);font-size:0.8rem;">/ d${hitDie}</span>
+        </div>`
+    ).join('');
+
+    pane.innerHTML = `
+        <div style="background:var(--parchment-dark);border:1px solid var(--gold);border-radius:6px;padding:10px 12px;margin-bottom:12px;display:flex;gap:16px;flex-wrap:wrap;font-size:0.88rem;">
+            <span><span style="color:var(--ink-light);">Hit Die:</span> <strong>d${hitDie}</strong></span>
+            <span><span style="color:var(--ink-light);">CON mod:</span> <strong>${conMod}</strong></span>
+            <span><span style="color:var(--ink-light);">Levels gained:</span> <strong>${levelsGained}</strong></span>
+            <span><span style="color:var(--ink-light);">Current Max HP:</span> <strong>${currentMaxHp}</strong></span>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+            <button id="hp-mode-avg" class="act-filter-pill active" onclick="window.selectHPMode('average')">Average</button>
+            <button id="hp-mode-manual" class="act-filter-pill" onclick="window.selectHPMode('manual')">Manual (Roll)</button>
+        </div>
+        <div id="hp-avg-section" style="background:var(--parchment);border:1px solid var(--gold);border-radius:6px;padding:10px;margin-bottom:12px;font-size:0.9rem;">
+            Average per level: <strong>${avgRoll}</strong> + <strong>${conMod}</strong> CON = <strong style="color:var(--red-dark);">${avgRoll + conMod}</strong>
+            ${levelsGained > 1 ? `<div style="margin-top:4px;">Total (${levelsGained} levels): <strong style="color:var(--red-dark);">${avgGain}</strong></div>` : ''}
+        </div>
+        <div id="hp-manual-section" style="display:none;margin-bottom:12px;">${abilityRows}</div>
+        <div id="hp-preview" style="background:var(--parchment-dark);border:2px solid var(--gold);border-radius:6px;padding:10px;text-align:center;font-size:0.95rem;">
+            New Max HP: <strong>${currentMaxHp}</strong> + <strong style="color:var(--red-dark);">${avgGain}</strong> = <strong style="color:var(--red-dark);font-size:1.15rem;">${currentMaxHp + avgGain}</strong>
+        </div>`;
+
+    if (window.pendingLevelUpChanges) {
+        window.pendingLevelUpChanges.hpMode = 'average';
+        window.pendingLevelUpChanges.hpGain = avgGain;
+    }
+};
+
+window.selectHPMode = function(mode) {
+    document.getElementById('hp-mode-avg')?.classList.toggle('active', mode === 'average');
+    document.getElementById('hp-mode-manual')?.classList.toggle('active', mode === 'manual');
+    document.getElementById('hp-avg-section').style.display = mode === 'average' ? '' : 'none';
+    document.getElementById('hp-manual-section').style.display = mode === 'manual' ? '' : 'none';
+    if (window.pendingLevelUpChanges) window.pendingLevelUpChanges.hpMode = mode;
+    if (mode === 'average') {
+        // re-read average gain from preview text isn't reliable; just re-trigger
+        const preview = document.getElementById('hp-preview');
+        if (preview && window.pendingLevelUpChanges?._hpAvgGain !== undefined) {
+            const g = window.pendingLevelUpChanges._hpAvgGain;
+            const cur = window.pendingLevelUpChanges._hpCurrent || 0;
+            preview.innerHTML = `New Max HP: <strong>${cur}</strong> + <strong style="color:var(--red-dark);">${g}</strong> = <strong style="color:var(--red-dark);font-size:1.15rem;">${cur + g}</strong>`;
+            window.pendingLevelUpChanges.hpGain = g;
+        }
+    }
+};
+
+window.updateHPPreview = function(levelsGained, hitDie, conMod) {
+    let total = 0;
+    for (let i = 0; i < levelsGained; i++) {
+        total += Math.max(1, Math.min(hitDie, parseInt(document.getElementById(`hp-roll-${i}`)?.value) || 0));
+    }
+    const gain = total + conMod * levelsGained;
+    const cur = parseInt(document.getElementById('maxHp')?.value) || 0;
+    const preview = document.getElementById('hp-preview');
+    if (preview) preview.innerHTML = `New Max HP: <strong>${cur}</strong> + <strong style="color:var(--red-dark);">${gain}</strong> = <strong style="color:var(--red-dark);font-size:1.15rem;">${cur + gain}</strong>`;
+    if (window.pendingLevelUpChanges) window.pendingLevelUpChanges.hpGain = gain;
+};
+
+// ── Level-up: ASI pane ──
+window.renderLevelUpASIPane = function(asiFeatures) {
+    const pane = document.getElementById('levelUpASIPane');
+    if (!pane || !asiFeatures?.length) return;
+    const asiTabBtn = document.getElementById('lvlup-tab-asi');
+    if (asiTabBtn) asiTabBtn.style.display = '';
+
+    if (!window.pendingLevelUpChanges.asiChoices) window.pendingLevelUpChanges.asiChoices = [];
+    const pending = window.pendingLevelUpChanges.asiChoices;
+
+    const STATS = [
+        { id: 'str', label: 'Strength' }, { id: 'dex', label: 'Dexterity' },
+        { id: 'con', label: 'Constitution' }, { id: 'int', label: 'Intelligence' },
+        { id: 'wis', label: 'Wisdom' }, { id: 'cha', label: 'Charisma' },
+    ];
+    const statOpts = (selectedId = '') => STATS.map(s =>
+        `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${s.label} (${(parseInt(document.getElementById(s.id)?.value)||10)})</option>`
+    ).join('');
+
+    pane.innerHTML = '';
+    asiFeatures.forEach((f, fi) => {
+        const uid = `asi-${fi}`;
+        const block = document.createElement('div');
+        block.style.cssText = 'margin-bottom:18px;border:1px solid var(--gold);border-radius:6px;padding:12px;background:var(--parchment);';
+        block.innerHTML = `
+            <div style="font-weight:700;color:var(--red-dark);margin-bottom:10px;font-size:0.95rem;">${f.name} <span style="font-weight:400;color:var(--ink-light);font-size:0.8rem;">[Level ${f.level}]</span></div>
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+                <button class="act-filter-pill active" id="${uid}-mode-+2" onclick="window._asiSetMode('${uid}','+2')">+2 to One</button>
+                <button class="act-filter-pill" id="${uid}-mode-+1+1" onclick="window._asiSetMode('${uid}','+1+1')">+1 / +1</button>
+                <button class="act-filter-pill" id="${uid}-mode-feat" onclick="window._asiSetMode('${uid}','feat')">Feat</button>
+            </div>
+            <div id="${uid}-section-+2">
+                <label style="font-size:0.88rem;color:var(--ink-light);">Choose ability (+2):</label>
+                <select id="${uid}-stat1" class="styled-select" style="width:100%;margin-top:6px;" onchange="window._asiUpdate('${uid}')">
+                    <option value="">— Choose —</option>${statOpts()}
+                </select>
+            </div>
+            <div id="${uid}-section-+1+1" style="display:none;">
+                <label style="font-size:0.88rem;color:var(--ink-light);">First ability (+1):</label>
+                <select id="${uid}-statA" class="styled-select" style="width:100%;margin-top:6px;margin-bottom:8px;" onchange="window._asiUpdate('${uid}')">
+                    <option value="">— Choose —</option>${statOpts()}
+                </select>
+                <label style="font-size:0.88rem;color:var(--ink-light);">Second ability (+1):</label>
+                <select id="${uid}-statB" class="styled-select" style="width:100%;margin-top:6px;" onchange="window._asiUpdate('${uid}')">
+                    <option value="">— Choose —</option>${statOpts()}
+                </select>
+            </div>
+            <div id="${uid}-section-feat" style="display:none;">
+                <div style="font-size:0.88rem;color:var(--ink-light);margin-bottom:8px;">Select a feat to add to your character.</div>
+                <button class="add-feature-btn" onclick="window.openFeatSearch()">Browse Feats</button>
+            </div>`;
+        block.querySelector(`#${uid}-stat1`).addEventListener('change', () => window._asiUpdate(uid));
+        pane.appendChild(block);
+        // init entry
+        pending[fi] = null;
+    });
+};
+
+window._asiSetMode = function(uid, mode) {
+    ['+2', '+1+1', 'feat'].forEach(m => {
+        document.getElementById(`${uid}-mode-${m}`)?.classList.toggle('active', m === mode);
+        const sec = document.getElementById(`${uid}-section-${m}`);
+        if (sec) sec.style.display = m === mode ? '' : 'none';
+    });
+    window._asiUpdate(uid, mode);
+};
+
+window._asiUpdate = function(uid, modeOverride) {
+    // Determine current mode
+    const activeBtn = document.querySelector(`[id^="${uid}-mode-"].active`);
+    const mode = modeOverride || (activeBtn ? activeBtn.id.replace(`${uid}-mode-`, '') : '+2');
+    const idx = parseInt(uid.split('-')[1]);
+    if (!window.pendingLevelUpChanges.asiChoices) window.pendingLevelUpChanges.asiChoices = [];
+    if (mode === '+2') {
+        const s = document.getElementById(`${uid}-stat1`)?.value;
+        window.pendingLevelUpChanges.asiChoices[idx] = s ? [{ ability: s, bonus: 2 }] : null;
+    } else if (mode === '+1+1') {
+        const a = document.getElementById(`${uid}-statA`)?.value;
+        const b = document.getElementById(`${uid}-statB`)?.value;
+        window.pendingLevelUpChanges.asiChoices[idx] = (a && b && a !== b) ? [{ ability: a, bonus: 1 }, { ability: b, bonus: 1 }] : null;
     } else {
-        featuresPane.style.display = '';
-        spellsPane.style.display = 'none';
-        if (tabFeatures) tabFeatures.classList.add('lvlup-tab-active');
-        if (tabSpells) tabSpells.classList.remove('lvlup-tab-active');
+        window.pendingLevelUpChanges.asiChoices[idx] = null; // feat handled by feat search
     }
 };
 
@@ -8632,6 +8914,8 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
         window.pendingLevelUpChanges.spells.clear();
         window.pendingLevelUpChanges.choices.clear();
         window.pendingLevelUpChanges.features = [];
+        window.pendingLevelUpChanges.asiChoices = [];
+        window.pendingLevelUpChanges.hpGain = 0;
     }
 
     try {
@@ -8734,6 +9018,17 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
             
             subDiv.appendChild(select);
             list.appendChild(subDiv);
+        }
+
+        // HP tab
+        window.renderLevelUpHPPane(charClass, level, minLevel);
+        // Store cached values for mode switching
+        if (window.pendingLevelUpChanges) {
+            const hd = _LVLUP_HIT_DICE[charClass] || 8;
+            const lg = minLevel ? Math.max(1, level - minLevel + 1) : 1;
+            const cm = Math.floor(((parseInt(document.getElementById('con')?.value)||10)-10)/2);
+            window.pendingLevelUpChanges._hpAvgGain = (Math.floor(hd/2)+1+cm)*lg;
+            window.pendingLevelUpChanges._hpCurrent = parseInt(document.getElementById('maxHp')?.value)||0;
         }
 
         // Check for Spellcasting to show "Add Spells" button
@@ -9218,6 +9513,52 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
                 </div>
                 <div style="font-size:0.9rem; line-height:1.5; overflow-wrap: break-word; word-break: break-word;">${desc}</div>
             `;
+
+            // ASI / Feat inline selector
+            if (/ability score improvement|ability improvements/i.test(f.name)) {
+                if (!window.pendingLevelUpChanges.asiChoices) window.pendingLevelUpChanges.asiChoices = [];
+                const asiIdx = window.pendingLevelUpChanges.asiChoices.length;
+                window.pendingLevelUpChanges.asiChoices.push(null);
+                const uid = `asi-${asiIdx}`;
+                const STATS = [
+                    { id: 'str', label: 'Strength' }, { id: 'dex', label: 'Dexterity' },
+                    { id: 'con', label: 'Constitution' }, { id: 'int', label: 'Intelligence' },
+                    { id: 'wis', label: 'Wisdom' }, { id: 'cha', label: 'Charisma' },
+                ];
+                const statOpts = (sel = '') => STATS.map(s =>
+                    `<option value="${s.id}" ${s.id === sel ? 'selected' : ''}>${s.label} (${parseInt(document.getElementById(s.id)?.value)||10})</option>`
+                ).join('');
+                const asiContainer = document.createElement('div');
+                asiContainer.style.cssText = 'margin-top:12px;padding:10px;background:var(--parchment-dark);border:1px solid var(--gold);border-radius:6px;';
+                asiContainer.innerHTML = `
+                    <div style="font-weight:700;font-size:0.88rem;color:var(--red-dark);margin-bottom:8px;">Apply ASI</div>
+                    <div style="display:flex;gap:6px;margin-bottom:10px;">
+                        <button class="act-filter-pill active" id="${uid}-mode-+2" onclick="window._asiSetMode('${uid}','+2')">+2 to One</button>
+                        <button class="act-filter-pill" id="${uid}-mode-+1+1" onclick="window._asiSetMode('${uid}','+1+1')">+1 / +1</button>
+                        <button class="act-filter-pill" id="${uid}-mode-feat" onclick="window._asiSetMode('${uid}','feat')">Feat</button>
+                    </div>
+                    <div id="${uid}-section-+2">
+                        <label style="font-size:0.85rem;color:var(--ink-light);">Ability (+2):</label>
+                        <select id="${uid}-stat1" class="styled-select" style="width:100%;margin-top:4px;" onchange="window._asiUpdate('${uid}')">
+                            <option value="">— Choose —</option>${statOpts()}
+                        </select>
+                    </div>
+                    <div id="${uid}-section-+1+1" style="display:none;">
+                        <label style="font-size:0.85rem;color:var(--ink-light);">First (+1):</label>
+                        <select id="${uid}-statA" class="styled-select" style="width:100%;margin-top:4px;margin-bottom:6px;" onchange="window._asiUpdate('${uid}')">
+                            <option value="">— Choose —</option>${statOpts()}
+                        </select>
+                        <label style="font-size:0.85rem;color:var(--ink-light);">Second (+1):</label>
+                        <select id="${uid}-statB" class="styled-select" style="width:100%;margin-top:4px;" onchange="window._asiUpdate('${uid}')">
+                            <option value="">— Choose —</option>${statOpts()}
+                        </select>
+                    </div>
+                    <div id="${uid}-section-feat" style="display:none;">
+                        <div style="font-size:0.85rem;color:var(--ink-light);margin-bottom:6px;">Select a feat to add.</div>
+                        <button class="add-feature-btn" onclick="window.openFeatSearch()">Browse Feats</button>
+                    </div>`;
+                div.appendChild(asiContainer);
+            }
 
             // Render choice UI for this feature
             const optSets = lvlup_extractOptionSets(f.entries || f.entry || []);
