@@ -107,21 +107,10 @@ const weaponProficiencyOptions = [
   },
 ];
 
-// Weapon DB
-let dndWeaponsDB = {};
+// Weapon DB — base set from utils.js; extended by loadWeaponsFromData()
+let dndWeaponsDB = window.dndWeaponsDB;
 window.dndTablesDB = {};
 window.dndItemsDB = {};
-
-// Equipment Packs
-window.EQUIPMENT_PACKS = {
-    "burglar's pack": ["Backpack", "Ball Bearings (bag of 1000)", "String (10 feet)", "Bell", "5 Candle", "Crowbar", "Hammer", "10 Piton", "Lantern, Hooded", "2 Oil (flask)", "5 Rations (1 day)", "Tinderbox", "Waterskin", "Rope, Hempen (50 feet)"],
-    "diplomat's pack": ["Chest", "2 Case, Map or Scroll", "Clothes, Fine", "Ink (1 ounce bottle)", "Ink Pen", "Lamp", "2 Oil (flask)", "5 Paper (one sheet)", "Perfume (vial)", "Sealing Wax", "Soap"],
-    "dungeoneer's pack": ["Backpack", "Crowbar", "Hammer", "10 Piton", "10 Torch", "Tinderbox", "10 Rations (1 day)", "Waterskin", "Rope, Hempen (50 feet)"],
-    "entertainer's pack": ["Backpack", "Bedroll", "2 Costume", "5 Candle", "5 Rations (1 day)", "Waterskin", "Disguise Kit"],
-    "explorer's pack": ["Backpack", "Bedroll", "Mess Kit", "Tinderbox", "10 Torch", "10 Rations (1 day)", "Waterskin", "Rope, Hempen (50 feet)"],
-    "priest's pack": ["Backpack", "Blanket", "10 Candle", "Tinderbox", "Alms Box", "2 Incense (block)", "Censer", "Vestments", "2 Rations (1 day)", "Waterskin"],
-    "scholar's pack": ["Backpack", "Book of Lore", "Ink (1 ounce bottle)", "Ink Pen", "10 Parchment (one sheet)", "Sand (little bag)", "Small Knife"]
-};
 
 const conditionsDB = {
   Blinded:
@@ -284,113 +273,7 @@ function getLevel() {
     return parseInt(document.getElementById("level")?.value) || 1;
 }
 
-// Helper to process entries recursively (Global)
-window.processEntries = function (entries) {
-  if (!entries) return "";
-  if (typeof entries === "string") return entries;
-  if (Array.isArray(entries))
-    return entries.map((e) => window.processEntries(e)).filter(e => e).join("<br><br>");
-
-  if (entries.type === "list") {
-    return (
-      "<ul style='padding-left: 20px; margin: 5px 0;'>" +
-      (entries.items || [])
-        .map((i) => `<li>${window.processEntries(i)}</li>`)
-        .join("") +
-      "</ul>"
-    );
-  }
-  if (entries.type === "table") {
-    let html =
-      "<div style='overflow-x:auto;'><table class='currency-table' style='width:100%; font-size:0.8rem; margin-top:5px;'>";
-    if (entries.colLabels) {
-      html +=
-        "<thead><tr>" +
-        entries.colLabels
-          .map((l) => `<th>${window.processEntries(l)}</th>`)
-          .join("") +
-        "</tr></thead>";
-    }
-    if (entries.rows) {
-      html +=
-        "<tbody>" +
-        entries.rows
-          .map(
-            (row) =>
-              "<tr>" +
-              row
-                .map((cell) => `<td>${window.processEntries(cell)}</td>`)
-                .join("") +
-              "</tr>",
-          )
-          .join("") +
-        "</tbody>";
-    }
-    html += "</table></div>";
-    return html;
-  }
-
-  if (entries.type === "refFeat") return `<strong>Feat:</strong> {@feat ${entries.feat}}`;
-  if (entries.type === "refOptionalfeature") return `<strong>Option:</strong> {@optionalfeature ${entries.optionalfeature}}`;
-  if (entries.type === "refClassFeature") return "";
-  if (entries.type === "refSubclassFeature") return "";
-  if (entries.type === "refSpell") return `<strong>Spell:</strong> {@spell ${entries.spell}}`;
-
-  let text = "";
-  if (entries.name) text += `<strong>${entries.name}.</strong> `;
-  if (entries.entries) text += window.processEntries(entries.entries);
-  else if (entries.entry) text += window.processEntries(entries.entry);
-  return text || entries.text || "";
-};
-
-// Helper to clean style tags (Global)
-window.cleanText = function (str) {
-  if (!str) return "";
-  let cleaned = str.replace(/\{@(\w+)\s*([^}]+)?\}/g, (match, tag, content) => {
-    if (tag === 'recharge') return content ? `(Recharge ${content}-6)` : "(Recharge 6)";
-    
-    if (!content) return "";
-    const parts = content.split('|');
-    const name = parts[0];
-
-    if (tag === 'h') return "Hit: ";
-    if (tag === 'm') return "Miss: ";
-    if (tag === 'atk') {
-        if (name === 'm') return "Melee Attack: ";
-        if (name === 'r') return "Ranged Attack: ";
-        if (name === 'mw') return "Melee Weapon Attack: ";
-        if (name === 'rw') return "Ranged Weapon Attack: ";
-        if (name === 'ms') return "Melee Spell Attack: ";
-        if (name === 'rs') return "Ranged Spell Attack: ";
-        return "Attack: ";
-    }
-    if (tag === 'b' || tag === 'bold') return `<b>${name}</b>`;
-    if (tag === 'i' || tag === 'italic') return `<i>${name}</i>`;
-    if (tag === 'dc') return `DC ${name}`;
-    if (tag === 'hit') return `+${name}`;
-    if (tag === 'chance') return `${parts[1] || name + '%'}`;
-    if (tag === 'note') return `Note: ${name}`;
-
-    if (tag === 'table') {
-        const tableName = name.split(';')[0].trim();
-        if (window.dndTablesDB && window.dndTablesDB[tableName]) {
-            return window.processEntries(window.dndTablesDB[tableName]);
-        }
-        return tableName;
-    }
-    if (tag === 'filter') return name.split(';')[0].trim();
-    
-    // Generic handler for pipe-separated content (name|source|display)
-    // If there's a display text (usually 3rd arg), use it. Otherwise use name.
-    if (parts.length >= 3 && parts[2]) return parts[2];
-    return name;
-  });
-
-  if (cleaned !== str && /\{@(\w+)\s*([^}]+)?\}/.test(cleaned)) {
-      return window.cleanText(cleaned);
-  }
-  return cleaned;
-};
+// processEntries and cleanText live in utils.js
 
 // Auto-resize logic
 function autoResizeTextarea(element) {
@@ -1423,35 +1306,11 @@ window.openNoteEditor = function (
 /* =========================================
       ITEM SEARCH (IndexedDB)
       ========================================= */
-const DB_NAME = "DndDataDB";
-const STORE_NAME = "files";
-const DB_VERSION = 7;
-
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onerror = () => {
-      console.error("IndexedDB open error:", request.error);
-      reject(request.error);
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onblocked = (e) => {
-      console.warn("IndexedDB blocked. Please close other tabs.");
-      alert(
-        "Database upgrade blocked. Please close other tabs with this site open and reload.",
-      );
-    };
-    request.onupgradeneeded = (e) => {
-      console.log(
-        `IndexedDB upgrade needed: ${e.oldVersion} -> ${e.newVersion}`,
-      );
-      const db = e.target.result;
-      if (db.objectStoreNames.contains(STORE_NAME))
-        db.deleteObjectStore(STORE_NAME);
-      db.createObjectStore(STORE_NAME);
-    };
-  });
-}
+// DB constants and openDB() live in utils.js
+const DB_NAME   = window.DB_NAME;
+const STORE_NAME = window.STORE_NAME;
+const DB_VERSION = window.DB_VERSION;
+const openDB    = window.openDB;
 
 function loadWeaponsFromData(parsedData) {
   if (!parsedData) return;
@@ -6467,24 +6326,9 @@ window.refreshSpellsInActionsView = function() {
 window.mountDefensesView = function() {
     const view = document.getElementById('view-defenses');
     if (!view) return;
-
-    function moveEl(el, attrKey) {
-        if (!el || el.dataset[attrKey]) return;
-        const ph = document.createElement('div');
-        ph.id = attrKey + '-ph-' + Math.random().toString(36).slice(2);
-        ph.style.display = 'none';
-        el.parentNode.insertBefore(ph, el);
-        el.dataset[attrKey] = ph.id;
-        view.appendChild(el);
-    }
-
-    // Speed
-    const speedStat = document.getElementById('speed')?.closest('.combat-stat');
-    moveEl(speedStat, 'defMoved');
-
-    // Defenses section (resistances, immunities, vulnerabilities)
-    const defField = document.getElementById('resistances')?.closest('.field');
-    moveEl(defField, 'defMoved');
+    const moveEl = window.createViewMover(view, 'defMoved');
+    moveEl(document.getElementById('speed')?.closest('.combat-stat'));
+    moveEl(document.getElementById('resistances')?.closest('.field'));
 };
 
 window.unmountDefensesView = function() {
@@ -6499,22 +6343,11 @@ window.unmountDefensesView = function() {
 window.mountProficienciesView = function() {
     const view = document.getElementById('view-proficiencies');
     if (!view) return;
-
-    function moveEl(el, attrKey) {
-        if (!el || el.dataset[attrKey]) return;
-        const ph = document.createElement('div');
-        ph.id = attrKey + '-ph-' + Math.random().toString(36).slice(2);
-        ph.style.display = 'none';
-        el.parentNode.insertBefore(ph, el);
-        el.dataset[attrKey] = ph.id;
-        view.appendChild(el);
-    }
-
-    moveEl(document.getElementById('profBonus')?.closest('.combat-stat'), 'profMoved');
-    moveEl(document.getElementById('armorLight')?.closest('.field'), 'profMoved');
-    moveEl(document.getElementById('weaponProfsSelector')?.closest('.field'), 'profMoved');
-    moveEl(document.getElementById('toolProfs')?.closest('.field'), 'profMoved');
-    moveEl(document.getElementById('languages')?.closest('.field'), 'profMoved');
+    const moveEl = window.createViewMover(view, 'profMoved');
+    ['profBonus', 'armorLight', 'weaponProfsSelector', 'toolProfs', 'languages'].forEach(id => {
+        const el = document.getElementById(id);
+        moveEl(el?.closest('.combat-stat') || el?.closest('.field'));
+    });
 };
 
 window.unmountProficienciesView = function() {
@@ -6529,20 +6362,10 @@ window.unmountProficienciesView = function() {
 window.mountNotesView = function() {
     const view = document.getElementById('view-notes');
     if (!view) return;
-
-    function moveEl(el, attrKey) {
-        if (!el || el.dataset[attrKey]) return;
-        const ph = document.createElement('div');
-        ph.id = attrKey + '-ph-' + Math.random().toString(36).slice(2);
-        ph.style.display = 'none';
-        el.parentNode.insertBefore(ph, el);
-        el.dataset[attrKey] = ph.id;
-        view.appendChild(el);
-    }
-
-    ['personality','ideals','bonds','flaws','deity','notes'].forEach(id => {
-        moveEl(document.getElementById(id)?.closest('.field'), 'notesMoved');
-    });
+    const moveEl = window.createViewMover(view, 'notesMoved');
+    ['personality','ideals','bonds','flaws','deity','notes'].forEach(id =>
+        moveEl(document.getElementById(id)?.closest('.field'))
+    );
 };
 
 window.unmountNotesView = function() {
@@ -6557,22 +6380,10 @@ window.unmountNotesView = function() {
 window.mountFeaturesView = function() {
     const view = document.getElementById('view-features');
     if (!view) return;
-
-    function moveEl(el, attrKey) {
-        if (!el || el.dataset[attrKey]) return;
-        const ph = document.createElement('div');
-        ph.id = attrKey + '-ph-' + Math.random().toString(36).slice(2);
-        ph.style.display = 'none';
-        el.parentNode.insertBefore(ph, el);
-        el.dataset[attrKey] = ph.id;
-        view.appendChild(el);
-    }
-
-    // Move the filter row and all 4 feature sections
-    moveEl(document.getElementById('features-filter-row'), 'featMoved');
-    ['class-features','race-features','background-features','feats'].forEach(id => {
-        moveEl(document.getElementById(id), 'featMoved');
-    });
+    const moveEl = window.createViewMover(view, 'featMoved');
+    ['features-filter-row','class-features','race-features','background-features','feats'].forEach(id =>
+        moveEl(document.getElementById(id))
+    );
 };
 
 window.unmountFeaturesView = function() {

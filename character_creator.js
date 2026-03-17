@@ -1,4 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Aliases for shared utilities from utils.js
+    const processEntries    = window.processEntries;
+    const formatDescription = window.cleanText;
+    const openDB            = window.openDB;
+    const STORE_NAME        = window.STORE_NAME;
+    const EQUIPMENT_PACKS   = window.EQUIPMENT_PACKS;
+    const dndWeaponsDB      = window.dndWeaponsDB;
+
     const classList = document.getElementById('creator-class-list');
     let selectedClass = null;
     let selectedLevel = 1;
@@ -60,136 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log(`[Equipment Selected] ${radio.name}:`, val);
     };
 
-    // Weapon DB (Copied for Character Creator)
-    const dndWeaponsDB = {
-        "Club": { type: "Simple", cat: "Melee", dmg: "1d4", dtype: "bludgeoning", props: ["Light"], mastery: "Slow" },
-        "Dagger": { type: "Simple", cat: "Melee", dmg: "1d4", dtype: "piercing", props: ["Finesse", "Light", "Thrown (20/60)"], mastery: "Nick" },
-        "Greatclub": { type: "Simple", cat: "Melee", dmg: "1d8", dtype: "bludgeoning", props: ["Two-Handed"], mastery: "Push" },
-        "Handaxe": { type: "Simple", cat: "Melee", dmg: "1d6", dtype: "slashing", props: ["Light", "Thrown (20/60)"], mastery: "Vex" },
-        "Javelin": { type: "Simple", cat: "Melee", dmg: "1d6", dtype: "piercing", props: ["Thrown (30/120)"], mastery: "Slow" },
-        "Light Hammer": { type: "Simple", cat: "Melee", dmg: "1d4", dtype: "bludgeoning", props: ["Light", "Thrown (20/60)"], mastery: "Nick" },
-        "Mace": { type: "Simple", cat: "Melee", dmg: "1d6", dtype: "bludgeoning", props: [], mastery: "Sap" },
-        "Quarterstaff": { type: "Simple", cat: "Melee", dmg: "1d6", dtype: "bludgeoning", props: ["Versatile (1d8)"], mastery: "Topple" },
-        "Sickle": { type: "Simple", cat: "Melee", dmg: "1d4", dtype: "slashing", props: ["Light"], mastery: "Nick" },
-        "Spear": { type: "Simple", cat: "Melee", dmg: "1d6", dtype: "piercing", props: ["Thrown (20/60)", "Versatile (1d8)"], mastery: "Sap" },
-        "Light Crossbow": { type: "Simple", cat: "Ranged", dmg: "1d8", dtype: "piercing", props: ["Ammunition (80/320)", "Loading", "Two-Handed"], mastery: "Slow" },
-        "Dart": { type: "Simple", cat: "Ranged", dmg: "1d4", dtype: "piercing", props: ["Finesse", "Thrown (20/60)"], mastery: "Vex" },
-        "Shortbow": { type: "Simple", cat: "Ranged", dmg: "1d6", dtype: "piercing", props: ["Ammunition (80/320)", "Two-Handed"], mastery: "Vex" },
-        "Sling": { type: "Simple", cat: "Ranged", dmg: "1d4", dtype: "bludgeoning", props: ["Ammunition (30/120)"], mastery: "Slow" },
-        "Battleaxe": { type: "Martial", cat: "Melee", dmg: "1d8", dtype: "slashing", props: ["Versatile (1d10)"], mastery: "Topple" },
-        "Flail": { type: "Martial", cat: "Melee", dmg: "1d8", dtype: "bludgeoning", props: [], mastery: "Sap" },
-        "Glaive": { type: "Martial", cat: "Melee", dmg: "1d10", dtype: "slashing", props: ["Heavy", "Reach", "Two-Handed"], mastery: "Graze" },
-        "Greataxe": { type: "Martial", cat: "Melee", dmg: "1d12", dtype: "slashing", props: ["Heavy", "Two-Handed"], mastery: "Cleave" },
-        "Greatsword": { type: "Martial", cat: "Melee", dmg: "2d6", dtype: "slashing", props: ["Heavy", "Two-Handed"], mastery: "Graze" },
-        "Halberd": { type: "Martial", cat: "Melee", dmg: "1d10", dtype: "slashing", props: ["Heavy", "Reach", "Two-Handed"], mastery: "Cleave" },
-        "Lance": { type: "Martial", cat: "Melee", dmg: "1d12", dtype: "piercing", props: ["Reach", "Special"], mastery: "Topple" },
-        "Longsword": { type: "Martial", cat: "Melee", dmg: "1d8", dtype: "slashing", props: ["Versatile (1d10)"], mastery: "Sap" },
-        "Maul": { type: "Martial", cat: "Melee", dmg: "2d6", dtype: "bludgeoning", props: ["Heavy", "Two-Handed"], mastery: "Topple" },
-        "Morningstar": { type: "Martial", cat: "Melee", dmg: "1d8", dtype: "piercing", props: [], mastery: "Sap" },
-        "Pike": { type: "Martial", cat: "Melee", dmg: "1d10", dtype: "piercing", props: ["Heavy", "Reach", "Two-Handed"], mastery: "Push" },
-        "Rapier": { type: "Martial", cat: "Melee", dmg: "1d8", dtype: "piercing", props: ["Finesse"], mastery: "Vex" },
-        "Scimitar": { type: "Martial", cat: "Melee", dmg: "1d6", dtype: "slashing", props: ["Finesse", "Light"], mastery: "Nick" },
-        "Shortsword": { type: "Martial", cat: "Melee", dmg: "1d6", dtype: "piercing", props: ["Finesse", "Light"], mastery: "Vex" },
-        "Trident": { type: "Martial", cat: "Melee", dmg: "1d6", dtype: "piercing", props: ["Thrown (20/60)", "Versatile (1d8)"], mastery: "Topple" },
-        "War Pick": { type: "Martial", cat: "Melee", dmg: "1d8", dtype: "piercing", props: [], mastery: "Sap" },
-        "Warhammer": { type: "Martial", cat: "Melee", dmg: "1d8", dtype: "bludgeoning", props: ["Versatile (1d10)"], mastery: "Push" },
-        "Whip": { type: "Martial", cat: "Melee", dmg: "1d4", dtype: "slashing", props: ["Finesse", "Reach"], mastery: "Slow" },
-        "Blowgun": { type: "Martial", cat: "Ranged", dmg: "1", dtype: "piercing", props: ["Ammunition (25/100)", "Loading"], mastery: "Vex" },
-        "Hand Crossbow": { type: "Martial", cat: "Ranged", dmg: "1d6", dtype: "piercing", props: ["Ammunition (30/120)", "Light", "Loading"], mastery: "Vex" },
-        "Heavy Crossbow": { type: "Martial", cat: "Ranged", dmg: "1d10", dtype: "piercing", props: ["Ammunition (100/400)", "Heavy", "Loading", "Two-Handed"], mastery: "Push" },
-        "Longbow": { type: "Martial", cat: "Ranged", dmg: "1d8", dtype: "piercing", props: ["Ammunition (150/600)", "Heavy", "Two-Handed"], mastery: "Slow" },
-        "Net": { type: "Martial", cat: "Ranged", dmg: "0", dtype: "-", props: ["Special", "Thrown (5/15)"], mastery: null },
-        "Musket": { type: "Martial", cat: "Ranged", dmg: "1d12", dtype: "piercing", props: ["Ammunition (40/120)", "Loading", "Two-Handed"], mastery: "Slow" },
-        "Pistol": { type: "Martial", cat: "Ranged", dmg: "1d10", dtype: "piercing", props: ["Ammunition (30/90)", "Loading"], mastery: "Vex" }
-    };
-
-    // Equipment Packs DB
-    const EQUIPMENT_PACKS = {
-        "burglar's pack": ["Backpack", "Ball Bearings (bag of 1000)", "String (10 feet)", "Bell", "5 Candle", "Crowbar", "Hammer", "10 Piton", "Lantern, Hooded", "2 Oil (flask)", "5 Rations (1 day)", "Tinderbox", "Waterskin", "Rope, Hempen (50 feet)"],
-        "diplomat's pack": ["Chest", "2 Case, Map or Scroll", "Clothes, Fine", "Ink (1 ounce bottle)", "Ink Pen", "Lamp", "2 Oil (flask)", "5 Paper (one sheet)", "Perfume (vial)", "Sealing Wax", "Soap"],
-        "dungeoneer's pack": ["Backpack", "Crowbar", "Hammer", "10 Piton", "10 Torch", "Tinderbox", "10 Rations (1 day)", "Waterskin", "Rope, Hempen (50 feet)"],
-        "entertainer's pack": ["Backpack", "Bedroll", "2 Costume", "5 Candle", "5 Rations (1 day)", "Waterskin", "Disguise Kit"],
-        "explorer's pack": ["Backpack", "Bedroll", "Mess Kit", "Tinderbox", "10 Torch", "10 Rations (1 day)", "Waterskin", "Rope, Hempen (50 feet)"],
-        "priest's pack": ["Backpack", "Blanket", "10 Candle", "Tinderbox", "Alms Box", "2 Incense (block)", "Censer", "Vestments", "2 Rations (1 day)", "Waterskin"],
-        "scholar's pack": ["Backpack", "Book of Lore", "Ink (1 ounce bottle)", "Ink Pen", "10 Parchment (one sheet)", "Sand (little bag)", "Small Knife"]
-    };
-
-    // DB Setup
-    const DB_NAME = 'DndDataDB';
-    const STORE_NAME = 'files';
-    const DB_VERSION = 7;
-
-    // Helper to process entries recursively
-    const processEntries = (entries, depth = 0) => {
-        if (!entries) return "";
-        if (typeof entries === 'string') return entries;
-        
-        if (Array.isArray(entries)) {
-            return entries.map(e => processEntries(e, depth)).filter(e => e).join("<br><br>");
-        }
-
-        const entry = entries;
-        let type = entry.type || "entries";
-        let result = "";
-
-        switch (type) {
-            case "entries":
-            case "section":
-            case "item":
-                if (entry.name) result += `<strong>${entry.name}.</strong> `;
-                if (entry.entries) result += processEntries(entry.entries, depth + 1);
-                else if (entry.entry) result += processEntries(entry.entry, depth + 1);
-                break;
-            
-            case "list":
-                if (entry.name) result += `<strong>${entry.name}</strong>`;
-                result += "<ul style='margin-top:4px; padding-left:20px; list-style-type:disc;'>";
-                if (entry.items) {
-                    result += entry.items.map(item => {
-                        return `<li>${processEntries(item, depth + 1)}</li>`;
-                    }).join("");
-                }
-                result += "</ul>";
-                break;
-
-            case "table":
-                if (entry.caption) result += `<strong>${entry.caption}</strong>`;
-                result += "<div style='overflow-x:auto;'><table class='currency-table' style='width:100%; font-size:0.8rem; margin-top:5px;'>";
-                if (entry.colLabels) {
-                    result += "<thead><tr>" + entry.colLabels.map(l => `<th>${processEntries(l, depth)}</th>`).join("") + "</tr></thead>";
-                }
-                if (entry.rows) {
-                    result += "<tbody>" + entry.rows.map(row => "<tr>" + row.map(cell => {
-                        let cellContent = cell;
-                        if (typeof cell === 'object' && cell.roll) {
-                            cellContent = `${cell.roll.min}-${cell.roll.max}`;
-                        }
-                        return `<td>${processEntries(cellContent, depth)}</td>`;
-                    }).join("") + "</tr>").join("") + "</tbody>";
-                }
-                result += "</table></div>";
-                break;
-
-            case "inset":
-            case "insetReadaloud":
-            case "quote":
-                result += "<div style='background:rgba(0,0,0,0.05); padding:10px; border-left:3px solid var(--gold); margin:10px 0;'>";
-                if (entry.name) result += `<strong>${entry.name}</strong><br>`;
-                if (entry.entries) result += processEntries(entry.entries, depth + 1);
-                if (entry.by) result += `<div style='text-align:right; font-style:italic;'>— ${entry.by}</div>`;
-                result += "</div>";
-                break;
-            
-            default:
-                if (entry.name) result += `<strong>${entry.name}.</strong> `;
-                if (entry.entries) result += processEntries(entry.entries, depth + 1);
-                else if (entry.entry) result += processEntries(entry.entry, depth + 1);
-                else if (entry.text) result += entry.text;
-                break;
-        }
-        
-        return result;
-    };
+    // dndWeaponsDB, EQUIPMENT_PACKS, DB constants, processEntries → from utils.js (aliased at top)
 
     const getSpellsFromFilter = (filterString) => {
         if (!filterString || allSpells.length === 0) return [];
@@ -262,80 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return unique;
     };
 
-    const resolveFilterTag = (content) => {
-        const parts = content.split('|');
-        const label = parts[0];
-        return label;
-    };
-
-    const formatDescription = (text) => {
-        if (!text) return "";
-        if (window.cleanText) return window.cleanText(text);
-        let clean = text;
-        clean = clean.replace(/\{@(\w+)\s*([^}]+)?\}/g, (match, tag, content) => {
-            if (tag === 'recharge') return content ? `(Recharge ${content}-6)` : "(Recharge 6)";
-            
-            if (!content) return "";
-            const parts = content.split('|');
-            const name = parts[0];
-
-            if (tag === 'filter') return resolveFilterTag(content); // Keep local filter logic if specific
-            if (tag === 'h') return "Hit: ";
-            if (tag === 'm') return "Miss: ";
-            if (tag === 'atk') {
-                if (name === 'm') return "Melee Attack: ";
-                if (name === 'r') return "Ranged Attack: ";
-                if (name === 'mw') return "Melee Weapon Attack: ";
-                if (name === 'rw') return "Ranged Weapon Attack: ";
-                if (name === 'ms') return "Melee Spell Attack: ";
-                if (name === 'rs') return "Ranged Spell Attack: ";
-                return "Attack: ";
-            }
-            if (tag === 'b' || tag === 'bold') return `<b>${name}</b>`;
-            if (tag === 'i' || tag === 'italic') return `<i>${name}</i>`;
-            if (tag === 'dc') return `DC ${name}`;
-            if (tag === 'hit') return `+${name}`;
-            if (tag === 'chance') return `${parts[1] || name + '%'}`;
-            if (tag === 'note') return `Note: ${name}`;
-
-            if (parts.length >= 3 && parts[2]) return parts[2];
-            return name;
-        });
-        return clean;
-    };
-
-    function openDB() {
-        return new Promise((resolve, reject) => {
-            console.log(`[DB] Opening ${DB_NAME} version ${DB_VERSION}...`);
-            const request = indexedDB.open(DB_NAME, DB_VERSION);
-            
-            request.onerror = (event) => {
-                console.error("[DB] Error opening database:", request.error);
-                reject(request.error);
-            };
-
-            request.onblocked = (event) => {
-                console.warn("[DB] Database upgrade blocked. Please close other tabs.");
-                alert("Database upgrade blocked. Please close other tabs with this site open and reload.");
-            };
-
-            request.onsuccess = (event) => {
-                console.log("[DB] Database opened successfully.");
-                resolve(request.result);
-            };
-            
-            request.onupgradeneeded = (e) => {
-                console.log(`[DB] Upgrade needed: ${e.oldVersion} -> ${e.newVersion}`);
-                const db = e.target.result;
-                if (db.objectStoreNames.contains(STORE_NAME)) {
-                    console.log(`[DB] Deleting old object store: ${STORE_NAME}`);
-                    db.deleteObjectStore(STORE_NAME);
-                }
-                console.log(`[DB] Creating object store: ${STORE_NAME}`);
-                db.createObjectStore(STORE_NAME);
-            };
-        });
-    }
+    // formatDescription, openDB → from utils.js (aliased at top)
 
     async function loadClassData() {
         try {
