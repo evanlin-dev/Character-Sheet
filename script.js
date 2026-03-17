@@ -4579,6 +4579,365 @@ window.downloadJSON = function () {
   URL.revokeObjectURL(url);
 };
 
+window.openShareModal = function() {
+    let modal = document.getElementById('shareModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'shareModal';
+        modal.className = 'info-modal-overlay';
+        modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+        <div class="info-modal-content" style="max-width:320px;">
+            <button class="info-modal-close" onclick="document.getElementById('shareModal').style.display='none'">×</button>
+            <h3 class="info-modal-title">Share / Export</h3>
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:4px;">
+                <button class="btn" style="text-align:left; height:auto; padding:10px 14px;" onclick="window.downloadJSON(); document.getElementById('shareModal').style.display='none'">
+                    <div style="font-weight:700;">📥 Download JSON</div>
+                    <div style="font-size:0.78rem; font-weight:400; color:var(--parchment); opacity:0.85; margin-top:2px;">Save all character data as a file you can reload later</div>
+                </button>
+                <button class="btn" style="text-align:left; height:auto; padding:10px 14px;" onclick="window.printCharacterSheet(); document.getElementById('shareModal').style.display='none'">
+                    <div style="font-weight:700;">🖨️ Print / Save as PDF</div>
+                    <div style="font-size:0.78rem; font-weight:400; color:var(--parchment); opacity:0.85; margin-top:2px;">Opens a compact print-ready sheet (~3 pages) — use browser Print → Save as PDF</div>
+                </button>
+            </div>
+        </div>`;
+    modal.style.display = 'flex';
+};
+
+window.printCharacterSheet = function() {
+    saveCharacter();
+    const raw = localStorage.getItem('dndCharacter');
+    if (!raw) return;
+    const d = JSON.parse(raw);
+
+    const v = (id, fallback = '') => {
+        const el = document.getElementById(id);
+        return el ? (el.value || fallback) : fallback;
+    };
+    const mod = score => {
+        const n = parseInt(score) || 10;
+        const m = Math.floor((n - 10) / 2);
+        return (m >= 0 ? '+' : '') + m;
+    };
+    const pct = (used, total) => total > 0 ? Math.round((used / total) * 100) : 0;
+    const pip = (used, total) => {
+        let s = '';
+        for (let i = 0; i < total; i++) s += i < used ? '●' : '○';
+        return s || '—';
+    };
+
+    const stats = ['str','dex','con','int','wis','cha'];
+    const statLabels = ['STR','DEX','CON','INT','WIS','CHA'];
+    const saveNames = ['Strength','Dexterity','Constitution','Intelligence','Wisdom','Charisma'];
+    const skillList = [
+        {name:'Acrobatics', stat:'dex'}, {name:'Animal Handling', stat:'wis'}, {name:'Arcana', stat:'int'},
+        {name:'Athletics', stat:'str'}, {name:'Deception', stat:'cha'}, {name:'History', stat:'int'},
+        {name:'Insight', stat:'wis'}, {name:'Intimidation', stat:'cha'}, {name:'Investigation', stat:'int'},
+        {name:'Medicine', stat:'wis'}, {name:'Nature', stat:'int'}, {name:'Perception', stat:'wis'},
+        {name:'Performance', stat:'cha'}, {name:'Persuasion', stat:'cha'}, {name:'Religion', stat:'int'},
+        {name:'Sleight of Hand', stat:'dex'}, {name:'Stealth', stat:'dex'}, {name:'Survival', stat:'wis'},
+    ];
+
+    const pb = parseInt(d.profBonus) || 2;
+    const statVals = {};
+    stats.forEach(s => { statVals[s] = parseInt(d[s]) || 10; });
+    const modVal = s => Math.floor((statVals[s] - 10) / 2);
+
+    const saveProfs = d.savingThrows || {};
+    const saveExps = d.savingThrowsExpertise || {};
+    const skillProfs = d.skills || {};
+    const skillExps = d.skillsExpertise || {};
+    const advStates = d.advantageState || {};
+
+    const skillBonus = skill => {
+        const base = modVal(skill.stat);
+        const prof = skillProfs[skill.name] ? (skillExps[skill.name] ? pb * 2 : pb) : 0;
+        const total = base + prof;
+        return (total >= 0 ? '+' : '') + total;
+    };
+    const saveBonus = (stat, i) => {
+        const base = modVal(stat);
+        const prof = saveProfs[saveNames[i]] ? pb : 0;
+        const total = base + prof;
+        return (total >= 0 ? '+' : '') + total;
+    };
+
+    const skillHalf = Math.ceil(skillList.length / 2);
+    const skillsCol1 = skillList.slice(0, skillHalf);
+    const skillsCol2 = skillList.slice(skillHalf);
+    const skillRow = skill => {
+        const isProf = !!skillProfs[skill.name];
+        const isExp = isProf && !!skillExps[skill.name];
+        const hasAdv = !!(advStates.skills && advStates.skills[skill.name]);
+        const badge = isExp ? 'EXP' : isProf ? 'PROF' : '';
+        const advMark = hasAdv ? ' ▲' : '';
+        return `<tr><td class="pip">${badge}</td><td>${skill.name}${advMark}</td><td class="right">${skillBonus(skill)}</td></tr>`;
+    };
+
+    const resources = (d.resourcesData || []).map(r => {
+        const max = r.max || 0;
+        return `<tr><td>${r.name}</td><td class="right">${pip(r.used, max)}</td><td class="center">${r.reset === 'sr' ? 'SR' : r.reset === 'both' ? 'SR/LR' : 'LR'}</td></tr>`;
+    }).join('') || '<tr><td colspan="3" class="muted">—</td></tr>';
+
+    const weapons = (d.weapons || []).map(w =>
+        `<tr><td>${w.name || '—'}</td><td class="center">${w.atk || '—'}</td><td class="center">${w.damage || '—'}</td><td>${w.notes || ''}</td></tr>`
+    ).join('') || '<tr><td colspan="4" class="muted">—</td></tr>';
+
+    const renderFeatureList = arr => (arr || []).map(f =>
+        `<div class="feature"><span class="fname">${f.title || ''}</span>${f.desc ? ': <span class="fdesc">' + f.desc.replace(/<[^>]+>/g, ' ').substring(0, 200) + (f.desc.length > 200 ? '…' : '') + '</span>' : ''}</div>`
+    ).join('');
+
+    const allFeatures = [
+        ...(d.classFeatures || []), ...(d.raceFeatures || []),
+        ...(d.backgroundFeatures || []), ...(d.feats || [])
+    ];
+
+    const actionList = type => (d[type] || []).map(f => `<span class="atag">${f.title}</span>`).join(' ');
+
+    const slots = (d.spellSlotsData || []).map(s =>
+        `<span class="slot-entry">Lv${s.level}: ${pip(s.used, s.total)} (${s.total - s.used}/${s.total})</span>`
+    ).join('  ');
+
+    const cantrips = (d.cantripsList || []).map(c => c.name).filter(Boolean).join(', ');
+
+    const spellsByLevel = {};
+    [...(d.preparedSpells || []), ...(d.unpreparedSpells || [])].forEach(s => {
+        const lv = parseInt(s.level) || 0;
+        if (!spellsByLevel[lv]) spellsByLevel[lv] = [];
+        spellsByLevel[lv].push(s);
+    });
+    const spellRows = Object.keys(spellsByLevel).sort((a,b) => a-b).map(lv => {
+        const list = spellsByLevel[lv].map(s => {
+            const prep = (d.preparedSpells || []).some(p => p.name === s.name) ? '★ ' : '';
+            const conc = s.concentration ? ' [C]' : '';
+            const rit = s.ritual ? ' [R]' : '';
+            return `${prep}${s.name}${conc}${rit}`;
+        }).join(', ');
+        return `<tr><td class="center lv">Lv${lv}</td><td>${list}</td></tr>`;
+    }).join('');
+
+    const equipped = (d.inventory || []).filter(i => i.equipped);
+    const backpack = (d.inventory || []).filter(i => !i.equipped);
+    const invRow = i => `<tr><td>${i.name || ''}</td><td class="center">${i.qty || 1}</td><td class="right">${i.weight ? i.weight + ' lb' : '—'}</td></tr>`;
+
+    const currency = ['pp','gp','ep','sp','cp'].map(c => d[c] ? `${d[c]} ${c.toUpperCase()}` : '').filter(Boolean).join('  ');
+
+    const armorProfs = ['light','medium','heavy','shields'].filter(k => d['armor_' + k]).join(', ');
+    const weaponProfs = (d.weaponProficiencies || []).join(', ');
+    const tools = d.toolProficiencies || '';
+    const langs = (d.languages || []).join(', ');
+
+    const condList = (d.activeConditions || []).join(', ') || '—';
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>${d.charName || 'Character'} — Character Sheet</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: 'Georgia', serif; font-size: 9pt; color: #1a1008; background: white; }
+h1 { font-family: 'Palatino Linotype', serif; font-size: 18pt; color: #6b1a1a; letter-spacing: 0.03em; border-bottom: 2px solid #8b6914; padding-bottom: 4px; margin-bottom: 2px; }
+h2 { font-family: 'Palatino Linotype', serif; font-size: 9pt; color: #6b1a1a; text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 1px solid #c8a830; padding-bottom: 2px; margin: 8px 0 4px; }
+h3 { font-family: 'Palatino Linotype', serif; font-size: 8pt; font-weight: bold; color: #4a3000; text-transform: uppercase; letter-spacing: 0.05em; margin: 6px 0 3px; }
+.page { width: 100%; padding: 14mm 14mm 10mm; page-break-after: always; }
+.page:last-child { page-break-after: auto; }
+.char-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px; }
+.char-meta { font-size: 8pt; color: #5a4020; }
+.char-meta span { margin-left: 12px; }
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cols3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.box { border: 1px solid #c8a830; border-radius: 3px; padding: 5px 7px; background: #fdf8ed; }
+.stat-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-bottom: 6px; }
+.stat-box { border: 1px solid #c8a830; border-radius: 3px; padding: 3px; text-align: center; background: #fdf8ed; }
+.stat-label { font-size: 6.5pt; text-transform: uppercase; letter-spacing: 0.08em; color: #6b1a1a; font-weight: bold; }
+.stat-val { font-size: 14pt; font-weight: bold; font-family: 'Palatino Linotype', serif; }
+.stat-mod { font-size: 9pt; color: #6b1a1a; font-weight: bold; }
+.combat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 6px; }
+.combat-box { border: 1px solid #c8a830; border-radius: 3px; padding: 3px 5px; text-align: center; background: #fdf8ed; }
+.combat-label { font-size: 6pt; text-transform: uppercase; letter-spacing: 0.06em; color: #8b6914; }
+.combat-val { font-size: 12pt; font-weight: bold; }
+.hp-bar { width: 100%; height: 7px; background: #e8e0d0; border-radius: 3px; overflow: hidden; margin: 2px 0; }
+.hp-fill { height: 100%; background: #8b1a1a; border-radius: 3px; }
+table { width: 100%; border-collapse: collapse; font-size: 8pt; }
+td, th { padding: 1.5px 4px; }
+th { font-size: 7pt; text-transform: uppercase; letter-spacing: 0.05em; color: #6b1a1a; border-bottom: 1px solid #c8a830; font-weight: bold; }
+tr:nth-child(even) td { background: #fdf8ed; }
+td.right { text-align: right; }
+td.center { text-align: center; }
+td.pip { font-size: 7pt; color: #6b1a1a; width: 30px; }
+td.lv { font-weight: bold; color: #6b1a1a; width: 30px; }
+.muted { color: #999; font-style: italic; }
+.save-row { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 4px; }
+.save-item { font-size: 7.5pt; border: 1px solid #c8a830; border-radius: 2px; padding: 1px 5px; background: #fdf8ed; white-space: nowrap; }
+.save-item.prof { background: #6b1a1a; color: white; border-color: #6b1a1a; }
+.save-item.exp { background: #3a1a6b; color: white; border-color: #3a1a6b; }
+.feature { margin-bottom: 3px; font-size: 8pt; line-height: 1.3; }
+.fname { font-weight: bold; color: #4a3000; }
+.fdesc { color: #333; }
+.slot-entry { font-size: 8pt; display: inline-block; margin-right: 8px; margin-bottom: 2px; }
+.atag { display: inline-block; background: #fdf8ed; border: 1px solid #c8a830; border-radius: 2px; padding: 0 4px; font-size: 7.5pt; margin: 1px 2px; }
+.section-note { font-size: 7.5pt; color: #666; font-style: italic; margin-bottom: 2px; }
+.star { color: #6b1a1a; }
+@media print {
+    body { font-size: 9pt; }
+    .page { padding: 10mm 12mm 8mm; }
+    @page { margin: 0; size: letter; }
+}
+</style></head>
+<body>
+
+<!-- PAGE 1: Core Stats -->
+<div class="page">
+    <div class="char-header">
+        <div>
+            <h1>${d.charName || 'Unnamed Character'}</h1>
+            <div class="char-meta">
+                <span>${[d.race, d.charClass, d.charSubclass].filter(Boolean).join(' · ')}</span>
+                <span>Level ${d.level || 1}</span>
+                ${d.background ? `<span>· ${d.background}</span>` : ''}
+                ${d.alignment ? `<span>· ${d.alignment}</span>` : ''}
+                ${d.deity ? `<span>· Deity: ${d.deity}</span>` : ''}
+            </div>
+        </div>
+        <div style="text-align:right; font-size:8pt; color:#8b6914;">
+            ${d.experience ? `XP: ${d.experience}` : ''}
+        </div>
+    </div>
+
+    <div class="stat-grid">
+        ${stats.map((s,i) => `<div class="stat-box">
+            <div class="stat-label">${statLabels[i]}</div>
+            <div class="stat-val">${statVals[s]}</div>
+            <div class="stat-mod">${mod(statVals[s])}</div>
+        </div>`).join('')}
+    </div>
+
+    <div class="combat-grid">
+        <div class="combat-box"><div class="combat-label">Armor Class</div><div class="combat-val">${d.ac || '—'}</div></div>
+        <div class="combat-box"><div class="combat-label">Initiative</div><div class="combat-val">${mod(statVals['dex'])}</div></div>
+        <div class="combat-box"><div class="combat-label">Speed</div><div class="combat-val">${d.speed || '—'}</div></div>
+        <div class="combat-box"><div class="combat-label">Prof Bonus</div><div class="combat-val">+${pb}</div></div>
+        <div class="combat-box" style="grid-column:span 2;">
+            <div class="combat-label">Hit Points</div>
+            <div class="combat-val">${d.hp || 0} / ${d.maxHp || 0}${d.tempHp ? ` (+${d.tempHp} temp)` : ''}</div>
+            <div class="hp-bar"><div class="hp-fill" style="width:${pct(parseInt(d.hp)||0, parseInt(d.maxHp)||1)}%"></div></div>
+        </div>
+        <div class="combat-box"><div class="combat-label">Hit Dice</div><div class="combat-val" style="font-size:10pt;">${d.hitDice || '—'}</div></div>
+        <div class="combat-box"><div class="combat-label">Atks / Action</div><div class="combat-val">${d.attacksPerAction || 1}</div></div>
+    </div>
+    ${condList !== '—' ? `<div style="font-size:7.5pt; margin-bottom:4px; color:#6b1a1a;"><b>Conditions:</b> ${condList}</div>` : ''}
+
+    <div class="cols2">
+        <div>
+            <h2>Saving Throws</h2>
+            <div class="save-row">
+                ${stats.map((s,i) => {
+                    const isProf = !!saveProfs[saveNames[i]];
+                    const isExp = isProf && !!(saveExps[saveNames[i]] || saveExps[s]);
+                    const hasAdv = !!(advStates.saves && advStates.saves[saveNames[i]]);
+                    const cls = isExp ? 'save-item exp' : isProf ? 'save-item prof' : 'save-item';
+                    const advMark = hasAdv ? ' ▲' : '';
+                    return `<span class="${cls}">${statLabels[i]} ${saveBonus(s,i)}${advMark}</span>`;
+                }).join('')}
+            </div>
+            <h2>Skills</h2>
+            <div class="cols2" style="gap:0;">
+                <table>
+                    ${skillsCol1.map(skillRow).join('')}
+                </table>
+                <table>
+                    ${skillsCol2.map(skillRow).join('')}
+                </table>
+            </div>
+        </div>
+        <div>
+            <h2>Defenses</h2>
+            <div class="box" style="margin-bottom:4px;">
+                <div style="font-size:7.5pt;"><b>Resistances:</b> ${d.resistances || '—'}</div>
+                <div style="font-size:7.5pt;"><b>Immunities:</b> ${d.immunities || '—'}</div>
+                <div style="font-size:7.5pt;"><b>Vulnerabilities:</b> ${d.vulnerabilities || '—'}</div>
+            </div>
+            <h2>Proficiencies</h2>
+            <div class="box" style="font-size:7.5pt; line-height:1.6;">
+                ${armorProfs ? `<div><b>Armor:</b> ${armorProfs}</div>` : ''}
+                ${weaponProfs ? `<div><b>Weapons:</b> ${weaponProfs}</div>` : ''}
+                ${tools ? `<div><b>Tools:</b> ${tools}</div>` : ''}
+                ${langs ? `<div><b>Languages:</b> ${langs}</div>` : ''}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- PAGE 2: Combat Abilities & Features -->
+<div class="page">
+    <h2>Weapon Attacks</h2>
+    <table style="margin-bottom:6px;">
+        <thead><tr><th>Weapon</th><th class="center">ATK</th><th class="center">Damage</th><th>Notes</th></tr></thead>
+        <tbody>${weapons}</tbody>
+    </table>
+
+    ${(d.resourcesData || []).length > 0 ? `
+    <h2>Class Resources</h2>
+    <table style="margin-bottom:6px;">
+        <thead><tr><th>Resource</th><th class="right">Slots</th><th class="center">Resets</th></tr></thead>
+        <tbody>${resources}</tbody>
+    </table>` : ''}
+
+    <div class="cols3" style="margin-bottom:6px;">
+        ${d.actions?.length ? `<div><h2>Actions</h2>${actionList('actions').split('</span>').join('</span><br>')}</div>` : ''}
+        ${d.bonusActions?.length ? `<div><h2>Bonus Actions</h2>${actionList('bonusActions').split('</span>').join('</span><br>')}</div>` : ''}
+        ${d.reactions?.length ? `<div><h2>Reactions</h2>${actionList('reactions').split('</span>').join('</span><br>')}</div>` : ''}
+    </div>
+
+    <h2>Features & Traits</h2>
+    <div class="cols2">
+        <div>${renderFeatureList([...(d.classFeatures||[]), ...(d.feats||[])])}</div>
+        <div>${renderFeatureList([...(d.raceFeatures||[]), ...(d.backgroundFeatures||[])])}</div>
+    </div>
+</div>
+
+<!-- PAGE 3: Spells, Inventory, Notes -->
+<div class="page">
+    ${(d.spellSlotsData || []).length > 0 || (d.cantripsList || []).length > 0 || (d.preparedSpells || []).length > 0 ? `
+    <h2>Spells ${d.spellAbility ? `<span style="font-size:7.5pt; font-weight:400; text-transform:none;">(Casting stat: ${d.spellAbility})</span>` : ''}</h2>
+    ${slots ? `<div style="margin-bottom:4px;">${slots}</div>` : ''}
+    ${cantrips ? `<div style="font-size:8pt; margin-bottom:4px;"><b>Cantrips:</b> ${cantrips}</div>` : ''}
+    ${spellRows ? `
+    <div class="section-note"><span class="star">★</span> = Prepared &nbsp; [C] = Concentration &nbsp; [R] = Ritual</div>
+    <table style="margin-bottom:8px;">
+        <thead><tr><th>Lvl</th><th>Spells</th></tr></thead>
+        <tbody>${spellRows}</tbody>
+    </table>` : ''}` : ''}
+
+    <div class="cols2">
+        <div>
+            <h2>Inventory</h2>
+            ${equipped.length ? `<h3>Equipped</h3><table><thead><tr><th>Item</th><th class="center">Qty</th><th class="right">Wt</th></tr></thead><tbody>${equipped.map(invRow).join('')}</tbody></table>` : ''}
+            ${backpack.length ? `<h3>Backpack</h3><table><thead><tr><th>Item</th><th class="center">Qty</th><th class="right">Wt</th></tr></thead><tbody>${backpack.map(invRow).join('')}</tbody></table>` : ''}
+            ${currency ? `<div style="font-size:8pt; margin-top:4px;"><b>Currency:</b> ${currency}</div>` : ''}
+        </div>
+        <div>
+            <h2>Notes</h2>
+            ${d.personality ? `<div class="feature"><span class="fname">Personality:</span> ${d.personality}</div>` : ''}
+            ${d.ideals ? `<div class="feature"><span class="fname">Ideals:</span> ${d.ideals}</div>` : ''}
+            ${d.bonds ? `<div class="feature"><span class="fname">Bonds:</span> ${d.bonds}</div>` : ''}
+            ${d.flaws ? `<div class="feature"><span class="fname">Flaws:</span> ${d.flaws}</div>` : ''}
+            ${d.notes ? `<div class="feature"><span class="fname">Notes:</span> <span class="fdesc">${(d.notes || '').replace(/<[^>]+>/g,' ').substring(0,600)}</span></div>` : ''}
+        </div>
+    </div>
+</div>
+
+</body></html>`;
+
+    const win = window.open('', '_blank', 'width=900,height=700');
+    if (!win) { alert('Pop-up blocked — please allow pop-ups for this page.'); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 400);
+};
+
 window.loadJSON = function (input) {
   const file = input.files[0];
   if (!file) return;
