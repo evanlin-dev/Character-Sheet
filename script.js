@@ -3912,16 +3912,16 @@ window.renderMobileResources = function() {
             </div>`;
         }
 
-        const settingsBtn = !res.auto
-            ? `<button class="res-settings-btn" onclick="window.openResourceSettingsModal(${i})" title="Settings">⚙</button>`
-            : `<span class="res-auto-tag" title="Auto-detected from class">⚙</span>`;
-
-        const delBtn = res.auto ? '' : `<button class="res-del-btn" onclick="window.deleteMobileResource(${i})">×</button>`;
+        const actionBtns = res.auto
+            ? `<span class="res-auto-tag" style="position:absolute;top:6px;right:6px;" title="Auto-detected from class">⚙</span>`
+            : `<div style="position:absolute;top:4px;right:4px;display:flex;gap:4px;z-index:10;">
+                <button class="res-settings-btn" onclick="window.openResourceSettingsModal(${i})" title="Settings">⚙</button>
+                <button class="res-del-btn" style="position:static;" onclick="window.deleteMobileResource(${i})">×</button>
+               </div>`;
         rowsHtml += `<div class="res-row">
-            ${delBtn}
+            ${actionBtns}
             <div class="res-row-top">
                 <input class="res-name-inp" value="${res.name.replace(/"/g, '&quot;')}" onchange="window.renameMobileResource(${i}, this.value)" ${res.auto ? 'readonly' : ''} />
-                ${settingsBtn}
                 <span class="res-badge ${resetClass}">${resetLabel}</span>
             </div>
             ${inputHtml}

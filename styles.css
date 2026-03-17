@@ -2921,7 +2921,7 @@ body.swap-scores.dense-mode .stat-modifier input {
     position: relative;
     margin-bottom: 10px;
     padding-bottom: 10px;
-    padding-right: 22px;
+    padding-right: 70px;
     border-bottom: 1px dashed var(--gold);
 }
 .res-row:last-of-type { border-bottom: none; margin-bottom: 4px; }
@@ -2961,16 +2961,18 @@ body.swap-scores.dense-mode .stat-modifier input {
 .res-badge-sr { background: #d4edff; color: #0066aa; border: 1px solid #99ccee; }
 .res-badge-lr { background: #fde8e8; color: var(--red-dark); border: 1px solid var(--red-light); }
 .res-del-btn {
-    position: absolute;
-    top: 4px;
-    right: 4px;
     background: transparent;
     border: none;
     color: var(--ink-light);
     font-size: 1rem;
     cursor: pointer;
-    padding: 0 2px;
+    padding: 0 4px;
     line-height: 1;
+    min-width: 28px;
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 .res-del-btn:hover { color: var(--red-dark); }
 
