@@ -435,6 +435,7 @@ function updateSpellDC() {
     }
   }
 
+  if (window.updateSpellRollTags) window.updateSpellRollTags();
   saveCharacter();
 }
 
@@ -2272,6 +2273,8 @@ function renderSpellSearchPage() {
         concentration: concentration,
         material: material,
         description: desc,
+        attackType: (spell.spellAttack && spell.spellAttack[0]) ? spell.spellAttack[0].toUpperCase() : '',
+        saveAbility: (spell.savingThrow && spell.savingThrow[0]) ? spell.savingThrow[0].toLowerCase() : '',
       };
 
       if (spellSearchOnSelect) {
@@ -4204,9 +4207,11 @@ window.addSpellRow = function (containerId, defaultLevel = 1, data = null) {
   const hasNotes = !!(data && data.description && data.description.length > 0);
   const noteBtnClass = hasNotes ? "note-btn has-notes" : "note-btn";
 
-  row.innerHTML = `<div class="drag-handle">☰</div><div class="spell-col-prep" style="${prepVisibility}"><span class="mobile-label">Prep</span><input type="checkbox" class="spell-check spell-prep" title="Prepared" ${isPrep ? "checked" : ""}></div><input type="number" class="spell-input spell-lvl" value="${lvl}" placeholder="Lvl" style="text-align:center;"><input type="text" class="spell-input spell-name" value="${data ? data.name : ""}" placeholder="Spell Name"><input type="text" class="spell-input spell-time" value="${data ? data.time : ""}" placeholder="1 Act"><input type="text" class="spell-input spell-range" value="${data ? data.range : ""}" placeholder="60 ft"><div class="spell-col-ritual"><span class="mobile-label">Ritual</span><input type="checkbox" class="spell-check spell-ritual" title="Ritual" ${rChecked}></div><div class="spell-col-conc"><span class="mobile-label">Conc</span><input type="checkbox" class="spell-check spell-conc" title="Concentration" ${cChecked}></div><div class="spell-col-mat"><span class="mobile-label">Mat</span><input type="checkbox" class="spell-check spell-mat" title="Material" ${mChecked}></div><input type="hidden" class="spell-desc"><button class="${noteBtnClass}" onclick="openSpellNoteEditor(this)" title="Edit Description">📝</button><button class="delete-feature-btn" onclick="this.parentElement.remove(); saveCharacter()">×</button>`;
+  row.innerHTML = `<div class="drag-handle">☰</div><div class="spell-col-prep" style="${prepVisibility}"><span class="mobile-label">Prep</span><input type="checkbox" class="spell-check spell-prep" title="Prepared" ${isPrep ? "checked" : ""}></div><input type="number" class="spell-input spell-lvl" value="${lvl}" placeholder="Lvl" style="text-align:center;"><div class="spell-name-cell"><input type="text" class="spell-input spell-name" value="${data ? data.name : ""}" placeholder="Spell Name"><span class="spell-roll-tag"></span></div><input type="text" class="spell-input spell-time" value="${data ? data.time : ""}" placeholder="1 Act"><input type="text" class="spell-input spell-range" value="${data ? data.range : ""}" placeholder="60 ft"><div class="spell-col-ritual"><span class="mobile-label">Ritual</span><input type="checkbox" class="spell-check spell-ritual" title="Ritual" ${rChecked}></div><div class="spell-col-conc"><span class="mobile-label">Conc</span><input type="checkbox" class="spell-check spell-conc" title="Concentration" ${cChecked}></div><div class="spell-col-mat"><span class="mobile-label">Mat</span><input type="checkbox" class="spell-check spell-mat" title="Material" ${mChecked}></div><input type="hidden" class="spell-desc"><button class="${noteBtnClass}" onclick="openSpellNoteEditor(this)" title="Edit Description">📝</button><button class="delete-feature-btn" onclick="this.parentElement.remove(); saveCharacter()">×</button>`;
   // Set description via .value (not in the attribute) so HTML content is stored verbatim
   row.querySelector('.spell-desc').value = (data && data.description) ? data.description : '';
+  row.dataset.atkType = (data && data.attackType) ? data.attackType : '';
+  row.dataset.saveAbility = (data && data.saveAbility) ? data.saveAbility : '';
 
   const prepBox = row.querySelector(".spell-prep");
   if (!isCantrip) {
@@ -4224,9 +4229,48 @@ window.addSpellRow = function (containerId, defaultLevel = 1, data = null) {
     .forEach((input) => input.addEventListener("input", saveCharacter));
   container.appendChild(row);
   setupDragItem(row, containerId);
+  if (window.updateSpellRollTags) window.updateSpellRollTags();
   saveCharacter();
 };
 
+const _SPELL_ABILITY_ABBR = { str: 'STR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'WIS', cha: 'CHA' };
+const _SPELL_SAVE_PATTERN = /\b(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+saving throw/i;
+const _SPELL_ATK_PATTERN = /\b(ranged|melee)\s+spell\s+attack/i;
+const _SAVE_NAME_MAP = { strength:'str', dexterity:'dex', constitution:'con', intelligence:'int', wisdom:'wis', charisma:'cha' };
+
+window.updateSpellRollTags = function() {
+    const atkRaw = parseInt(document.getElementById('spellAttackBonus')?.value) || 0;
+    const atkStr = atkRaw >= 0 ? `+${atkRaw}` : `${atkRaw}`;
+    const dc = parseInt(document.getElementById('spellDC')?.value) || 10;
+    document.querySelectorAll('.spell-row').forEach(row => {
+        const tag = row.querySelector('.spell-roll-tag');
+        if (!tag) return;
+        let atkType = row.dataset.atkType || '';
+        let saveAb = row.dataset.saveAbility || '';
+        // Fallback: parse description if no stored data
+        if (!atkType && !saveAb) {
+            const desc = (row.querySelector('.spell-desc')?.value || '').toLowerCase();
+            const atkMatch = _SPELL_ATK_PATTERN.exec(desc);
+            if (atkMatch) {
+                atkType = atkMatch[1][0].toUpperCase(); // 'R' or 'M'
+            } else {
+                const saveMatch = _SPELL_SAVE_PATTERN.exec(desc);
+                if (saveMatch) saveAb = _SAVE_NAME_MAP[saveMatch[1].toLowerCase()] || '';
+            }
+        }
+        if (atkType) {
+            tag.textContent = `Hit ${atkStr}`;
+            tag.className = 'spell-roll-tag spell-roll-atk';
+        } else if (saveAb) {
+            const abbr = _SPELL_ABILITY_ABBR[saveAb] || saveAb.toUpperCase().slice(0, 3);
+            tag.textContent = `${abbr} ${dc}`;
+            tag.className = 'spell-roll-tag spell-roll-save';
+        } else {
+            tag.textContent = '';
+            tag.className = 'spell-roll-tag';
+        }
+    });
+};
 
 window.showSpellInfo = function (btn) {
   const row = btn.closest(".spell-row");
@@ -4683,6 +4727,8 @@ window.saveCharacter = function () {
       concentration: row.querySelector(".spell-conc").checked,
       material: row.querySelector(".spell-mat").checked,
       description: row.querySelector(".spell-desc").value,
+      attackType: row.dataset.atkType || '',
+      saveAbility: row.dataset.saveAbility || '',
     })),
     preparedSpellsList: Array.from(
       document.querySelectorAll("#preparedSpellsList .spell-row"),
@@ -4696,6 +4742,8 @@ window.saveCharacter = function () {
       material: row.querySelector(".spell-mat").checked,
       description: row.querySelector(".spell-desc").value,
       prepared: true,
+      attackType: row.dataset.atkType || '',
+      saveAbility: row.dataset.saveAbility || '',
     })),
     spellsList: Array.from(
       document.querySelectorAll("#spellList .spell-row"),
@@ -4709,6 +4757,8 @@ window.saveCharacter = function () {
       material: row.querySelector(".spell-mat").checked,
       description: row.querySelector(".spell-desc").value,
       prepared: false,
+      attackType: row.dataset.atkType || '',
+      saveAbility: row.dataset.saveAbility || '',
     })),
     languages: document.getElementById("languages").value,
     personality: document.getElementById("personality").value,
@@ -6574,18 +6624,18 @@ window.refreshSpellsInActionsView = function() {
     };
 
     // Compute Hit/DC string from hitType using current character stats
-    const saveLabels = { str: 'Str', dex: 'Dex', con: 'Con', int: 'Int', wis: 'Wis', cha: 'Cha' };
-    const getHitDC = (hitType) => {
-        if (!hitType) return '';
-        if (hitType === 'atk') {
+    const getHitDC = (hitType, saveAb) => {
+        if (hitType) {
             const raw = document.getElementById('spellAttackBonus')?.value ?? '';
-            if (raw === '') return '';
             const n = parseInt(raw);
-            return isNaN(n) ? '' : (n >= 0 ? `+${n}` : `${n}`);
+            return isNaN(n) ? '' : `Hit ${n >= 0 ? '+' + n : n}`;
         }
-        const dc = document.getElementById('spellDC')?.value ?? '';
-        const label = saveLabels[hitType] || hitType;
-        return dc ? `${label} DC ${dc}` : '';
+        if (saveAb) {
+            const dc = document.getElementById('spellDC')?.value ?? '';
+            const abbr = (_SPELL_ABILITY_ABBR[saveAb] || saveAb.toUpperCase().slice(0, 3));
+            return dc ? `${abbr} ${dc}` : '';
+        }
+        return '';
     };
 
     // Extract damage dice from description
@@ -6607,11 +6657,19 @@ window.refreshSpellsInActionsView = function() {
         if (!name) return;
         const desc = row.querySelector('.spell-desc')?.value || '';
         const range = row.querySelector('.spell-range')?.value || '';
-        const hitType = row.querySelector('.spell-hit-type')?.value || '';
         const lvl = parseInt(row.querySelector('.spell-lvl')?.value) || 0;
         const lvlLabel = lvl === 0 ? 'Cantrip' : `Lv ${lvl}`;
+        // Resolve attack/save type: stored data attrs first, then description fallback
+        let atkType = row.dataset.atkType || '';
+        let saveAb = row.dataset.saveAbility || '';
+        if (!atkType && !saveAb && desc) {
+            const d = desc.toLowerCase();
+            const am = _SPELL_ATK_PATTERN.exec(d);
+            if (am) { atkType = am[1][0].toUpperCase(); }
+            else { const sm = _SPELL_SAVE_PATTERN.exec(d); if (sm) saveAb = _SAVE_NAME_MAP[sm[1].toLowerCase()] || ''; }
+        }
         const cat = classify(time);
-        if (cat) groups[cat].push({ name, desc, range, hitType, lvlLabel });
+        if (cat) groups[cat].push({ name, desc, range, atkType, saveAb, lvlLabel });
     });
 
     const inject = (containerId, spells, autoId) => {
@@ -6629,14 +6687,17 @@ window.refreshSpellsInActionsView = function() {
             const descHtml = s.desc
                 ? s.desc.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
                 : '';
-            const statParts = [];
-            if (s.range) statParts.push(s.range);
-            const hitdc = getHitDC(s.hitType);
-            if (hitdc) statParts.push(hitdc);
+            const metaParts = [];
+            if (s.range) metaParts.push(`<span class="auto-spell-meta-txt">${s.range}</span>`);
             const dmg = extractDmg(s.desc);
-            if (dmg) statParts.push(dmg);
-            const statsHtml = statParts.length
-                ? `<span class="auto-spell-stats">${statParts.join(' · ')}</span>`
+            if (dmg) metaParts.push(`<span class="auto-spell-meta-txt">${dmg}</span>`);
+            const hitdc = getHitDC(s.atkType, s.saveAb);
+            if (hitdc) {
+                const cls = s.atkType ? 'msv-tag msv-tag-atk' : 'msv-tag msv-tag-save';
+                metaParts.push(`<span class="${cls}">${hitdc}</span>`);
+            }
+            const statsHtml = metaParts.length
+                ? `<div class="auto-spell-stats">${metaParts.join('')}</div>`
                 : '';
             return `<div class="auto-spell-item">
                 <div class="auto-spell-header" onclick="var d=document.getElementById('${autoId}-d-${idx}');if(d)d.classList.toggle('open')">
@@ -6830,7 +6891,10 @@ window.refreshMobileSpellView = function() {
             ritual: row.querySelector('.spell-ritual')?.checked || false,
             concentration: row.querySelector('.spell-conc')?.checked || false,
             material: row.querySelector('.spell-mat')?.checked || false,
-            description: row.querySelector('.spell-desc')?.value || '' });
+            description: row.querySelector('.spell-desc')?.value || '',
+            attackType: row.dataset.atkType || '',
+            saveAbility: row.dataset.saveAbility || '',
+            _row: row });
     });
     document.querySelectorAll('#preparedSpellsList .spell-row').forEach(row => {
         const name = row.querySelector('.spell-name')?.value?.trim();
@@ -6841,7 +6905,10 @@ window.refreshMobileSpellView = function() {
             ritual: row.querySelector('.spell-ritual')?.checked || false,
             concentration: row.querySelector('.spell-conc')?.checked || false,
             material: row.querySelector('.spell-mat')?.checked || false,
-            description: row.querySelector('.spell-desc')?.value || '' });
+            description: row.querySelector('.spell-desc')?.value || '',
+            attackType: row.dataset.atkType || '',
+            saveAbility: row.dataset.saveAbility || '',
+            _row: row });
     });
 
     let filtered = spells;
@@ -6859,26 +6926,47 @@ window.refreshMobileSpellView = function() {
     const lvlLabel = l => ['Cantrips','1st Level','2nd Level','3rd Level','4th Level','5th Level','6th Level','7th Level','8th Level','9th Level'][l] || `${l}th Level`;
     const badge = l => ['Cantrip','1st','2nd','3rd','4th','5th','6th','7th','8th','9th'][l] || `${l}th`;
 
+    const _msvAtkRaw = parseInt(document.getElementById('spellAttackBonus')?.value) || 0;
+    const _msvAtkStr = _msvAtkRaw >= 0 ? `+${_msvAtkRaw}` : `${_msvAtkRaw}`;
+    const _msvDC = parseInt(document.getElementById('spellDC')?.value) || 10;
+
     let html = '';
     Object.keys(byLevel).sort((a,b) => a-b).forEach(lvl => {
         html += '<div class="msv-level-group">';
         if (filter === 'all' || filter === 'ritual') html += `<h3 class="msv-level-header">${lvlLabel(+lvl)}</h3>`;
         byLevel[lvl].forEach(spell => {
-            const tags = [
+            let atkType = spell.attackType || '';
+            let saveAb = spell.saveAbility || '';
+            if (!atkType && !saveAb && spell.description) {
+                const desc = spell.description.toLowerCase();
+                const atkMatch = _SPELL_ATK_PATTERN.exec(desc);
+                if (atkMatch) { atkType = atkMatch[1][0].toUpperCase(); }
+                else { const sm = _SPELL_SAVE_PATTERN.exec(desc); if (sm) saveAb = _SAVE_NAME_MAP[sm[1].toLowerCase()] || ''; }
+            }
+            let rollTag = '';
+            if (atkType) {
+                rollTag = `<span class="msv-tag msv-tag-atk">Hit ${_msvAtkStr}</span>`;
+            } else if (saveAb) {
+                const abbr = _SPELL_ABILITY_ABBR[saveAb] || saveAb.toUpperCase().slice(0, 3);
+                rollTag = `<span class="msv-tag msv-tag-save">${abbr} ${_msvDC}</span>`;
+            }
+            const rcmTags = [
                 spell.ritual ? '<span class="msv-tag">R</span>' : '',
                 spell.concentration ? '<span class="msv-tag msv-tag-conc">C</span>' : '',
                 spell.material ? '<span class="msv-tag">M</span>' : '',
             ].join('');
             const hasDesc = spell.description.trim().length > 0;
-            const spellIdx = window._msvSpells.push({ name: spell.name, desc: spell.description }) - 1;
+            const spellIdx = window._msvSpells.push({ name: spell.name, desc: spell.description, row: spell._row }) - 1;
             html += `<div class="msv-spell-card">
                 <div class="msv-spell-card-main">
+                    <div class="msv-drag-handle" ontouchstart="window.msvDragStart(event,${spellIdx})" onmousedown="window.msvDragStart(event,${spellIdx})">☰</div>
                     <div class="msv-spell-card-left">
                         <span class="msv-spell-level-badge">${badge(+lvl)}</span>
                         <span class="msv-spell-name">${spell.name}</span>
-                        ${tags}
                     </div>
                     <div class="msv-spell-card-right">
+                        ${rollTag}
+                        ${rcmTags}
                         ${spell.time ? `<span class="msv-spell-meta">${spell.time}</span>` : ''}
                         ${spell.range ? `<span class="msv-spell-meta">${spell.range}</span>` : ''}
                         ${hasDesc ? `<button class="msv-info-btn" onclick="window.showMsvSpellInfo(${spellIdx})">?</button>` : ''}
@@ -6899,6 +6987,90 @@ window.showMsvSpellInfo = function(idx) {
         ? s.desc.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>')
         : 'No description available.';
     document.getElementById('infoModal').style.display = 'flex';
+};
+
+window.msvDragStart = function(e, idx) {
+    e.preventDefault();
+    const isTouch = e.type === 'touchstart';
+    const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+
+    const card = e.currentTarget.closest('.msv-spell-card');
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+
+    const ghost = card.cloneNode(true);
+    ghost.id = 'msv-drag-ghost';
+    ghost.style.cssText = `position:fixed;z-index:9999;opacity:0.9;pointer-events:none;width:${rect.width}px;left:${rect.left}px;top:${rect.top}px;box-shadow:0 6px 20px rgba(0,0,0,0.25);border-radius:6px;margin:0;`;
+    document.body.appendChild(ghost);
+    card.classList.add('msv-dragging');
+
+    const ds = { idx, ghost, card, offsetY: clientY - rect.top, offsetX: clientX - rect.left };
+    window._msvDragState = ds;
+
+    let dropIndicator = null;
+
+    const onMove = (ev) => {
+        ev.preventDefault();
+        const cy = ev.type === 'touchmove' ? ev.touches[0].clientY : ev.clientY;
+        const cx = ev.type === 'touchmove' ? ev.touches[0].clientX : ev.clientX;
+        ds.ghost.style.top = (cy - ds.offsetY) + 'px';
+        ds.ghost.style.left = (cx - ds.offsetX) + 'px';
+
+        // Show drop indicator
+        ds.ghost.style.display = 'none';
+        const el = document.elementFromPoint(cx, cy);
+        ds.ghost.style.display = '';
+        const overCard = el?.closest('.msv-spell-card');
+        if (dropIndicator) dropIndicator.classList.remove('msv-drop-above', 'msv-drop-below');
+        if (overCard && overCard !== ds.card) {
+            const overRect = overCard.getBoundingClientRect();
+            const overMid = overRect.top + overRect.height / 2;
+            dropIndicator = overCard;
+            overCard.classList.add(cy < overMid ? 'msv-drop-above' : 'msv-drop-below');
+        }
+    };
+
+    const onEnd = (ev) => {
+        const cy = ev.type === 'touchend' ? ev.changedTouches[0].clientY : ev.clientY;
+        const cx = ev.type === 'touchend' ? ev.changedTouches[0].clientX : ev.clientX;
+
+        ds.ghost.style.display = 'none';
+        const el = document.elementFromPoint(cx, cy);
+        ds.ghost.remove();
+        ds.card.classList.remove('msv-dragging');
+        if (dropIndicator) dropIndicator.classList.remove('msv-drop-above', 'msv-drop-below');
+        window._msvDragState = null;
+
+        const targetCard = el?.closest('.msv-spell-card');
+        if (targetCard && targetCard !== ds.card) {
+            const allCards = [...document.querySelectorAll('#msv-list .msv-spell-card')];
+            const targetIdx = allCards.indexOf(targetCard);
+            const srcRow = window._msvSpells[ds.idx]?.row;
+            const tgtRow = window._msvSpells[targetIdx]?.row;
+            if (srcRow && tgtRow && srcRow !== tgtRow && srcRow.parentElement === tgtRow.parentElement) {
+                const overRect = targetCard.getBoundingClientRect();
+                const overMid = overRect.top + overRect.height / 2;
+                if (cy < overMid) {
+                    tgtRow.parentElement.insertBefore(srcRow, tgtRow);
+                } else {
+                    tgtRow.after(srcRow);
+                }
+                saveCharacter();
+                window.refreshMobileSpellView();
+            }
+        }
+
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onEnd);
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onEnd);
+    };
+
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
 };
 
 window.openManageSpellsModal = function() {
@@ -8127,6 +8299,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateModifiers();
     if (window.updateComponentPouchVisibility) window.updateComponentPouchVisibility();
     renderSpellSlots();
+    if (window.updateSpellRollTags) window.updateSpellRollTags();
     renderResources();
     window.renderSummons();
     updateHpBar();
@@ -9567,7 +9740,7 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
                                         let matText = typeof rawMat2 === 'object' ? (rawMat2.text || '') : rawMat2;
                                         if (matText) { matText = matText.charAt(0).toUpperCase() + matText.slice(1); desc = `**Materials:** ${matText}\n\n${desc}`; }
                                     }
-                                    pendingSpells.push({ target: s.level === 0 ? 'cantripList' : 'spellList', spellData: { name: s.name, level: s.level, time, range: rangeStr, ritual: isRitual, concentration: isConc, material: !!rawMat2, description: desc, prepared: s.level !== 0 } });
+                                    pendingSpells.push({ target: s.level === 0 ? 'cantripList' : 'spellList', spellData: { name: s.name, level: s.level, time, range: rangeStr, ritual: isRitual, concentration: isConc, material: !!rawMat2, description: desc, prepared: s.level !== 0, attackType: (s.spellAttack && s.spellAttack[0]) ? s.spellAttack[0].toUpperCase() : '', saveAbility: (s.savingThrow && s.savingThrow[0]) ? s.savingThrow[0].toLowerCase() : '' } });
                                 }
                                 updateStyles();
                                 updateCounter();

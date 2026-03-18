@@ -359,6 +359,19 @@ body.app-view-active .header { display: none !important; }
     justify-content: space-between;
     gap: 8px;
 }
+.msv-drag-handle {
+    flex-shrink: 0;
+    font-size: 0.85rem;
+    color: var(--gold-dark);
+    cursor: grab;
+    padding: 0 4px;
+    user-select: none;
+    touch-action: none;
+}
+.msv-drag-handle:active { cursor: grabbing; }
+.msv-dragging { opacity: 0.3; }
+.msv-drop-above { box-shadow: 0 -3px 0 var(--red); }
+.msv-drop-below { box-shadow: 0 3px 0 var(--red); }
 .msv-spell-card-left {
     display: flex;
     align-items: center;
@@ -397,6 +410,8 @@ body.app-view-active .header { display: none !important; }
 }
 .msv-tag-conc { background: var(--parchment-dark); color: var(--ink-light); }
 .msv-tag-mat  { background: #e8f0e4; color: #3a6b2a; }
+.msv-tag-atk  { background: #d4edda; color: #155724; }
+.msv-tag-save { background: #fff3cd; color: #856404; }
 .msv-spell-card-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .msv-spell-meta { font-size: 0.72rem; color: var(--ink-light); white-space: nowrap; }
 .msv-info-btn {
@@ -754,6 +769,12 @@ body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) {
 .spell-input { border-bottom: 1px solid transparent; font-size: 0.95rem; }
 .spell-input:focus { border-bottom: 1px solid var(--red); }
 .spell-col-prep, .spell-col-ritual, .spell-col-conc, .spell-col-mat { display: flex; align-items: center; justify-content: center; }
+/* Spell name cell with inline roll tag */
+.spell-name-cell { display: flex; align-items: center; gap: 5px; overflow: hidden; min-width: 0; }
+.spell-name-cell .spell-name { flex: 1; min-width: 0; }
+.spell-roll-tag { flex-shrink: 0; font-size: 0.68rem; font-weight: 700; padding: 1px 5px; border-radius: 3px; white-space: nowrap; line-height: 1.5; }
+.spell-roll-atk { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+.spell-roll-save { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
 .mobile-label { display: none; }
 
 .slot-level-container { background: white; border: 1px solid var(--gold); border-radius: 6px; padding: 10px; margin-bottom: 12px; }
@@ -1617,10 +1638,12 @@ body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) {
     margin-bottom: 8px;
   }
 
-  .spell-row .spell-name { 
-      grid-area: name; 
-      font-size: 0.95rem; 
-      font-weight: 700; 
+  .spell-row .spell-name-cell { grid-area: name; display: flex; align-items: center; gap: 5px; overflow: hidden; min-width: 0; border-bottom: 1px solid var(--parchment-dark); padding-bottom: 2px; }
+  .spell-row .spell-name-cell .spell-name { border-bottom: none; padding-bottom: 0; }
+  .spell-row .spell-name {
+      grid-area: name;
+      font-size: 0.95rem;
+      font-weight: 700;
       color: var(--red-dark);
       border-bottom: 1px solid var(--parchment-dark);
       padding-bottom: 2px;
@@ -2323,10 +2346,6 @@ body.dense-mode .hp-bar-container, body.dense-mode .hp-controls { display: none;
   margin-top: 0;
 }
 
-/* Remove margin from attunement section when in column */
-.attunement-section.sheet-section-col {
-  /* Normal view styles are handled by .attunement-section class */
-}
 
 /* Dense Mode Overrides for Tab Columns */
 body.dense-mode .tab-columns {
@@ -2909,11 +2928,17 @@ body.swap-scores.dense-mode .stat-modifier input {
     white-space: nowrap;
 }
 .auto-spell-stats {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+.auto-spell-meta-txt {
     font-size: 0.7rem;
     color: var(--ink-light);
     white-space: nowrap;
-    text-align: right;
-    flex-shrink: 0;
 }
 .auto-spell-desc {
     display: none;
