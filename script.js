@@ -173,6 +173,7 @@ const deathSaves = {
 };
 let spellSlotsData = [{ level: 1, total: 1, used: 0 }];
 let resourcesData = [];
+let summonsData = [];
 let hitDiceUsed = 0;
 let pbScores = { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 };
 
@@ -3318,6 +3319,279 @@ window.toggleResourceSlot = function(index, slotIndex) {
     saveCharacter();
 };
 
+// ===== SUMMONS / CREATURES =====
+window.renderSummons = function() {
+    const container = document.getElementById('summonsContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    if (summonsData.length === 0) {
+        container.innerHTML = '<div style="text-align:center;color:var(--ink-light);font-style:italic;padding:16px 0;">No creatures tracked. Add one below.</div>';
+        return;
+    }
+    summonsData.forEach((s, i) => {
+        const card = document.createElement('div');
+        card.className = 'summon-card';
+
+        // Build abilities HTML
+        const abilities = s.abilities || [];
+        const abilitiesHtml = abilities.map((ab, ai) => `
+            <div class="summon-ability-row" id="summon-ab-${i}-${ai}">
+                <input class="summon-ability-name" type="text" value="${(ab.name||'').replace(/"/g,'&quot;')}" placeholder="Ability name"
+                    oninput="window.updateCreatureAbility(${i},${ai},'name',this.value)">
+                <button class="mini-btn" style="color:var(--red-dark);flex-shrink:0;" onclick="window.removeCreatureAbility(${i},${ai})" title="Remove">✕</button>
+                <textarea class="summon-ability-desc" rows="2" placeholder="Description..."
+                    oninput="window.updateCreatureAbility(${i},${ai},'desc',this.value)">${(ab.desc||'').replace(/</g,'&lt;')}</textarea>
+            </div>`).join('');
+
+        const importBtn = window.isDataAvailable
+            ? `<button class="mini-btn summon-import-btn" title="Import from data" onclick="window.openCreatureImportModal(${i})">⬇ Import</button>`
+            : '';
+
+        card.innerHTML = `
+            <div class="summon-card-header">
+                <input class="summon-name-inp" type="text" value="${s.name.replace(/"/g,'&quot;')}" placeholder="Creature name"
+                    onchange="window.updateSummonField(${i},'name',this.value)" oninput="window.updateSummonField(${i},'name',this.value)">
+                ${importBtn}
+                <button class="mini-btn" style="color:var(--red-dark);" onclick="window.deleteSummon(${i})" title="Remove">✕</button>
+            </div>
+            <div class="summon-card-stats">
+                <div class="summon-stat-block">
+                    <span class="summon-stat-label">AC</span>
+                    <input class="summon-stat-inp" type="number" min="0" value="${s.ac}"
+                        onchange="window.updateSummonField(${i},'ac',parseInt(this.value)||0)"
+                        oninput="window.updateSummonField(${i},'ac',parseInt(this.value)||0)">
+                </div>
+                <div class="summon-stat-block summon-hp-block">
+                    <span class="summon-stat-label">HP</span>
+                    <div class="summon-hp-row">
+                        <button class="mini-btn" onclick="window.stepSummonHp(${i},-1)">−</button>
+                        <input class="summon-stat-inp summon-hp-cur" type="number" min="0" value="${s.hp}"
+                            onchange="window.updateSummonField(${i},'hp',parseInt(this.value)||0)"
+                            oninput="window.updateSummonField(${i},'hp',parseInt(this.value)||0)">
+                        <span style="color:var(--ink-light);font-size:0.85rem;">/</span>
+                        <input class="summon-stat-inp summon-hp-max" type="number" min="1" value="${s.maxHp}"
+                            onchange="window.updateSummonField(${i},'maxHp',Math.max(1,parseInt(this.value)||1))"
+                            oninput="window.updateSummonField(${i},'maxHp',Math.max(1,parseInt(this.value)||1))">
+                        <button class="mini-btn" onclick="window.stepSummonHp(${i},1)">+</button>
+                    </div>
+                </div>
+                <div class="summon-stat-block">
+                    <span class="summon-stat-label">Spd</span>
+                    <input class="summon-stat-inp" type="text" style="width:52px;" value="${s.speed||''}" placeholder="30 ft"
+                        oninput="window.updateSummonField(${i},'speed',this.value)">
+                </div>
+            </div>
+
+            <div class="summon-section">
+                <button class="summon-section-toggle" onclick="window.toggleSummonSection(this)">Abilities <span class="summon-toggle-arrow">▾</span></button>
+                <div class="summon-section-body">
+                    <div id="summon-abilities-${i}">${abilitiesHtml}</div>
+                    <button class="add-feature-btn" style="margin-top:6px;" onclick="window.addCreatureAbility(${i})">+ Add Ability</button>
+                </div>
+            </div>
+
+            <div class="summon-section">
+                <button class="summon-section-toggle" onclick="window.toggleSummonSection(this)">Details <span class="summon-toggle-arrow">▾</span></button>
+                <div class="summon-section-body">
+                    <label class="summon-detail-label">Resistances</label>
+                    <input class="summon-detail-inp" type="text" value="${(s.resistances||'').replace(/"/g,'&quot;')}" placeholder="e.g. Fire, Bludgeoning"
+                        oninput="window.updateSummonField(${i},'resistances',this.value)">
+                    <label class="summon-detail-label" style="margin-top:6px;">Vulnerabilities</label>
+                    <input class="summon-detail-inp" type="text" value="${(s.vulnerabilities||'').replace(/"/g,'&quot;')}" placeholder="e.g. Cold"
+                        oninput="window.updateSummonField(${i},'vulnerabilities',this.value)">
+                    <label class="summon-detail-label" style="margin-top:6px;">Immunities</label>
+                    <input class="summon-detail-inp" type="text" value="${(s.immunities||'').replace(/"/g,'&quot;')}" placeholder="e.g. Poison, Charmed"
+                        oninput="window.updateSummonField(${i},'immunities',this.value)">
+                    <label class="summon-detail-label" style="margin-top:6px;">Notes</label>
+                    <textarea class="summon-notes" rows="2" placeholder="Additional notes..."
+                        oninput="window.updateSummonField(${i},'notes',this.value)">${s.notes || ''}</textarea>
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+};
+
+window.toggleSummonSection = function(btn) {
+    const body = btn.nextElementSibling;
+    const arrow = btn.querySelector('.summon-toggle-arrow');
+    const collapsed = body.style.display === 'none';
+    body.style.display = collapsed ? '' : 'none';
+    if (arrow) arrow.textContent = collapsed ? '▾' : '▸';
+};
+
+window.addSummon = function() {
+    summonsData.push({ name: 'New Creature', hp: 10, maxHp: 10, ac: 12, speed: '', notes: '', resistances: '', vulnerabilities: '', immunities: '', abilities: [] });
+    window.renderSummons();
+    saveCharacter();
+};
+
+window.addCreatureAbility = function(i) {
+    if (!summonsData[i]) return;
+    if (!summonsData[i].abilities) summonsData[i].abilities = [];
+    summonsData[i].abilities.push({ name: '', desc: '' });
+    window.renderSummons();
+    saveCharacter();
+};
+
+window.removeCreatureAbility = function(i, ai) {
+    if (!summonsData[i]?.abilities) return;
+    summonsData[i].abilities.splice(ai, 1);
+    window.renderSummons();
+    saveCharacter();
+};
+
+window.updateCreatureAbility = function(i, ai, field, val) {
+    if (!summonsData[i]?.abilities?.[ai]) return;
+    summonsData[i].abilities[ai][field] = val;
+    saveCharacter();
+};
+
+window.openCreatureImportModal = async function(summonIdx) {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const data = await new Promise(resolve => {
+        const req = store.get('currentData');
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+    });
+    if (!data) return alert('No data loaded.');
+
+    const monsters = [];
+    data.forEach(file => {
+        if (!file.name.toLowerCase().endsWith('.json')) return;
+        try {
+            const json = JSON.parse(file.content);
+            if (json.monster) monsters.push(...json.monster);
+        } catch(e) {}
+    });
+    if (!monsters.length) return alert('No monster data found in loaded files.');
+
+    // Deduplicate — prefer MM then PHB then first
+    const monMap = new Map();
+    monsters.forEach(m => {
+        if (!m?.name) return;
+        const key = m.name.toLowerCase();
+        if (!monMap.has(key)) monMap.set(key, m);
+        else {
+            const ex = monMap.get(key);
+            if (m.source === 'MM' && ex.source !== 'MM') monMap.set(key, m);
+        }
+    });
+    const sorted = Array.from(monMap.values()).sort((a,b) => a.name.localeCompare(b.name));
+
+    let overlay = document.getElementById('creature-import-modal');
+    if (overlay) overlay.remove();
+    overlay = document.createElement('div');
+    overlay.id = 'creature-import-modal';
+    overlay.className = 'info-modal-overlay';
+    overlay.style.display = 'flex';
+    overlay.innerHTML = `
+        <div class="info-modal-content" style="max-width:420px;max-height:85vh;display:flex;flex-direction:column;">
+            <button class="close-modal-btn" onclick="document.getElementById('creature-import-modal').remove()">&times;</button>
+            <h3 class="info-modal-title">Import Creature</h3>
+            <input id="creature-import-search" type="text" placeholder="Search monsters…"
+                style="margin-bottom:8px;padding:6px 10px;border:1px solid var(--gold);border-radius:4px;font-size:0.9rem;background:var(--parchment);">
+            <div id="creature-import-list" style="overflow-y:auto;flex:1;border:1px solid var(--gold);border-radius:4px;"></div>
+        </div>`;
+    document.body.appendChild(overlay);
+
+    const listEl = document.getElementById('creature-import-list');
+    const searchEl = document.getElementById('creature-import-search');
+
+    const renderList = (q) => {
+        const filtered = q ? sorted.filter(m => m.name.toLowerCase().includes(q.toLowerCase())) : sorted;
+        listEl.innerHTML = '';
+        filtered.slice(0, 200).forEach(m => {
+            const row = document.createElement('div');
+            row.style.cssText = 'padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--gold-light,#e8d9a0);font-size:0.9rem;';
+            row.onmouseover = () => row.style.background = 'var(--parchment-dark)';
+            row.onmouseout = () => row.style.background = '';
+            const cr = m.cr ? (typeof m.cr === 'object' ? m.cr.cr : m.cr) : '?';
+            row.innerHTML = `<strong>${m.name}</strong> <span style="color:var(--ink-light);font-size:0.8rem;">[CR ${cr}] ${m.source||''}</span>`;
+            row.onclick = () => {
+                window._importCreatureData(summonIdx, m);
+                overlay.remove();
+            };
+            listEl.appendChild(row);
+        });
+        if (!listEl.children.length) listEl.innerHTML = '<div style="padding:10px;color:var(--ink-light);text-align:center;">No results</div>';
+    };
+    renderList('');
+    searchEl.addEventListener('input', () => renderList(searchEl.value));
+    searchEl.focus();
+};
+
+window._importCreatureData = function(i, m) {
+    if (!summonsData[i]) return;
+    const s = summonsData[i];
+    s.name = m.name;
+
+    // AC
+    if (m.ac) {
+        const acEntry = Array.isArray(m.ac) ? m.ac[0] : m.ac;
+        s.ac = typeof acEntry === 'object' ? (acEntry.ac || acEntry.value || 10) : (parseInt(acEntry) || 10);
+    }
+
+    // HP
+    if (m.hp) {
+        const hp = typeof m.hp === 'object' ? (m.hp.average || m.hp.min || 1) : (parseInt(m.hp) || 1);
+        s.hp = hp; s.maxHp = hp;
+    }
+
+    // Speed
+    if (m.speed) {
+        const spd = m.speed.walk || m.speed;
+        s.speed = typeof spd === 'object' ? (spd.number ? `${spd.number} ft` : '') : (spd ? `${spd} ft` : '');
+    }
+
+    // Resistances/Vulnerabilities/Immunities
+    const joinDmg = arr => Array.isArray(arr) ? arr.map(x => typeof x === 'string' ? x : (x.resist || x.vulnerable || x.immune || JSON.stringify(x))).join(', ') : '';
+    s.resistances = joinDmg(m.resist);
+    s.vulnerabilities = joinDmg(m.vulnerable);
+    s.immunities = joinDmg(m.immune);
+
+    // Abilities from traits + actions
+    s.abilities = [];
+    const processEntryList = (list, tag) => {
+        if (!Array.isArray(list)) return;
+        list.forEach(entry => {
+            if (!entry?.name) return;
+            const rawDesc = window.processEntries ? window.processEntries(entry.entries || entry.entry || []) : '';
+            const desc = window.cleanText ? window.cleanText(rawDesc) : rawDesc;
+            s.abilities.push({ name: (tag ? `[${tag}] ` : '') + entry.name, desc });
+        });
+    };
+    processEntryList(m.trait, '');
+    processEntryList(m.action, 'Action');
+    processEntryList(m.bonus, 'Bonus');
+    processEntryList(m.reaction, 'Reaction');
+    processEntryList(m.legendary, 'Legendary');
+
+    window.renderSummons();
+    saveCharacter();
+};
+
+window.deleteSummon = function(i) {
+    summonsData.splice(i, 1);
+    window.renderSummons();
+    saveCharacter();
+};
+
+window.updateSummonField = function(i, field, val) {
+    if (!summonsData[i]) return;
+    summonsData[i][field] = val;
+    saveCharacter();
+};
+
+window.stepSummonHp = function(i, delta) {
+    if (!summonsData[i]) return;
+    summonsData[i].hp = Math.max(0, Math.min(summonsData[i].maxHp, summonsData[i].hp + delta));
+    window.renderSummons();
+    saveCharacter();
+};
+
 // Auto-detect class resources from class table + known formulas
 window.autoDetectClassResources = async function() {
     const charClass = document.getElementById('charClass')?.value?.trim();
@@ -4291,7 +4565,7 @@ window.saveCharacter = function () {
     int: document.getElementById("int").value,
     wis: document.getElementById("wis").value,
     cha: document.getElementById("cha").value,
-    ac: document.getElementById("baseAC")?.value || "10",
+    baseAC: document.getElementById("baseAC")?.value || "10",
     shield: document.getElementById("shieldEquipped")?.checked || false,
     armorLight: document.getElementById("armorLight").checked,
     armorMedium: document.getElementById("armorMedium").checked,
@@ -4313,6 +4587,7 @@ window.saveCharacter = function () {
     immunities: document.getElementById("immunities")?.value || '',
     vulnerabilities: document.getElementById("vulnerabilities")?.value || '',
     resourcesData: resourcesData,
+    summonsData: summonsData,
     classes: window.characterClasses,
 
     weapons: Array.from(document.querySelectorAll(".weapon-item")).map(
@@ -5825,6 +6100,7 @@ window.initQuickNav = function () {
               <button class="btn btn-secondary" style="white-space: normal; height: auto; padding: 10px;" onclick="window.switchAppView('view-defenses')">Speed & Defenses</button>
               <button class="btn btn-secondary" style="white-space: normal; height: auto; padding: 10px;" onclick="window.switchAppView('view-proficiencies')">Proficiencies & Training</button>
               <button class="btn btn-secondary" style="white-space: normal; height: auto; padding: 10px;" onclick="window.switchAppView('view-notes')">Notes</button>
+              <button class="btn btn-secondary" style="white-space: normal; height: auto; padding: 10px;" onclick="window.switchAppView('view-summons')">Summons &amp; Creatures</button>
           </div>
       </div>
   `;
@@ -6383,6 +6659,45 @@ window.unmountNotesView = function() {
     });
 };
 
+// ===== SUMMONS VIEW (Mobile) =====
+window.mountSummonsView = function() {
+    const view = document.getElementById('view-summons');
+    if (!view) return;
+    if (!document.getElementById('summons-view-title')) {
+        const h = document.createElement('h2');
+        h.id = 'summons-view-title';
+        h.className = 'section-title';
+        h.textContent = 'Summons & Creatures';
+        view.appendChild(h);
+    }
+    // Inject add-button if not already present
+    if (!document.getElementById('summons-mobile-add')) {
+        const btn = document.createElement('button');
+        btn.id = 'summons-mobile-add';
+        btn.className = 'add-feature-btn';
+        btn.style.margin = '4px 0 8px';
+        btn.textContent = '+ Add Creature';
+        btn.onclick = () => window.addSummon();
+        view.appendChild(btn);
+    }
+    const moveEl = window.createViewMover(view, 'summonsMoved');
+    moveEl(document.getElementById('summonsContainer'));
+    // Move the add button (desktop) into view too
+    const desktopBtn = document.querySelector('#summons > .add-feature-btn');
+    if (desktopBtn) moveEl(desktopBtn);
+};
+
+window.unmountSummonsView = function() {
+    document.getElementById('summons-view-title')?.remove();
+    document.querySelectorAll('[data-summons-moved]').forEach(el => {
+        const ph = document.getElementById(el.dataset.summonsMoved);
+        if (ph) { ph.parentNode.insertBefore(el, ph); ph.remove(); }
+        delete el.dataset.summonsMoved;
+    });
+    const mobileBtn = document.getElementById('summons-mobile-add');
+    if (mobileBtn) mobileBtn.remove();
+};
+
 // ===== FEATURES VIEW (Mobile) =====
 window.mountFeaturesView = function() {
     const view = document.getElementById('view-features');
@@ -6768,11 +7083,12 @@ window.switchAppView = function(viewId) {
             { id: 'view-features', title: 'Features & Traits' },
             { id: 'view-defenses', title: 'Speed & Defenses' },
             { id: 'view-proficiencies', title: 'Proficiencies & Training' },
-            { id: 'view-notes', title: 'Notes' }
+            { id: 'view-notes', title: 'Notes' },
+            { id: 'view-summons', title: 'Summons & Creatures' }
         ];
         window._appViewOrder = views.map(v => v.id);
 
-        const noPlaceholder = new Set(['view-stats', 'view-actions', 'view-inventory', 'view-spells', 'view-features', 'view-defenses', 'view-proficiencies', 'view-notes']);
+        const noPlaceholder = new Set(['view-stats', 'view-actions', 'view-inventory', 'view-spells', 'view-features', 'view-defenses', 'view-proficiencies', 'view-notes', 'view-summons']);
         views.forEach(v => {
             const vDiv = document.createElement('div');
             vDiv.id = v.id;
@@ -6812,6 +7128,7 @@ window.switchAppView = function(viewId) {
         if (prev === 'view-defenses' && window.unmountDefensesView) window.unmountDefensesView();
         if (prev === 'view-proficiencies' && window.unmountProficienciesView) window.unmountProficienciesView();
         if (prev === 'view-notes' && window.unmountNotesView) window.unmountNotesView();
+        if (prev === 'view-summons' && window.unmountSummonsView) window.unmountSummonsView();
         if (prev === 'view-features' && window.unmountFeaturesView) window.unmountFeaturesView();
         if (prev === 'view-actions' && window.unmountActionsView) window.unmountActionsView();
     }
@@ -6826,6 +7143,7 @@ window.switchAppView = function(viewId) {
     if (viewId === 'view-defenses' && window.mountDefensesView) window.mountDefensesView();
     if (viewId === 'view-proficiencies' && window.mountProficienciesView) window.mountProficienciesView();
     if (viewId === 'view-notes' && window.mountNotesView) window.mountNotesView();
+    if (viewId === 'view-summons' && window.mountSummonsView) window.mountSummonsView();
     if (viewId === 'view-features' && window.mountFeaturesView) window.mountFeaturesView();
     if (viewId === 'view-actions' && window.mountActionsView) window.mountActionsView();
     window._currentMobileView = viewId;
@@ -7558,6 +7876,11 @@ document.addEventListener("DOMContentLoaded", () => {
           else el.value = data[key];
         }
       });
+      // Migrate old 'ac' key to 'baseAC'
+      if (data.ac && !data.baseAC) {
+        const acEl = document.getElementById('baseAC');
+        if (acEl) acEl.value = data.ac;
+      }
       if (data.skillProficiency) {
         Object.assign(skillProficiency, data.skillProficiency);
         Object.keys(skillProficiency).forEach((k) => {
@@ -7679,6 +8002,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (data.spellSlotsData) spellSlotsData = data.spellSlotsData;
       if (data.resourcesData) resourcesData = data.resourcesData;
+      if (data.summonsData) summonsData = data.summonsData;
       if (data.hitDiceUsed !== undefined) hitDiceUsed = data.hitDiceUsed;
       
       document.getElementById("cantripList").innerHTML = "";
@@ -7745,6 +8069,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (window.updateComponentPouchVisibility) window.updateComponentPouchVisibility();
     renderSpellSlots();
     renderResources();
+    window.renderSummons();
     updateHpBar();
     calculateWeight();
     renderWeaponTags();

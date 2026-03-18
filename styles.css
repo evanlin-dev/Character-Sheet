@@ -2934,6 +2934,174 @@ body.swap-scores.dense-mode .stat-modifier input {
     margin-top: 8px;
 }
 
+/* ===== SUMMONS / CREATURES ===== */
+.summon-card {
+    background: white;
+    border: 1px solid var(--gold);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 12px;
+}
+.summon-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    border-bottom: 1px dashed var(--gold-dark);
+    padding-bottom: 6px;
+}
+.summon-name-inp {
+    flex: 1;
+    font-family: 'Cinzel', serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--red-dark);
+    border: none;
+    background: transparent;
+    outline: none;
+    min-width: 0;
+}
+.summon-card-stats {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.summon-stat-block {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.summon-stat-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    color: var(--ink-light);
+    font-weight: 600;
+    min-width: 18px;
+}
+.summon-stat-inp {
+    width: 52px;
+    text-align: center;
+    font-size: 1rem;
+    font-weight: 700;
+    border: 1px solid var(--gold);
+    border-radius: 4px;
+    background: var(--parchment);
+    padding: 3px 4px;
+}
+.summon-hp-block { flex: 1; }
+.summon-hp-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.summon-hp-cur { color: var(--red-dark); }
+.summon-hp-max { color: var(--ink-light); }
+.summon-notes {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    font-size: 0.85rem;
+    border: 1px solid var(--gold-light, #e8d9a0);
+    border-radius: 4px;
+    background: var(--parchment);
+    padding: 5px 7px;
+    color: var(--ink);
+    font-family: inherit;
+}
+.summon-section {
+    border-top: 1px dashed var(--gold-light, #e8d9a0);
+    margin-top: 8px;
+    padding-top: 4px;
+}
+.summon-section-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: 'Cinzel', serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--ink-light);
+    letter-spacing: 0.04em;
+    padding: 3px 0;
+    width: 100%;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.summon-section-toggle:hover { color: var(--ink); }
+.summon-section-body {
+    padding-top: 6px;
+}
+.summon-ability-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 4px;
+    margin-bottom: 8px;
+    background: var(--parchment);
+    border: 1px solid var(--gold-light, #e8d9a0);
+    border-radius: 4px;
+    padding: 6px;
+}
+.summon-ability-name {
+    font-weight: 700;
+    font-size: 0.85rem;
+    border: none;
+    background: transparent;
+    outline: none;
+    color: var(--red-dark);
+    font-family: 'Cinzel', serif;
+    min-width: 0;
+}
+.summon-ability-desc {
+    grid-column: 1 / -1;
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 0.82rem;
+    border: none;
+    background: transparent;
+    resize: vertical;
+    outline: none;
+    font-family: inherit;
+    color: var(--ink);
+    min-height: 40px;
+}
+.summon-detail-label {
+    display: block;
+    font-family: 'Cinzel', serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--ink-light);
+    letter-spacing: 0.04em;
+    margin-bottom: 3px;
+}
+.summon-detail-inp {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 0.85rem;
+    border: 1px solid var(--gold-light, #e8d9a0);
+    border-radius: 4px;
+    background: var(--parchment);
+    padding: 4px 7px;
+    color: var(--ink);
+    font-family: inherit;
+}
+.summon-import-btn {
+    font-size: 0.72rem;
+    padding: 2px 7px;
+    border: 1px solid var(--gold);
+    border-radius: 3px;
+    background: var(--parchment-dark);
+    color: var(--ink);
+    cursor: pointer;
+    font-family: 'Cinzel', serif;
+    white-space: nowrap;
+}
+.summon-import-btn:hover { background: var(--gold-light, #e8d9a0); }
+
 /* ===== MOBILE RESOURCES CARD ===== */
 .mobile-money-card {
     background: var(--parchment-dark);
