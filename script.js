@@ -111,6 +111,7 @@ const weaponProficiencyOptions = [
 let dndWeaponsDB = window.dndWeaponsDB;
 window.dndTablesDB = {};
 window.dndItemsDB = {};
+window.dndItemWeightsDB = {};
 
 const conditionsDB = {
   Blinded:
@@ -1106,10 +1107,12 @@ window.addInventoryItem = function (
               let pQty = 1;
               const match = p.match(/^(\d+)\s+(.*)$/);
               if (match) { pQty = parseInt(match[1]); pName = match[2]; }
-              let itemDesc = (window.dndItemsDB || {})[pName.toLowerCase().trim()];
+              const pKey = pName.toLowerCase().trim();
+              let itemDesc = (window.dndItemsDB || {})[pKey];
               let fullDesc = `From ${name}`;
               if (itemDesc) fullDesc = `${fullDesc}:\n${itemDesc}`;
-              addInventoryItem(pName, pQty * Math.max(1, parseInt(qty)||1), 0, isEquipped, fullDesc, skipSave);
+              const itemWt = (window.dndItemWeightsDB || {})[pKey] || 0;
+              addInventoryItem(pName, pQty * Math.max(1, parseInt(qty)||1), itemWt, isEquipped, fullDesc, skipSave);
           });
           return;
       }
@@ -1386,6 +1389,7 @@ function loadWeaponsFromData(parsedData) {
 function loadItemsFromData(parsedData) {
   if (!parsedData) return;
   window.dndItemsDB = {};
+  window.dndItemWeightsDB = {};
   parsedData.forEach((json) => {
     try {
       const arrays = [json.item, json.items, json.baseitem, json.baseitems, json.magicvariant, json.magicvariants];
@@ -1393,14 +1397,14 @@ function loadItemsFromData(parsedData) {
           if (Array.isArray(arr)) {
               arr.forEach(item => {
                   if (!item.name) return;
+                  const key = item.name.toLowerCase().trim();
                   let desc = "";
                   if (item.entries) desc = window.processEntries(item.entries);
                   else if (item.desc) desc = window.processEntries(item.desc);
                   else if (item.description) desc = item.description;
-                  
-                  if (desc) {
-                      window.dndItemsDB[item.name.toLowerCase().trim()] = window.cleanText(desc);
-                  }
+                  if (desc) window.dndItemsDB[key] = window.cleanText(desc);
+                  const wt = item.weight ?? item.weight_lbs ?? 0;
+                  if (wt) window.dndItemWeightsDB[key] = parseFloat(wt) || 0;
               });
           }
       });
@@ -6311,11 +6315,11 @@ window.mountInventoryView = function() {
     // Inject money card at top
     if (!document.getElementById('mobile-money-card')) {
         const coins = [
-            { id: 'pp', label: 'PP' },
-            { id: 'gp', label: 'GP' },
-            { id: 'ep', label: 'EP' },
-            { id: 'sp', label: 'SP' },
             { id: 'cp', label: 'CP' },
+            { id: 'sp', label: 'SP' },
+            { id: 'ep', label: 'EP' },
+            { id: 'gp', label: 'GP' },
+            { id: 'pp', label: 'PP' },
         ];
         const mc = document.createElement('div');
         mc.id = 'mobile-money-card';

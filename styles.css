@@ -574,10 +574,10 @@ body.app-view-active #view-inventory .inventory-item .delete-btn { grid-area: de
 body.app-view-active #view-inventory .inventory-item .desc-field { display: none; }
 
 /* Saving throws: 4-column layout (no MOD column) */
-body.app-view-active #view-stats #mobile-saves-wrapper .skill-item { grid-template-columns: 20px 16px 28px 1fr 45px; }
+body.app-view-active #view-stats #mobile-saves-wrapper .skill-item { grid-template-columns: 20px 16px 16px 28px 1fr 45px; }
 body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .mobile-mod-label { display: none; }
-body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .skill-name { grid-column: 4; }
-body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .skill-mod { grid-column: 5; }
+body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .skill-name { grid-column: 5; }
+body.app-view-active #view-stats #mobile-saves-wrapper .skill-item .skill-mod { grid-column: 6; }
 .mobile-saves-header { grid-template-columns: 38px 28px 1fr 45px; gap: 4px; }
 
 /* Skills header doesn't align with 2-column layout — hide it */
@@ -1469,9 +1469,9 @@ body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) {
 
   body:not(.dense-mode) .skill-item {
       display: grid;
-      grid-template-columns: 18px 20px 30px 1fr 20px 35px;
+      grid-template-columns: 18px 14px 20px 30px 1fr 20px 35px;
       padding: 2px 6px;
-      gap: 6px;
+      gap: 4px;
       border-color: rgba(0,0,0,0.1);
       background: white;
       box-shadow: 0 1px 2px rgba(0,0,0,0.05);
@@ -1480,11 +1480,12 @@ body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) {
   }
   body:not(.dense-mode) .skill-item > * { margin: 0; min-height: unset; align-self: center; grid-row: 1; }
   body:not(.dense-mode) .skill-checkbox { grid-column: 1; align-self: center; margin: 0 auto !important; width: 16px; height: 16px; min-height: unset; border-radius: 3px; border-width: 1px; display: flex; align-items: center; justify-content: center; }
-  body:not(.dense-mode) .adv-toggle { grid-column: 2; align-self: center; margin: 0 auto !important; width: 18px; height: 18px; min-height: unset; font-size: 0.6rem; display: flex; align-items: center; justify-content: center; }
-  body:not(.dense-mode) .mobile-mod-label { grid-column: 3; align-self: center; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; color: var(--ink-light); font-weight: bold; text-transform: uppercase; }
-  body:not(.dense-mode) .skill-name { grid-column: 4; align-self: center; display: flex; align-items: center; justify-content: flex-start; font-size: 0.85rem; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 !important; }
-  body:not(.dense-mode) .skill-info-btn { grid-column: 5; align-self: center; margin: 0 auto !important; width: 18px; height: 18px; min-height: unset; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; }
-  body:not(.dense-mode) .skill-mod { grid-column: 6; align-self: center; display: flex; align-items: center; justify-content: flex-end; font-size: 0.9rem; min-width: 24px; min-height: unset; text-align: right; margin: 0 !important; }
+  body:not(.dense-mode) .expertise-btn { grid-column: 2; align-self: center; margin: 0 auto !important; width: 13px; height: 13px; min-height: unset; font-size: 0.42rem; padding: 0; border-radius: 2px; }
+  body:not(.dense-mode) .adv-toggle { grid-column: 3; align-self: center; margin: 0 auto !important; width: 18px; height: 18px; min-height: unset; font-size: 0.6rem; display: flex; align-items: center; justify-content: center; }
+  body:not(.dense-mode) .mobile-mod-label { grid-column: 4; align-self: center; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; color: var(--ink-light); font-weight: bold; text-transform: uppercase; }
+  body:not(.dense-mode) .skill-name { grid-column: 5; align-self: center; display: flex; align-items: center; justify-content: flex-start; font-size: 0.85rem; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 !important; }
+  body:not(.dense-mode) .skill-info-btn { grid-column: 6; align-self: center; margin: 0 auto !important; width: 18px; height: 18px; min-height: unset; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; }
+  body:not(.dense-mode) .skill-mod { grid-column: 7; align-self: center; display: flex; align-items: center; justify-content: flex-end; font-size: 0.9rem; min-width: 24px; min-height: unset; text-align: right; margin: 0 !important; }
   body:not(.dense-mode) .checkmark { font-size: 0.8rem; }
 
   /* Compress Hit Points & Death Saves on Mobile/Tablet */
@@ -3202,7 +3203,7 @@ body.swap-scores.dense-mode .stat-modifier input {
     position: relative;
     margin-bottom: 10px;
     padding-bottom: 10px;
-    padding-right: 70px;
+    padding-right: 56px;
     border-bottom: 1px dashed var(--gold);
 }
 .res-row:last-of-type { border-bottom: none; margin-bottom: 4px; }
@@ -3249,8 +3250,8 @@ body.swap-scores.dense-mode .stat-modifier input {
     cursor: pointer;
     padding: 0 4px;
     line-height: 1;
-    min-width: 28px;
-    min-height: 28px;
+    min-width: 22px;
+    min-height: 22px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -3374,7 +3375,7 @@ body.swap-scores.dense-mode .stat-modifier input {
 .res-settings-btn:hover { background: var(--gold); color: var(--parchment); }
 @media (max-width: 900px) {
     .res-settings-btn {
-        min-width: 36px; min-height: 36px; padding: 4px 8px; font-size: 0.9rem;
+        min-width: 24px; min-height: 24px; padding: 1px 4px; font-size: 0.72rem;
     }
     .weapon-formula-btn, .delete-feature-btn {
         width: 32px !important; height: 32px !important; font-size: 1rem !important;
