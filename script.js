@@ -213,11 +213,12 @@ const CLASS_RESOURCE_DEFS = {
 
 // Formula options for custom resource max and weapon stats
 const RESOURCE_FORMULA_OPTS = [
-    { key: 'fixed',      label: 'Fixed number' },
-    { key: 'pb',         label: 'Proficiency Bonus',    compute: () => getPB() },
-    { key: 'pb_x2',      label: 'Prof. Bonus × 2',      compute: () => getPB() * 2 },
-    { key: 'level',      label: 'Level',                compute: () => getLevel() },
-    { key: 'level_x5',   label: 'Level × 5',            compute: () => getLevel() * 5 },
+    { key: 'fixed',         label: 'Fixed number' },
+    { key: 'pb',            label: 'Proficiency Bonus',    compute: () => getPB() },
+    { key: 'pb_x2',         label: 'Prof. Bonus × 2',      compute: () => getPB() * 2 },
+    { key: 'level',         label: 'Level',                compute: () => getLevel() },
+    { key: 'half_level',    label: 'Half Level',           compute: () => Math.max(1, Math.floor(getLevel() / 2)) },
+    { key: 'level_x5',      label: 'Level × 5',            compute: () => getLevel() * 5 },
     { key: 'str_mod',    label: 'STR modifier',         compute: () => Math.max(1, getAbilityMod('str')) },
     { key: 'dex_mod',    label: 'DEX modifier',         compute: () => Math.max(1, getAbilityMod('dex')) },
     { key: 'con_mod',    label: 'CON modifier',         compute: () => Math.max(1, getAbilityMod('con')) },
