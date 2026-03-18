@@ -2958,7 +2958,7 @@ window.addWeapon = function (data = null) {
             <div class="field"><span class="field-label">Atk Bonus</span><input type="text" class="weapon-atk" placeholder="+0" value="${data ? data.atk : ""}" /></div>
             <div class="field"><span class="field-label">Damage</span><input type="text" class="weapon-damage" placeholder="1d6+0" value="${data ? data.damage : ""}" /></div>
         </div>
-        <div class="field"><span class="field-label">Notes</span><input type="text" class="weapon-notes" placeholder="Properties..." value="${data ? data.notes : ""}" /></div>
+        <div class="field"><span class="field-label">Notes</span><textarea class="weapon-notes" placeholder="Properties..." rows="1">${data ? data.notes : ""}</textarea></div>
     </div>`;
   if (data && data.formulaData) {
       newWeapon.dataset.wformula = JSON.stringify(data.formulaData);
@@ -2974,6 +2974,11 @@ window.addWeapon = function (data = null) {
   newWeapon
     .querySelectorAll("input")
     .forEach((input) => input.addEventListener("input", saveCharacter));
+  const notesTA = newWeapon.querySelector('.weapon-notes');
+  if (notesTA) {
+      notesTA.addEventListener('input', saveCharacter);
+      requestAnimationFrame(() => autoResizeTextarea(notesTA));
+  }
   if (!window.isInitializing) {
       if (data && data.formulaData) window.recomputeWeaponFormulas();
       saveCharacter();
@@ -3019,6 +3024,17 @@ window.recomputeWeaponFormulas = function() {
     if (window.renderWeaponsCard) window.renderWeaponsCard();
 };
 
+const MASTERY_DESCRIPTIONS = {
+    cleave:  'Hit a creature → make a second attack (no action) against a different creature within 5 ft. On hit, deal damage equal to your ability modifier.',
+    graze:   'When you miss, the target still takes damage equal to your ability modifier.',
+    nick:    'The extra attack from the Light property uses your Action instead of your Bonus Action.',
+    push:    'On a hit, push the target up to 10 ft directly away from you.',
+    sap:     'On a hit, the target has Disadvantage on its next attack roll before your next turn.',
+    slow:    'On a hit, the target\'s Speed is reduced by 10 ft until the start of your next turn.',
+    topple:  'On a hit, the target must succeed on a Constitution saving throw (DC = 8 + your ability modifier + PB) or fall Prone.',
+    vex:     'On a hit that deals damage, you gain Advantage on your next attack roll against the same target before your next turn.',
+};
+
 window.renderWeaponsCard = function() {
     const card = document.getElementById('mobile-weapons-card');
     if (!card) return;
@@ -3048,11 +3064,26 @@ window.renderWeaponsCard = function() {
             }
         } catch(e) {}
 
+        // Parse mastery from notes (e.g. "Finesse, Light, Mastery: Vex")
+        const masteryMatch = notes.match(/Mastery:\s*(\w+)/i);
+        const masteryName = masteryMatch ? masteryMatch[1] : '';
+        const masteryDesc = masteryName ? MASTERY_DESCRIPTIONS[masteryName.toLowerCase()] : '';
+
+        // Notes without the "Mastery: X" part (avoid duplicate display)
+        const notesWithoutMastery = notes.replace(/,?\s*Mastery:\s*\w+/gi, '').trim().replace(/^,\s*/, '');
+
         const detailParts = [];
-        if (notes) detailParts.push(notes);
-        if (dcStr) detailParts.push(dcStr);
-        const hasDetail = detailParts.length > 0;
+        if (notesWithoutMastery) detailParts.push(`<span class="wcard-notes">${notesWithoutMastery}</span>`);
+        if (dcStr) detailParts.push(`<span class="wcard-notes">${dcStr}</span>`);
+        const hasMastery = !!(masteryName && masteryDesc);
+        const hasDetail = detailParts.length > 0 || hasMastery;
         const expandId = `wcard-detail-${i}`;
+
+        const masteryHtml = hasMastery ? `
+            <div class="wcard-mastery-block">
+                <span class="wcard-mastery-name">${masteryName}</span>
+                <span class="wcard-mastery-desc">${masteryDesc}</span>
+            </div>` : '';
 
         return `<div class="weapon-card-item">
             <div class="weapon-card-row${hasDetail ? ' weapon-card-row-expandable' : ''}"
@@ -3062,7 +3093,7 @@ window.renderWeaponsCard = function() {
                 <span class="weapon-card-dmg">${dmg}</span>
                 ${hasDetail ? `<span class="wcard-chevron">▾</span>` : '<span style="width:12px;flex-shrink:0;"></span>'}
             </div>
-            ${hasDetail ? `<div class="weapon-card-detail" id="${expandId}">${detailParts.join(' · ')}</div>` : ''}
+            ${hasDetail ? `<div class="weapon-card-detail" id="${expandId}">${detailParts.join(' · ')}${masteryHtml}</div>` : ''}
         </div>`;
     }).join('');
 
@@ -6722,36 +6753,119 @@ window.refreshSpellsInActionsView = function() {
 window.mountDefensesView = function() {
     const view = document.getElementById('view-defenses');
     if (!view) return;
-    const moveEl = window.createViewMover(view, 'defMoved');
-    moveEl(document.getElementById('speed')?.closest('.combat-stat'));
-    moveEl(document.getElementById('resistances')?.closest('.field'));
+
+    const gv = id => document.getElementById(id)?.value || '';
+    const speed = gv('speed') || '30';
+    const size = gv('charSize') || 'Medium';
+    const sizeOpts = ['Tiny','Small','Medium','Large','Huge','Gargantuan']
+        .map(s => `<option${size === s ? ' selected' : ''}>${s}</option>`).join('');
+
+    view.innerHTML = `<div id="def-view-inner">
+        <div class="def-stat-grid">
+            <div class="def-stat-card">
+                <div class="def-stat-label">Speed</div>
+                <div class="def-stat-input-row">
+                    <input class="def-stat-input" id="def-speed" type="number" value="${speed}" oninput="window._defSync('speed',this.value)"/>
+                    <span class="def-stat-unit">ft</span>
+                </div>
+            </div>
+            <div class="def-stat-card">
+                <div class="def-stat-label">Size</div>
+                <select class="def-stat-select" id="def-size" onchange="window._defSync('charSize',this.value)">${sizeOpts}</select>
+            </div>
+        </div>
+        <div class="def-card">
+            <div class="def-card-header">Defenses</div>
+            <div class="def-defense-row">
+                <div class="def-defense-label">Resistances</div>
+                <textarea class="def-defense-textarea" id="def-res" placeholder="e.g. Fire, Poison…" oninput="window._defSync('resistances',this.value)">${gv('resistances')}</textarea>
+            </div>
+            <div class="def-defense-row">
+                <div class="def-defense-label">Immunities</div>
+                <textarea class="def-defense-textarea" id="def-imm" placeholder="e.g. Charmed, Frightened…" oninput="window._defSync('immunities',this.value)">${gv('immunities')}</textarea>
+            </div>
+            <div class="def-defense-row" style="margin-bottom:0">
+                <div class="def-defense-label">Vulnerabilities</div>
+                <textarea class="def-defense-textarea" id="def-vuln" placeholder="e.g. Cold…" oninput="window._defSync('vulnerabilities',this.value)">${gv('vulnerabilities')}</textarea>
+            </div>
+        </div>
+    </div>`;
+};
+
+window._defSync = function(sourceId, value) {
+    const el = document.getElementById(sourceId);
+    if (el) { el.value = value; saveCharacter(); }
 };
 
 window.unmountDefensesView = function() {
-    document.querySelectorAll('[data-def-moved]').forEach(el => {
-        const ph = document.getElementById(el.dataset.defMoved);
-        if (ph) { ph.parentNode.insertBefore(el, ph); ph.remove(); }
-        delete el.dataset.defMoved;
-    });
+    const view = document.getElementById('view-defenses');
+    if (view) view.innerHTML = '';
 };
 
 // ===== PROFICIENCIES VIEW (Mobile) =====
 window.mountProficienciesView = function() {
     const view = document.getElementById('view-proficiencies');
     if (!view) return;
-    const moveEl = window.createViewMover(view, 'profMoved');
-    ['profBonus', 'armorLight', 'weaponProfsSelector', 'toolProfs', 'languages'].forEach(id => {
-        const el = document.getElementById(id);
-        moveEl(el?.closest('.combat-stat') || el?.closest('.field'));
-    });
+
+    const pb = parseInt(document.getElementById('profBonus')?.value) || 2;
+    const armorIds   = ['armorLight','armorMedium','armorHeavy','armorShield'];
+    const armorLabels = ['Light','Medium','Heavy','Shield'];
+    const armorBoxes = armorIds.map((id, i) => {
+        const chk = document.getElementById(id)?.checked ? 'checked' : '';
+        return `<label class="prof-armor-item"><input type="checkbox" ${chk} onchange="var s=document.getElementById('${id}');if(s){s.checked=this.checked;saveCharacter()}"> ${armorLabels[i]}</label>`;
+    }).join('');
+
+    view.innerHTML = `<div id="prof-view-inner">
+        <div class="prof-pb-row">
+            <div class="def-stat-card prof-pb-card">
+                <div class="def-stat-label">Proficiency Bonus</div>
+                <div class="def-stat-readonly">+${pb}</div>
+            </div>
+        </div>
+        <div class="def-card">
+            <div class="def-card-header">Armor Training</div>
+            <div class="prof-armor-grid">${armorBoxes}</div>
+        </div>
+        <div class="def-card">
+            <div class="def-card-header">Weapon Proficiencies</div>
+            <div id="prof-weapon-slot" class="prof-field-slot"></div>
+        </div>
+        <div class="def-card">
+            <div class="def-card-header">Tool Proficiencies</div>
+            <div id="prof-tool-slot" class="prof-field-slot"></div>
+        </div>
+        <div class="def-card">
+            <div class="def-card-header">Languages</div>
+            <div id="prof-lang-slot" class="prof-field-slot"></div>
+        </div>
+    </div>`;
+
+    const moveInto = (slotId, el) => {
+        if (!el) return;
+        const slot = document.getElementById(slotId);
+        if (!slot) return;
+        const ph = document.createElement('span');
+        ph.id = 'profph-' + slotId + '-' + el.id;
+        ph.style.display = 'none';
+        el.parentNode.insertBefore(ph, el);
+        el.dataset.profViewMoved = ph.id;
+        slot.appendChild(el);
+    };
+
+    moveInto('prof-weapon-slot', document.getElementById('weaponProfsSelector'));
+    moveInto('prof-weapon-slot', document.getElementById('weaponProfsText'));
+    moveInto('prof-tool-slot',   document.getElementById('toolProfs'));
+    moveInto('prof-lang-slot',   document.getElementById('languages'));
 };
 
 window.unmountProficienciesView = function() {
-    document.querySelectorAll('[data-prof-moved]').forEach(el => {
-        const ph = document.getElementById(el.dataset.profMoved);
+    document.querySelectorAll('[data-prof-view-moved]').forEach(el => {
+        const ph = document.getElementById(el.dataset.profViewMoved);
         if (ph) { ph.parentNode.insertBefore(el, ph); ph.remove(); }
-        delete el.dataset.profMoved;
+        delete el.dataset.profViewMoved;
     });
+    const view = document.getElementById('view-proficiencies');
+    if (view) view.innerHTML = '';
 };
 
 // ===== NOTES VIEW (Mobile) =====

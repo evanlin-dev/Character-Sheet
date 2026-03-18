@@ -335,6 +335,193 @@ body.app-view-active .header { display: none !important; }
 }
 .msv-slot-dot.used { background: var(--red); border-color: var(--red-dark); }
 
+/* ===== DEFENSES VIEW ===== */
+#def-view-inner {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.def-stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    max-width: 320px;
+    margin: 0 auto;
+}
+.def-stat-card {
+    background: white;
+    border: 2px solid var(--gold);
+    border-radius: 10px;
+    padding: 12px 8px 10px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    box-shadow: 0 2px 6px var(--shadow);
+}
+.def-stat-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+.def-stat-input {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--red-dark);
+    text-align: center;
+    width: 72px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--gold);
+    padding: 0;
+    line-height: 1.1;
+}
+.def-stat-input-row {
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+}
+.def-stat-unit {
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    color: var(--ink-light);
+    font-weight: 600;
+}
+.def-stat-readonly {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--red-dark);
+    line-height: 1.1;
+}
+.def-stat-select {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--red-dark);
+    border: none;
+    border-bottom: 2px solid var(--gold);
+    background: transparent;
+    text-align: center;
+    padding: 2px 0;
+    cursor: pointer;
+    max-width: 100%;
+}
+.def-shield-label {
+    font-size: 0.65rem;
+    font-family: 'Cinzel', serif;
+    color: var(--ink-light);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    margin-top: 2px;
+}
+.def-card {
+    background: white;
+    border: 1px solid var(--gold);
+    border-radius: 8px;
+    padding: 12px 14px;
+    box-shadow: 0 1px 4px var(--shadow);
+}
+.def-card-header {
+    font-family: 'Cinzel', serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--red-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--gold);
+}
+.def-defense-row { margin-bottom: 10px; }
+.def-defense-label {
+    font-size: 0.62rem;
+    font-family: 'Cinzel', serif;
+    font-weight: 700;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+}
+.def-defense-textarea {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid var(--gold);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-family: 'Crimson Text', serif;
+    font-size: 1rem;
+    background: var(--parchment);
+    box-sizing: border-box;
+    resize: vertical;
+    color: var(--ink);
+}
+.def-defense-textarea:focus { outline: none; border-color: var(--red); }
+
+/* ===== PROFICIENCIES VIEW ===== */
+#prof-view-inner {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.prof-pb-row {
+    display: flex;
+    justify-content: center;
+}
+.prof-pb-card {
+    min-width: 140px;
+    max-width: 180px;
+}
+.prof-armor-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 16px;
+}
+.prof-armor-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Crimson Text', serif;
+    font-size: 1rem;
+    color: var(--ink);
+    cursor: pointer;
+}
+.prof-armor-item input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--red);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.prof-field-slot .tag-display {
+    border: 1px solid var(--gold);
+    border-radius: 4px;
+    padding: 6px 8px;
+    background: var(--parchment);
+    min-height: 38px;
+    cursor: pointer;
+}
+.prof-field-slot textarea {
+    width: 100%;
+    min-height: 52px;
+    border: 1px solid var(--gold);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-family: 'Crimson Text', serif;
+    font-size: 1rem;
+    background: var(--parchment);
+    box-sizing: border-box;
+    resize: vertical;
+    color: var(--ink);
+}
+.prof-field-slot textarea:focus { outline: none; border-color: var(--red); }
+
 /* Spell cards */
 .msv-level-group { margin-bottom: 12px; }
 .msv-level-header {
@@ -761,6 +948,9 @@ body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) {
    9. WEAPONS & SPELLS
    ========================================= */
 .weapon-flex-container { display: flex; align-items: flex-start; gap: 8px; }
+/* Weapon notes textarea — single-line feel on desktop, expands on mobile */
+.weapon-notes { resize: none; overflow: hidden; line-height: 1.4; font-family: inherit; font-size: inherit; width: 100%; padding: 0; background: transparent; border: none; border-bottom: 1px solid transparent; min-height: 1.4em; }
+.weapon-notes:focus { outline: none; border-bottom-color: var(--red); }
 .spell-list-header, .spell-row { display: grid; grid-template-columns: 30px 30px 40px 2fr 1fr 1fr 25px 25px 25px 25px 30px; gap: 8px; align-items: center; }
 .spell-list-header span { text-align: center; }
 .spell-list-header { font-family: "Cinzel", serif; font-size: 0.75rem; font-weight: 600; color: var(--red-dark); text-transform: uppercase; padding: 0 8px; margin-bottom: 6px; }
@@ -1576,14 +1766,18 @@ body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) {
   body:not(.dense-mode) .slot-btn-small { width: 22px; height: 22px; font-size: 0.8rem; }
 
   /* Compress Weapon Attacks on Mobile/Tablet */
-  body:not(.dense-mode) .weapon-item { padding: 8px !important; padding-right: 76px !important; margin-bottom: 8px; }
+  body:not(.dense-mode) .weapon-item { padding: 10px !important; padding-right: 62px !important; margin-bottom: 8px; }
   body:not(.dense-mode) .weapon-item > div { gap: 6px !important; }
-  body:not(.dense-mode) .weapon-item .grid-3 { grid-template-columns: 1fr 55px 85px !important; gap: 6px !important; }
+  /* Name on its own row; ATK + Damage share the row below */
+  body:not(.dense-mode) .weapon-item .grid-3 { grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
+  body:not(.dense-mode) .weapon-item .grid-3 > :nth-child(1) { grid-column: 1 / -1; }
   body:not(.dense-mode) .weapon-item .field { padding: 6px 8px; }
   body:not(.dense-mode) .weapon-item .field-label { font-size: 0.65rem; margin-bottom: 2px; }
-  body:not(.dense-mode) .weapon-item input { font-size: 1rem; min-height: 24px; height: 24px; padding: 0; }
-  body:not(.dense-mode) .weapon-item .delete-feature-btn { width: 32px !important; height: 32px !important; }
-  body:not(.dense-mode) .weapon-item .weapon-formula-btn { width: 32px !important; height: 32px !important; }
+  body:not(.dense-mode) .weapon-item input { font-size: 1rem; min-height: 26px; height: 26px; padding: 0; }
+  body:not(.dense-mode) .weapon-item .weapon-name { font-size: 1.05rem !important; font-weight: 700; }
+  body:not(.dense-mode) .weapon-notes { resize: vertical; overflow: auto; min-height: 2em; }
+  body:not(.dense-mode) .weapon-item .delete-feature-btn { width: 26px !important; height: 26px !important; }
+  body:not(.dense-mode) .weapon-item .weapon-formula-btn { width: 26px !important; height: 26px !important; }
 }
 
 @media (max-width: 768px) {
@@ -3495,3 +3689,24 @@ body.swap-scores.dense-mode .stat-modifier input {
     line-height: 1.3;
 }
 .weapon-card-detail.open { display: block; }
+.wcard-mastery-block {
+    margin-top: 5px;
+    padding: 5px 7px;
+    background: color-mix(in srgb, var(--gold) 12%, var(--parchment));
+    border-left: 2px solid var(--gold-dark);
+    border-radius: 3px;
+}
+.wcard-mastery-name {
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--red-dark);
+    letter-spacing: 0.03em;
+    margin-right: 5px;
+}
+.wcard-mastery-desc {
+    font-family: 'Crimson Text', serif;
+    font-size: 0.82rem;
+    color: var(--ink);
+    line-height: 1.35;
+}
