@@ -2245,9 +2245,15 @@ function renderSpellSearchPage() {
 
       let ritual = spell.meta && spell.meta.ritual ? true : false;
 
-      let material = false;
-      if (spell.components && (spell.components.m || spell.components.M))
-        material = true;
+      const rawMat = spell.components && (spell.components.m || spell.components.M);
+      const material = !!rawMat;
+      if (rawMat) {
+        let matText = typeof rawMat === 'object' ? (rawMat.text || '') : rawMat;
+        if (matText) {
+          matText = matText.charAt(0).toUpperCase() + matText.slice(1);
+          desc = `**Materials:** ${matText}\n\n${desc}`;
+        }
+      }
 
       const spellData = {
         name: spell.name,
@@ -9171,7 +9177,12 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
                                     let desc = window.processEntries ? window.processEntries(s.entries) : '';
                                     if (s.entriesHigherLevel) desc += '<br><br>' + (window.processEntries ? window.processEntries(s.entriesHigherLevel) : '');
                                     desc = window.cleanText ? window.cleanText(desc) : desc;
-                                    pendingSpells.push({ target: s.level === 0 ? 'cantripList' : 'spellList', spellData: { name: s.name, level: s.level, time, range: rangeStr, ritual: isRitual, concentration: isConc, material: hasMat, description: desc, prepared: s.level !== 0 } });
+                                    const rawMat2 = s.components && (s.components.m || s.components.M);
+                                    if (rawMat2) {
+                                        let matText = typeof rawMat2 === 'object' ? (rawMat2.text || '') : rawMat2;
+                                        if (matText) { matText = matText.charAt(0).toUpperCase() + matText.slice(1); desc = `**Materials:** ${matText}\n\n${desc}`; }
+                                    }
+                                    pendingSpells.push({ target: s.level === 0 ? 'cantripList' : 'spellList', spellData: { name: s.name, level: s.level, time, range: rangeStr, ritual: isRitual, concentration: isConc, material: !!rawMat2, description: desc, prepared: s.level !== 0 } });
                                 }
                                 updateStyles();
                                 updateCounter();
@@ -9612,7 +9623,15 @@ window.addSpellFromFeature = async function(spellName, silent = false) {
                 desc += "<br><br>" + window.processEntries(foundSpell.entriesHigherLevel);
             }
             desc = window.cleanText(desc);
-            
+            const rawMat = foundSpell.components && (foundSpell.components.m || foundSpell.components.M);
+            if (rawMat) {
+                let matText = typeof rawMat === 'object' ? (rawMat.text || '') : rawMat;
+                if (matText) {
+                    matText = matText.charAt(0).toUpperCase() + matText.slice(1);
+                    desc = `**Materials:** ${matText}\n\n${desc}`;
+                }
+            }
+
             const spellData = {
                 name: foundSpell.name,
                 level: foundSpell.level,
@@ -9620,7 +9639,7 @@ window.addSpellFromFeature = async function(spellName, silent = false) {
                 range: range,
                 ritual: foundSpell.meta && foundSpell.meta.ritual ? true : false,
                 concentration: foundSpell.duration && foundSpell.duration[0] && foundSpell.duration[0].concentration ? true : false,
-                material: foundSpell.components && (foundSpell.components.m || foundSpell.components.M) ? true : false,
+                material: !!rawMat,
                 description: desc,
                 prepared: true
             };
