@@ -721,7 +721,10 @@
 
       <div class="tab-content" id="summons">
         <div id="summonsContainer"></div>
-        <button class="add-feature-btn" onclick="window.addSummon()" style="margin-top:8px;">+ Add Creature</button>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+          <button class="add-feature-btn" onclick="window.addSummon()">+ Add Blank</button>
+          <button class="add-feature-btn" id="summons-search-btn" onclick="window.openCreatureSearchAdd()" style="display:none;">🔍 Search Creatures</button>
+        </div>
       </div>
 
       <div class="tab-content" id="notes">

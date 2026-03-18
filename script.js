@@ -1596,6 +1596,8 @@ async function checkDataUploadStatus() {
 
       // Toggle Weapon Attack Inputs
       window.isDataAvailable = hasData;
+      const summonsSearchBtn = document.getElementById('summons-search-btn');
+      if (summonsSearchBtn) summonsSearchBtn.style.display = hasData ? '' : 'none';
       document.querySelectorAll(".weapon-name").forEach((input) => {
         if (input.dataset.customWeapon) return; // already unlocked for custom name editing
         if (hasData) {
@@ -3470,7 +3472,14 @@ window.updateCreatureAbility = function(i, ai, field, val) {
     saveCharacter();
 };
 
-window.openCreatureImportModal = async function(summonIdx) {
+window.openCreatureSearchAdd = async function() {
+    // Creates a new summon slot then opens the picker to fill it
+    window.addSummon();
+    const newIdx = summonsData.length - 1;
+    await window.openCreatureImportModal(newIdx, true);
+};
+
+window.openCreatureImportModal = async function(summonIdx, removeOnCancel = false) {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
@@ -3510,15 +3519,21 @@ window.openCreatureImportModal = async function(summonIdx) {
     overlay.id = 'creature-import-modal';
     overlay.className = 'info-modal-overlay';
     overlay.style.display = 'flex';
+    const onClose = () => {
+        overlay.remove();
+        if (removeOnCancel) { summonsData.splice(summonIdx, 1); window.renderSummons(); saveCharacter(); }
+    };
     overlay.innerHTML = `
         <div class="info-modal-content" style="max-width:420px;max-height:85vh;display:flex;flex-direction:column;">
-            <button class="close-modal-btn" onclick="document.getElementById('creature-import-modal').remove()">&times;</button>
-            <h3 class="info-modal-title">Import Creature</h3>
+            <button class="close-modal-btn" id="creature-import-close">&times;</button>
+            <h3 class="info-modal-title">Search Creatures</h3>
             <input id="creature-import-search" type="text" placeholder="Search monsters…"
                 style="margin-bottom:8px;padding:6px 10px;border:1px solid var(--gold);border-radius:4px;font-size:0.9rem;background:var(--parchment);">
             <div id="creature-import-list" style="overflow-y:auto;flex:1;border:1px solid var(--gold);border-radius:4px;"></div>
         </div>`;
     document.body.appendChild(overlay);
+    document.getElementById('creature-import-close').onclick = onClose;
+    overlay.addEventListener('click', e => { if (e.target === overlay) onClose(); });
 
     const listEl = document.getElementById('creature-import-list');
     const searchEl = document.getElementById('creature-import-search');
@@ -6707,21 +6722,29 @@ window.mountSummonsView = function() {
         h.textContent = 'Summons & Creatures';
         view.appendChild(h);
     }
-    // Inject add-button if not already present
+    // Inject add-buttons if not already present
     if (!document.getElementById('summons-mobile-add')) {
-        const btn = document.createElement('button');
-        btn.id = 'summons-mobile-add';
-        btn.className = 'add-feature-btn';
-        btn.style.margin = '4px 0 8px';
-        btn.textContent = '+ Add Creature';
-        btn.onclick = () => window.addSummon();
-        view.appendChild(btn);
+        const bar = document.createElement('div');
+        bar.id = 'summons-mobile-add';
+        bar.style.cssText = 'display:flex;gap:8px;margin:4px 0 8px;flex-wrap:wrap;';
+        const addBtn = document.createElement('button');
+        addBtn.className = 'add-feature-btn';
+        addBtn.style.flex = '1';
+        addBtn.textContent = '+ Add Blank';
+        addBtn.onclick = () => window.addSummon();
+        bar.appendChild(addBtn);
+        if (window.isDataAvailable) {
+            const searchBtn = document.createElement('button');
+            searchBtn.className = 'add-feature-btn';
+            searchBtn.style.flex = '1';
+            searchBtn.textContent = '🔍 Search Creatures';
+            searchBtn.onclick = () => window.openCreatureSearchAdd();
+            bar.appendChild(searchBtn);
+        }
+        view.appendChild(bar);
     }
     const moveEl = window.createViewMover(view, 'summonsMoved');
     moveEl(document.getElementById('summonsContainer'));
-    // Move the add button (desktop) into view too
-    const desktopBtn = document.querySelector('#summons > .add-feature-btn');
-    if (desktopBtn) moveEl(desktopBtn);
 };
 
 window.unmountSummonsView = function() {
@@ -6731,8 +6754,7 @@ window.unmountSummonsView = function() {
         if (ph) { ph.parentNode.insertBefore(el, ph); ph.remove(); }
         delete el.dataset.summonsMoved;
     });
-    const mobileBtn = document.getElementById('summons-mobile-add');
-    if (mobileBtn) mobileBtn.remove();
+    document.getElementById('summons-mobile-add')?.remove();
 };
 
 // ===== FEATURES VIEW (Mobile) =====
