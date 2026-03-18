@@ -3383,6 +3383,25 @@ window.renderSummons = function() {
             </div>
 
             <div class="summon-section">
+                <button class="summon-section-toggle" onclick="window.toggleSummonSection(this)">Ability Scores <span class="summon-toggle-arrow">▸</span></button>
+                <div class="summon-section-body" style="display:none;">
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:4px;">
+                        ${['str','dex','con','int','wis','cha'].map(ab => {
+                            const score = s[ab] ?? 10;
+                            const mod = Math.floor((score - 10) / 2);
+                            const modStr = (mod >= 0 ? '+' : '') + mod;
+                            return `<div style="text-align:center;background:var(--parchment);border:1px solid var(--gold);border-radius:4px;padding:4px 2px;">
+                                <div style="font-size:0.7rem;font-weight:700;color:var(--ink-light);letter-spacing:0.05em;text-transform:uppercase;">${ab}</div>
+                                <input type="number" min="1" max="30" value="${score}" style="width:38px;text-align:center;font-size:0.95rem;font-weight:700;border:none;background:transparent;padding:0;"
+                                    oninput="window.updateSummonAbility(${i},'${ab}',parseInt(this.value)||10,this)">
+                                <div class="summon-ab-mod" style="font-size:0.8rem;color:var(--ink-light);">${modStr}</div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+            </div>
+
+            <div class="summon-section">
                 <button class="summon-section-toggle" onclick="window.toggleSummonSection(this)">Abilities <span class="summon-toggle-arrow">▾</span></button>
                 <div class="summon-section-body">
                     <div id="summon-abilities-${i}">${abilitiesHtml}</div>
@@ -3421,7 +3440,7 @@ window.toggleSummonSection = function(btn) {
 };
 
 window.addSummon = function() {
-    summonsData.push({ name: 'New Creature', hp: 10, maxHp: 10, ac: 12, speed: '', notes: '', resistances: '', vulnerabilities: '', immunities: '', abilities: [] });
+    summonsData.push({ name: 'New Creature', hp: 10, maxHp: 10, ac: 12, speed: '', notes: '', resistances: '', vulnerabilities: '', immunities: '', abilities: [], str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 });
     window.renderSummons();
     saveCharacter();
 };
@@ -3546,6 +3565,11 @@ window._importCreatureData = function(i, m) {
         s.speed = typeof spd === 'object' ? (spd.number ? `${spd.number} ft` : '') : (spd ? `${spd} ft` : '');
     }
 
+    // Ability scores
+    ['str','dex','con','int','wis','cha'].forEach(ab => {
+        if (m[ab] !== undefined) s[ab] = parseInt(m[ab]) || 10;
+    });
+
     // Resistances/Vulnerabilities/Immunities
     const joinDmg = arr => Array.isArray(arr) ? arr.map(x => typeof x === 'string' ? x : (x.resist || x.vulnerable || x.immune || JSON.stringify(x))).join(', ') : '';
     s.resistances = joinDmg(m.resist);
@@ -3583,6 +3607,15 @@ window.updateSummonField = function(i, field, val) {
     if (!summonsData[i]) return;
     summonsData[i][field] = val;
     saveCharacter();
+};
+
+window.updateSummonAbility = function(i, ab, val, inputEl) {
+    if (!summonsData[i]) return;
+    summonsData[i][ab] = val;
+    saveCharacter();
+    const mod = Math.floor((val - 10) / 2);
+    const modEl = inputEl?.closest('div')?.querySelector('.summon-ab-mod');
+    if (modEl) modEl.textContent = (mod >= 0 ? '+' : '') + mod;
 };
 
 window.stepSummonHp = function(i, delta) {
