@@ -261,12 +261,27 @@ body.app-view-active .header { display: none !important; }
     margin-bottom: 12px;
     justify-content: center;
 }
+.msv-search-row {
+    margin-bottom: 10px;
+}
+.msv-search-input {
+    width: 100%;
+    padding: 7px 12px;
+    border: 1px solid var(--gold);
+    border-radius: 20px;
+    font-family: 'Crimson Text', serif;
+    font-size: 0.95rem;
+    background: white;
+    color: var(--ink);
+    box-sizing: border-box;
+}
+.msv-search-input:focus { outline: none; border-color: var(--red); }
 .mobile-spell-filter-row {
     display: flex;
     gap: 6px;
     overflow-x: auto;
     padding-bottom: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
 }
@@ -543,8 +558,33 @@ body.app-view-active .header { display: none !important; }
 .msv-spell-card-main {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 8px;
+}
+.msv-spell-card-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+.msv-spell-card-row1 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+.msv-spell-card-row2 {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    padding-left: 22px;
+}
+.msv-spell-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
 }
 .msv-drag-handle {
     flex-shrink: 0;
@@ -565,6 +605,7 @@ body.app-view-active .header { display: none !important; }
     gap: 6px;
     min-width: 0;
     flex: 1;
+    overflow: hidden;
 }
 .msv-spell-level-badge {
     flex-shrink: 0;
@@ -599,7 +640,7 @@ body.app-view-active .header { display: none !important; }
 .msv-tag-mat  { background: #e8f0e4; color: #3a6b2a; }
 .msv-tag-atk  { background: #d4edda; color: #155724; }
 .msv-tag-save { background: #fff3cd; color: #856404; }
-.msv-spell-card-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.msv-spell-card-right { display: none; } /* replaced by row2 */
 .msv-spell-meta { font-size: 0.72rem; color: var(--ink-light); white-space: nowrap; }
 .msv-info-btn {
     display: flex;

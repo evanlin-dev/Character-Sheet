@@ -6624,6 +6624,9 @@ window.mountSpellView = function() {
             </div>
             <div id="msv-slots"></div>
             <div class="mobile-spell-filter-row">${_filterBtns}</div>
+            <div class="msv-search-row">
+                <input id="msv-search" class="msv-search-input" type="text" placeholder="Search spells..." oninput="window.filterMsvSearch(this.value)">
+            </div>
             <div id="msv-list"></div>
         </div>`;
     window._msvFilter = 'all';
@@ -6633,6 +6636,19 @@ window.mountSpellView = function() {
 };
 
 window.unmountSpellView = function() { /* rebuilt on each mount */ };
+
+window.filterMsvSearch = function(query) {
+    const q = (query || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    document.querySelectorAll('#msv-list .msv-spell-card').forEach(card => {
+        const name = card.dataset.spellSearch || '';
+        card.style.display = (!q || name.includes(q)) ? '' : 'none';
+    });
+    // Hide empty level group headers
+    document.querySelectorAll('#msv-list .msv-level-group').forEach(group => {
+        const visible = Array.from(group.querySelectorAll('.msv-spell-card')).some(c => c.style.display !== 'none');
+        group.style.display = visible ? '' : 'none';
+    });
+};
 
 window._syncAtkBadge = function() {
     const badge = document.getElementById('act-atk-badge');
@@ -7252,18 +7268,23 @@ window.refreshMobileSpellView = function() {
             const hasDesc = spell.description.trim().length > 0;
             const spellIdx = window._msvSpells.push({ name: spell.name, desc: spell.description, row: spell._row, level: spell.level, concentration: spell.concentration }) - 1;
             const isLeveled = spell.level > 0;
-            html += `<div class="msv-spell-card">
+            const searchName = spell.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            html += `<div class="msv-spell-card" data-spell-search="${searchName}">
                 <div class="msv-spell-card-main">
-                    <div class="msv-drag-handle" ontouchstart="window.msvDragStart(event,${spellIdx})" onmousedown="window.msvDragStart(event,${spellIdx})">☰</div>
-                    <div class="msv-spell-card-left">
-                        <span class="msv-spell-level-badge">${badge(+lvl)}</span>
-                        <span class="msv-spell-name">${spell.name}</span>
+                    <div class="msv-spell-card-content">
+                        <div class="msv-spell-card-row1">
+                            <div class="msv-drag-handle" ontouchstart="window.msvDragStart(event,${spellIdx})" onmousedown="window.msvDragStart(event,${spellIdx})">☰</div>
+                            <span class="msv-spell-level-badge">${badge(+lvl)}</span>
+                            <span class="msv-spell-name">${spell.name}</span>
+                        </div>
+                        <div class="msv-spell-card-row2">
+                            ${rollTag}
+                            ${rcmTags}
+                            ${spell.time ? `<span class="msv-spell-meta">${spell.time}</span>` : ''}
+                            ${spell.range ? `<span class="msv-spell-meta">${spell.range}</span>` : ''}
+                        </div>
                     </div>
-                    <div class="msv-spell-card-right">
-                        ${rollTag}
-                        ${rcmTags}
-                        ${spell.time ? `<span class="msv-spell-meta">${spell.time}</span>` : ''}
-                        ${spell.range ? `<span class="msv-spell-meta">${spell.range}</span>` : ''}
+                    <div class="msv-spell-card-actions">
                         ${isLeveled ? `<button class="msv-cast-btn" onclick="window.openCastModal(${spellIdx})">Cast</button>` : ''}
                         ${hasDesc ? `<button class="msv-info-btn" onclick="window.showMsvSpellInfo(${spellIdx})">?</button>` : ''}
                     </div>
