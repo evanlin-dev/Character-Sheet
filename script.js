@@ -1897,6 +1897,7 @@ let spellTargetContainer = "";
 let spellSearchFilterType = ""; // 'cantrip' or 'leveled'
 window.currentSpellMaxLevel = 9;
 let spellSearchOnSelect = null;
+let _spellColSort = { key: 'name', dir: 'asc' }; // column-click sort state for spell search table
 
 window.openSpellSearch = async function (containerId, filterType, maxLevel = 9, preselectedClass = null, onSelect = null) {
   spellTargetContainer = containerId;
@@ -1906,6 +1907,7 @@ window.openSpellSearch = async function (containerId, filterType, maxLevel = 9, 
   document.getElementById("spellSearchModal").style.display = "flex";
   document.getElementById("spellSearchInput").value = "";
   document.getElementById("spellSearchSort").value = "name-asc";
+  _spellColSort = { key: 'name', dir: 'asc' };
 
   // Reset and setup filters
   const levelSelect = document.getElementById("spellSearchLevel");
@@ -2206,15 +2208,27 @@ window.filterSpellSearch = function () {
     results = results.filter((s) => s.level === parseInt(levelFilter));
   }
 
-  // Sort
+  // Sort — column-click state takes precedence over dropdown when key differs
+  const _scs = _spellColSort;
+  const _spellSortVal = (s, key) => {
+    if (key === 'level')  return s.level;
+    if (key === 'name')   return s.name.toLowerCase();
+    if (key === 'school') return (s.school || '').toLowerCase();
+    if (key === 'conc')   return (s.duration && s.duration[0] && s.duration[0].concentration) ? 0 : 1;
+    if (key === 'ritual') return (s.meta && s.meta.ritual) ? 0 : 1;
+    if (key === 'mat')    return (s.components && (s.components.m || s.components.M)) ? 0 : 1;
+    if (key === 'range') {
+      if (!s.range) return 'zzz';
+      if (s.range.distance) { const d = s.range.distance; return d.type === 'self' ? 'self' : d.type === 'touch' ? 'touch' : String(d.amount || 0).padStart(6,'0') + ' ' + (d.type||''); }
+      return s.range.type || 'zzz';
+    }
+    return s.name.toLowerCase();
+  };
   results.sort((a, b) => {
-    if (sortFilter === "name-asc") return a.name.localeCompare(b.name);
-    if (sortFilter === "name-desc") return b.name.localeCompare(a.name);
-    if (sortFilter === "level-asc")
-      return a.level - b.level || a.name.localeCompare(b.name);
-    if (sortFilter === "level-desc")
-      return b.level - a.level || a.name.localeCompare(b.name);
-    return 0;
+    const va = _spellSortVal(a, _scs.key), vb = _spellSortVal(b, _scs.key);
+    let cmp = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb));
+    if (cmp === 0 && _scs.key !== 'name') cmp = a.name.localeCompare(b.name);
+    return _scs.dir === 'asc' ? cmp : -cmp;
   });
 
   currentSpellResults = results;
@@ -2238,8 +2252,7 @@ function renderSpellSearchPage() {
   const pageInfo = document.getElementById("spellSearchPageInfo");
 
   if (currentSpellResults.length === 0) {
-    list.innerHTML =
-      '<div style="padding:10px; color:#666; text-align:center;">No matching spells found.</div>';
+    list.innerHTML = '<div style="padding:10px; color:#666; text-align:center;">No matching spells found.</div>';
     pagination.style.display = "none";
     return;
   }
@@ -2249,28 +2262,80 @@ function renderSpellSearchPage() {
   pageInfo.textContent = `Page ${spellSearchPage} of ${maxPage}`;
 
   const startIndex = (spellSearchPage - 1) * ITEMS_PER_PAGE;
-  const spellsToShow = currentSpellResults.slice(
-    startIndex,
-    startIndex + ITEMS_PER_PAGE,
-  );
+  const spellsToShow = currentSpellResults.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
+  // Build sortable table
+  const _scs = _spellColSort;
+  const _sch = { A:'Abjuration', C:'Conjuration', D:'Divination', E:'Enchantment', V:'Evocation', I:'Illusion', N:'Necromancy', T:'Transmutation' };
+  const spellCols = [
+    { key: 'level',  label: 'Lvl',    style: 'width:32px;' },
+    { key: 'name',   label: 'Name',   style: '' },
+    { key: 'school', label: 'School', style: '' },
+    { key: 'conc',   label: 'C',      style: 'width:24px; text-align:center;', title: 'Concentration' },
+    { key: 'ritual', label: 'R',      style: 'width:24px; text-align:center;', title: 'Ritual' },
+    { key: 'mat',    label: 'M',      style: 'width:24px; text-align:center;', title: 'Material Component' },
+    { key: 'range',  label: 'Range',  style: '' },
+  ];
+
+  const table = document.createElement('table');
+  table.style.cssText = 'width:100%; border-collapse:collapse; font-size:0.82rem;';
+
+  const thead = document.createElement('thead');
+  const headTr = document.createElement('tr');
+  headTr.style.cssText = 'background:var(--parchment-dark); border-bottom:2px solid var(--gold-dark); text-align:left; position:sticky; top:0; z-index:1;';
+  const thBase = 'padding:5px 6px; font-weight:600; cursor:pointer; user-select:none; white-space:nowrap;';
+  spellCols.forEach(col => {
+    const th = document.createElement('th');
+    const isActive = _scs.key === col.key;
+    th.style.cssText = thBase + (col.style || '') + `color:${isActive ? 'var(--red-dark)' : 'var(--ink-light)'};`;
+    if (col.title) th.title = col.title;
+    th.textContent = col.label + (isActive ? (_scs.dir === 'asc' ? ' ↑' : ' ↓') : '');
+    th.addEventListener('click', () => {
+      if (_scs.key === col.key) {
+        if (_scs.dir === 'asc') _scs.dir = 'desc';
+        else { _scs.key = 'name'; _scs.dir = 'asc'; } // third click: reset to default
+      } else { _scs.key = col.key; _scs.dir = 'asc'; }
+      filterSpellSearch();
+    });
+    headTr.appendChild(th);
+  });
+  thead.appendChild(headTr);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
   list.innerHTML = "";
-  spellsToShow.forEach((spell) => {
-    const div = document.createElement("div");
-    div.className = "checklist-item";
-    div.style.flexDirection = "column";
-    div.style.alignItems = "flex-start";
+  list.style.overflowY = "auto";
+  list.style.display = "block";
 
-    const levelStr = spell.level === 0 ? "Cantrip" : `Level ${spell.level}`;
-    const school = spell.school ? spell.school.toUpperCase() : "";
+  spellsToShow.forEach((spell, i) => {
+    const tr = document.createElement("tr");
+    tr.style.cssText = `cursor:pointer; border-bottom:1px solid var(--gold-light,#e8d9a0); background:${i % 2 === 0 ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)'};`;
+    tr.onmouseenter = () => tr.style.background = 'rgba(180,140,60,0.18)';
+    tr.onmouseleave = () => tr.style.background = i % 2 === 0 ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)';
 
-    div.innerHTML = `
-               <div style="font-weight:bold; width:100%; display:flex; justify-content:space-between;">
-                   <span>${spell.name}</span>
-                   <span style="font-size:0.8rem; color:var(--ink-light);">${levelStr} ${school ? "(" + school + ")" : ""}</span>
-               </div>
-           `;
-    div.onclick = () => {
+    const levelStr = spell.level === 0 ? 'C' : spell.level;
+    const schoolFull = _sch[spell.school] || spell.school || '—';
+    const isConc = !!(spell.duration && spell.duration[0] && spell.duration[0].concentration);
+    const isRitual = !!(spell.meta && spell.meta.ritual);
+    const hasMat = !!(spell.components && (spell.components.m || spell.components.M));
+    let rangeStr = '—';
+    if (spell.range) {
+      if (spell.range.distance) { const d = spell.range.distance; rangeStr = d.type === 'self' ? 'Self' : d.type === 'touch' ? 'Touch' : d.amount ? `${d.amount} ${d.type}` : d.type || '—'; }
+      else rangeStr = spell.range.type || '—';
+    }
+
+    tr.innerHTML = `
+      <td style="padding:4px 6px; white-space:nowrap;">${levelStr}</td>
+      <td style="padding:4px 6px; font-weight:500;">${spell.name}</td>
+      <td style="padding:4px 6px; white-space:nowrap; font-size:0.78rem;">${schoolFull}</td>
+      <td style="padding:4px 6px; text-align:center;">${isConc ? '●' : ''}</td>
+      <td style="padding:4px 6px; text-align:center;">${isRitual ? '✦' : ''}</td>
+      <td style="padding:4px 6px; text-align:center;">${hasMat ? '◆' : ''}</td>
+      <td style="padding:4px 6px; white-space:nowrap; font-size:0.78rem;">${rangeStr}</td>
+    `;
+    tbody.appendChild(tr);
+
+    tr.onclick = () => {
       // Map data to our format
       let time = "";
       let desc = "";
@@ -2337,8 +2402,10 @@ function renderSpellSearchPage() {
       }
       closeSpellSearch();
     };
-    list.appendChild(div);
   });
+
+  table.appendChild(tbody);
+  list.appendChild(table);
 }
 
 /* =========================================
@@ -10094,11 +10161,10 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
                         lvlFilter.addEventListener('change', applyFilter);
                     }
 
-                    // Build spell tables grouped by level
+                    // Build sortable spell table
                     spellTableWrap.innerHTML = '';
                     const SCHOOL_ABBR = { A: 'Abjur', C: 'Conj', D: 'Div', E: 'Ench', V: 'Evoc', I: 'Illus', N: 'Necro', T: 'Trans' };
                     const rowMap = new Map();
-
                     const atLimit = () => maxSpellsSelectable !== null && pendingSpells.length >= maxSpellsSelectable;
 
                     const updateStyles = () => {
@@ -10113,79 +10179,153 @@ window.renderLevelUpFeatures = async function(charClass, charSubclass, level, sh
                         });
                     };
 
-                    const levelGroups = [...new Set(spells.map(s => s.level))].filter(l => l !== 0 || canLearnCantrips).sort((a, b) => a - b);
-                    levelGroups.forEach(lvl => {
-                        const group = spells.filter(s => s.level === lvl);
-                        const section = document.createElement('div');
-                        section.className = 'spell-level-section';
+                    const _lvlupGetRng = s => s.range ? (s.range.type === 'point' && s.range.distance ? (s.range.distance.type === 'self' ? 'Self' : s.range.distance.type === 'touch' ? 'Touch' : `${s.range.distance.amount||''} ${s.range.distance.type}`.trim()) : (s.range.type || '—')) : '—';
+                    const _lvlupSortVal = (s, key) => {
+                        if (key === 'level')  return s.level;
+                        if (key === 'name')   return s.name.toLowerCase();
+                        if (key === 'school') return (s.school || '').toLowerCase();
+                        if (key === 'conc')   return (s.duration && s.duration.some(d => d.concentration)) ? 0 : 1;
+                        if (key === 'ritual') return (s.meta && s.meta.ritual) ? 0 : 1;
+                        if (key === 'mat')    return (s.components && s.components.m) ? 0 : 1;
+                        if (key === 'range')  return _lvlupGetRng(s);
+                        return s.name.toLowerCase();
+                    };
 
-                        // Level heading
-                        const heading = document.createElement('div');
-                        heading.style.cssText = 'font-family:"Cinzel",serif; font-size:0.72rem; font-weight:600; color:var(--red-dark); background:var(--parchment-dark); padding:3px 8px; border-bottom:1px solid var(--gold); border-top:1px solid var(--gold); letter-spacing:0.05em; text-transform:uppercase;';
-                        heading.textContent = lvl === 0 ? 'Cantrips' : `Level ${lvl} Spells`;
-                        section.appendChild(heading);
+                    let _lvlSort = { key: 'level', dir: 'asc' };
 
-                        const tbl = document.createElement('table');
-                        tbl.style.cssText = 'width:100%; border-collapse:collapse; font-size:0.78rem;';
-                        tbl.innerHTML = `<thead><tr style="background:rgba(0,0,0,0.03); text-align:left; border-bottom:1px solid rgba(212,175,55,0.3);">
-                            <th style="padding:2px 6px; color:var(--ink-light); font-weight:500; font-size:0.72rem;">Name</th>
-                            <th style="padding:2px 6px; color:var(--ink-light); font-weight:500; font-size:0.72rem;">School</th>
-                            <th style="padding:2px 6px; color:var(--ink-light); font-weight:500; font-size:0.72rem; text-align:center;" title="Ritual">R</th>
-                            <th style="padding:2px 6px; color:var(--ink-light); font-weight:500; font-size:0.72rem; text-align:center;" title="Concentration">C</th>
-                            <th style="padding:2px 6px; color:var(--ink-light); font-weight:500; font-size:0.72rem; text-align:center;" title="Material">M</th>
-                            <th style="padding:2px 6px; color:var(--ink-light); font-weight:500; font-size:0.72rem;">Range</th>
-                        </tr></thead>`;
-                        const tbody = document.createElement('tbody');
+                    // Single table with sticky sortable header
+                    const mainTbl = document.createElement('table');
+                    mainTbl.style.cssText = 'width:100%; border-collapse:collapse; font-size:0.78rem;';
+                    const mainThead = document.createElement('thead');
+                    const theadTr = document.createElement('tr');
+                    theadTr.style.cssText = 'background:var(--parchment-dark); text-align:left; border-bottom:2px solid var(--gold); position:sticky; top:0; z-index:1;';
+                    const _thBase = 'padding:4px 6px; font-weight:600; cursor:pointer; user-select:none; white-space:nowrap; font-size:0.72rem;';
+                    const _lvlCols = [
+                        { key: 'name',   label: 'Name',   style: '' },
+                        { key: 'school', label: 'School', style: '' },
+                        { key: 'ritual', label: 'R',      style: 'text-align:center; width:20px;', title: 'Ritual' },
+                        { key: 'conc',   label: 'C',      style: 'text-align:center; width:20px;', title: 'Concentration' },
+                        { key: 'mat',    label: 'M',      style: 'text-align:center; width:20px;', title: 'Material' },
+                        { key: 'range',  label: 'Range',  style: '' },
+                    ];
+                    const _updateLvlHeaders = () => {
+                        theadTr.querySelectorAll('th').forEach(th => {
+                            const k = th.dataset.sortKey;
+                            const isActive = k === _lvlSort.key;
+                            th.style.color = isActive ? 'var(--red-dark)' : 'var(--ink-light)';
+                            const ind = isActive ? (_lvlSort.dir === 'asc' ? ' ↑' : ' ↓') : '';
+                            th.textContent = (th.dataset.label || '') + ind;
+                            if (th.dataset.title) th.title = th.dataset.title;
+                        });
+                    };
+                    const mainTbody = document.createElement('tbody');
 
-                        group.forEach(s => {
+                    const _renderLvlupTable = () => {
+                        mainTbody.innerHTML = '';
+                        rowMap.clear();
+                        const sorted = [...spells].filter(s => s.level !== 0 || canLearnCantrips).sort((a, b) => {
+                            let va = _lvlupSortVal(a, _lvlSort.key), vb = _lvlupSortVal(b, _lvlSort.key);
+                            let cmp = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb));
+                            if (cmp === 0 && _lvlSort.key !== 'name') cmp = a.name.localeCompare(b.name);
+                            return _lvlSort.dir === 'asc' ? cmp : -cmp;
+                        });
+                        const byLevel = _lvlSort.key === 'level';
+                        let curLvl = null;
+                        sorted.forEach(s => {
+                            if (byLevel && s.level !== curLvl) {
+                                curLvl = s.level;
+                                const htr = document.createElement('tr');
+                                htr.dataset.levelHeader = s.level;
+                                htr.innerHTML = `<td colspan="6" style="padding:3px 8px; font-family:'Cinzel',serif; font-size:0.72rem; font-weight:600; color:var(--red-dark); background:var(--parchment-dark); border-top:1px solid var(--gold); border-bottom:1px solid var(--gold); letter-spacing:0.05em; text-transform:uppercase;">${s.level === 0 ? 'Cantrips' : `Level ${s.level} Spells`}</td>`;
+                                mainTbody.appendChild(htr);
+                            }
                             const isRitual = !!(s.meta && s.meta.ritual);
                             const isConc = !!(s.duration && s.duration.some(d => d.concentration));
                             const hasMat = !!(s.components && s.components.m);
-                            const rangeStr = s.range ? (s.range.type === 'point' && s.range.distance ? (s.range.distance.type === 'self' ? 'Self' : s.range.distance.type === 'touch' ? 'Touch' : `${s.range.distance.amount||''} ${s.range.distance.type}`.trim()) : (s.range.type || '—')) : '—';
+                            const rangeStr = _lvlupGetRng(s);
                             const tr = document.createElement('tr');
                             tr.dataset.spell = s.name;
                             tr.style.cssText = 'border-bottom:1px solid rgba(212,175,55,0.15); transition:background 0.1s, opacity 0.1s;';
                             tr.innerHTML = `<td style="padding:3px 6px; font-weight:500;">${s.name}</td><td style="padding:3px 6px;" title="${SCHOOL_ABBR[s.school]||s.school||''}">${s.school||''}</td><td style="padding:3px 6px; text-align:center;">${isRitual?'✦':''}</td><td style="padding:3px 6px; text-align:center;">${isConc?'●':''}</td><td style="padding:3px 6px; text-align:center;">${hasMat?'◆':''}</td><td style="padding:3px 6px;">${rangeStr}</td>`;
-
-                            tr.onmouseenter = () => {
-                                if (!pendingSpells.some(p=>p.spellData.name===s.name) && !existingOnSheet.has(s.name.toLowerCase()) && !atLimit())
-                                    tr.style.background = 'rgba(180,140,60,0.12)';
-                            };
+                            tr.onmouseenter = () => { if (!pendingSpells.some(p=>p.spellData.name===s.name) && !existingOnSheet.has(s.name.toLowerCase()) && !atLimit()) tr.style.background = 'rgba(180,140,60,0.12)'; };
                             tr.onmouseleave = () => updateStyles();
-
                             tr.onclick = () => {
                                 if (detailPane) showSpellDetail(s, detailPane);
                                 if (existingOnSheet.has(s.name.toLowerCase())) return;
                                 const idx2 = pendingSpells.findIndex(p => p.spellData.name === s.name);
-                                if (idx2 > -1) {
-                                    pendingSpells.splice(idx2, 1);
-                                } else {
-                                    if (atLimit()) return; // enforce limit
+                                if (idx2 > -1) { pendingSpells.splice(idx2, 1); }
+                                else {
+                                    if (atLimit()) return;
                                     let time = ''; if (s.time && s.time[0]) { const t = s.time[0]; time = `${t.number} ${t.unit}`; }
                                     let desc = window.processEntries ? window.processEntries(s.entries) : '';
                                     if (s.entriesHigherLevel) desc += '<br><br>' + (window.processEntries ? window.processEntries(s.entriesHigherLevel) : '');
                                     desc = window.cleanText ? window.cleanText(desc) : desc;
                                     const rawMat2 = s.components && (s.components.m || s.components.M);
-                                    if (rawMat2) {
-                                        let matText = typeof rawMat2 === 'object' ? (rawMat2.text || '') : rawMat2;
-                                        if (matText) { matText = matText.charAt(0).toUpperCase() + matText.slice(1); desc = `**Materials:** ${matText}\n\n${desc}`; }
-                                    }
-                                    pendingSpells.push({ target: s.level === 0 ? 'cantripList' : 'spellList', spellData: { name: s.name, level: s.level, time, range: rangeStr, ritual: isRitual, concentration: isConc, material: !!rawMat2, description: desc, prepared: s.level !== 0, attackType: (s.spellAttack && s.spellAttack[0]) ? s.spellAttack[0].toUpperCase() : '', saveAbility: (s.savingThrow && s.savingThrow[0]) ? s.savingThrow[0].toLowerCase() : '' } });
+                                    if (rawMat2) { let mt = typeof rawMat2 === 'object' ? (rawMat2.text||'') : rawMat2; if (mt) { mt = mt.charAt(0).toUpperCase()+mt.slice(1); desc = `**Materials:** ${mt}\n\n${desc}`; } }
+                                    pendingSpells.push({ target: s.level === 0 ? 'cantripList' : 'spellList', spellData: { name: s.name, level: s.level, time, range: rangeStr, ritual: isRitual, concentration: isConc, material: !!rawMat2, description: desc, prepared: s.level !== 0, attackType: (s.spellAttack&&s.spellAttack[0])?s.spellAttack[0].toUpperCase():'', saveAbility: (s.savingThrow&&s.savingThrow[0])?s.savingThrow[0].toLowerCase():'' } });
                                 }
-                                updateStyles();
-                                updateCounter();
+                                updateStyles(); updateCounter();
                             };
-
                             rowMap.set(s, tr);
-                            tbody.appendChild(tr);
+                            mainTbody.appendChild(tr);
                         });
+                        updateStyles();
+                    };
 
-                        tbl.appendChild(tbody);
-                        section.appendChild(tbl);
-                        spellTableWrap.appendChild(section);
+                    _lvlCols.forEach(col => {
+                        const th = document.createElement('th');
+                        th.style.cssText = _thBase + (col.style || '');
+                        th.dataset.sortKey = col.key;
+                        th.dataset.label = col.label;
+                        if (col.title) th.dataset.title = col.title;
+                        th.addEventListener('click', () => {
+                            if (_lvlSort.key === col.key) {
+                                if (_lvlSort.dir === 'asc') _lvlSort.dir = 'desc';
+                                else { _lvlSort.key = 'level'; _lvlSort.dir = 'asc'; }
+                            } else { _lvlSort.key = col.key; _lvlSort.dir = 'asc'; }
+                            _updateLvlHeaders();
+                            _renderLvlupTable();
+                        });
+                        theadTr.appendChild(th);
                     });
+                    _updateLvlHeaders();
+                    mainThead.appendChild(theadTr);
+                    mainTbl.appendChild(mainThead);
+                    mainTbl.appendChild(mainTbody);
+                    spellTableWrap.appendChild(mainTbl);
+                    _renderLvlupTable();
 
-                    updateStyles();
+                    // Update filter to work with flat table
+                    if (filterRowEl && filterRowEl.children.length > 0) {
+                        const searchInp = filterRowEl.querySelector('input');
+                        const lvlFilter = filterRowEl.querySelector('select');
+                        if (searchInp && lvlFilter) {
+                            searchInp.removeEventListener('input', searchInp._lvlFilter);
+                            lvlFilter.removeEventListener('change', lvlFilter._lvlFilter);
+                            const flatFilter = () => {
+                                const q = searchInp.value.toLowerCase();
+                                const lv = lvlFilter.value;
+                                mainTbody.querySelectorAll('tr[data-spell]').forEach(tr2 => {
+                                    const sp = spells.find(x => x.name === tr2.dataset.spell);
+                                    if (!sp) return;
+                                    tr2.style.display = (!q || sp.name.toLowerCase().includes(q)) && (!lv || String(sp.level) === lv) ? '' : 'none';
+                                });
+                                mainTbody.querySelectorAll('tr[data-level-header]').forEach(htr => {
+                                    const lvl = parseInt(htr.dataset.levelHeader);
+                                    const hasVisible = [...mainTbody.querySelectorAll(`tr[data-spell]`)].some(tr2 => {
+                                        const sp = spells.find(x => x.name === tr2.dataset.spell);
+                                        return sp && sp.level === lvl && tr2.style.display !== 'none';
+                                    });
+                                    htr.style.display = hasVisible ? '' : 'none';
+                                });
+                            };
+                            searchInp._lvlFilter = flatFilter;
+                            lvlFilter._lvlFilter = flatFilter;
+                            searchInp.addEventListener('input', flatFilter);
+                            lvlFilter.addEventListener('change', flatFilter);
+                        }
+                    }
+
                     updateCounter();
 
                 } catch (e) { console.error(e); spellTableWrap.innerHTML = '<div style="padding:10px; color:var(--red);">Error loading spells.</div>'; }

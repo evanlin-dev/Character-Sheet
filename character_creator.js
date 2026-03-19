@@ -1,4 +1,19 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Image lightbox
+    const lightbox = document.getElementById('img-lightbox');
+    const lightboxImg = document.getElementById('img-lightbox-img');
+    document.querySelector('.app-window').addEventListener('click', (e) => {
+        if (e.target.tagName === 'IMG' && e.target.id !== 'img-lightbox-img') {
+            lightboxImg.src = e.target.src;
+            lightboxImg.alt = e.target.alt;
+            lightbox.classList.add('open');
+        }
+    });
+    lightbox.addEventListener('click', () => {
+        lightbox.classList.remove('open');
+        lightboxImg.src = '';
+    });
+
     // Aliases for shared utilities from utils.js
     const processEntries    = window.processEntries;
     const formatDescription = window.cleanText;
@@ -25,7 +40,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let allBackgrounds = [];
     let allBackgroundFluff = [];
     let allRaceFluff = [];
+    let allClassFluff = [];
+    let allSubclassFluff = [];
     let selectedBackground = null;
+    let selectedBgSkills = []; // skills chosen from background's choose entries
+    let bgFilterAbilities = new Set(); // active ASI filter keys e.g. 'str','dex'
+    let bgFilterSkills = new Set();    // active skill filter keys e.g. 'arcana'
     let allSpecies = [];
     let allDeities = [];
     let selectedDeity = null;
@@ -229,6 +249,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         if (json.background && Array.isArray(json.background)) {
                             for (const b of json.background) allBackgrounds.push(b);
+                        }
+                        if (json.classFluff && Array.isArray(json.classFluff)) {
+                            for (const f of json.classFluff) allClassFluff.push(f);
+                        }
+                        if (json.subclassFluff && Array.isArray(json.subclassFluff)) {
+                            for (const f of json.subclassFluff) allSubclassFluff.push(f);
                         }
                         if (json.backgroundFluff && Array.isArray(json.backgroundFluff)) {
                             // Tag as inline if same file also has background data (same-source-file fluff)
@@ -467,9 +493,10 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedSubclassSource = null;
             selectedOptionalFeatures.clear();
             selectedSpells.clear();
+            const subclassFluffBlock = document.getElementById('creator-subclass-fluff');
+            if (subclassFluffBlock) { subclassFluffBlock.innerHTML = ''; subclassFluffBlock.style.display = 'none'; }
             updateSubclassOptions(c);
             
-            renderClassPreview();
             renderCoreTraits();
             renderClassTable();
             renderClassFeatures();
@@ -481,6 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Level Change
     levelSelect.addEventListener('change', () => {
         selectedLevel = parseInt(levelSelect.value);
+        if (selectedClass) updateSubclassOptions(selectedClass);
         renderClassTable();
         renderClassFeatures();
     });
@@ -498,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedSubclass = null;
             return;
         }
-        subContainer.style.display = 'flex';
+        subContainer.style.display = selectedLevel >= 3 ? 'flex' : 'none';
 
         console.log(`[Creator] Available subclasses:`, available);
         
@@ -537,16 +565,210 @@ document.addEventListener('DOMContentLoaded', () => {
             select.appendChild(option);
         });
 
+        subclassList.appendChild(select);
+
         select.addEventListener('change', (e) => {
             const idx = e.target.value;
             if (idx === "") return;
             const s = unique[idx];
             selectedSubclass = s.shortName || s.name;
             selectedSubclassSource = s.source;
+            renderSubclassFluff();
             renderClassFeatures();
         });
+    }
 
-        subclassList.appendChild(select);
+    // Build an <img> tag that walks through an array of fallback URLs before hiding.
+    // Pass fallbacks as an array of URL strings.
+    function imgTag(src, alt, style, fallbacks) {
+        const esc = s => s.replace(/'/g, "\\'");
+        console.log('[Img] primary:', src, '| fallbacks:', fallbacks);
+        let onerror = '';
+        fallbacks.forEach((fb, i) => {
+            const cond = i === 0 ? `if(!this.dataset.tried)` : `else if(this.dataset.tried==='${i}')`;
+            onerror += `${cond}{console.log('[Img] failed, trying fallback ${i+1}:','${esc(fb)}');this.dataset.tried='${i+1}';this.src='${esc(fb)}';}`;
+        });
+        onerror += `else{console.log('[Img] all failed, hiding');this.style.display='none';}`;
+        return `<img src="${src}" alt="${alt}" style="${style}" onerror="${onerror}">`;
+    }
+
+    // Build standard fallback list for non-subclass entities
+    function stdFallbacks(type, source, name) {
+        const typeTitle = type.charAt(0).toUpperCase() + type.slice(1);
+        return [
+            `https://5e.tools/img/${type}/${encodeURIComponent(source)}/${encodeURIComponent(name)}.webp`,
+            `https://raw.githubusercontent.com/TheGiddyLimit/homebrew-img/refs/heads/main/img/${encodeURIComponent(source)}/${typeTitle}/${encodeURIComponent(name)}.webp`,
+        ];
+    }
+
+    // Extract first image path from a fluff object (top-level images[] or inside entries)
+    function extractFluffImageUrl(fluff) {
+        if (fluff.images && fluff.images.length) {
+            const img = fluff.images[0];
+            if (img.href && img.href.path) return 'https://5e.tools/img/' + img.href.path;
+        }
+        // Fall back to first {type:"image"} inside entries
+        if (fluff.entries) {
+            let found = null;
+            const seek = (obj) => {
+                if (found) return;
+                if (!obj) return;
+                if (Array.isArray(obj)) { obj.forEach(seek); return; }
+                if (typeof obj === 'object') {
+                    if (obj.type === 'image' && obj.href && obj.href.path) { found = 'https://5e.tools/img/' + obj.href.path; return; }
+                    if (obj.entries) seek(obj.entries);
+                    else if (obj.entry) seek(obj.entry);
+                }
+            };
+            seek(fluff.entries);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    function renderSubclassFluff() {
+        console.log('[SubclassFluff] called — selectedClass:', selectedClass, '| selectedSubclass:', selectedSubclass, '| selectedSubclassSource:', selectedSubclassSource);
+        const block = document.getElementById('creator-subclass-fluff');
+        if (!block) return;
+        if (!selectedSubclass || !selectedClass) { block.style.display = 'none'; block.innerHTML = ''; return; }
+        console.log('[SubclassFluff] allSubclassFluff count:', allSubclassFluff.length);
+        const fluff = allSubclassFluff.find(f =>
+            f.className && f.className.toLowerCase() === selectedClass.toLowerCase() &&
+            (f.shortName === selectedSubclass || f.name === selectedSubclass) &&
+            f.source === selectedSubclassSource
+        ) || allSubclassFluff.find(f =>
+            f.className && f.className.toLowerCase() === selectedClass.toLowerCase() &&
+            (f.shortName === selectedSubclass || f.name === selectedSubclass)
+        );
+        console.log('[SubclassFluff] found fluff:', fluff ? { name: fluff.name, shortName: fluff.shortName, hasEntries: !!fluff.entries, hasImages: !!(fluff.images && fluff.images.length) } : null);
+
+        // Resolve full subclass name early (needed for both lvl3 lookup and image fallbacks)
+        const subclassObj = allSubclasses.find(s =>
+            s.className && s.className.toLowerCase() === selectedClass.toLowerCase() &&
+            (s.shortName === selectedSubclass || s.name === selectedSubclass) &&
+            s.source === selectedSubclassSource
+        ) || allSubclasses.find(s =>
+            s.className && s.className.toLowerCase() === selectedClass.toLowerCase() &&
+            (s.shortName === selectedSubclass || s.name === selectedSubclass)
+        );
+
+        // Grab description from the intro subclass feature (level 3, falling back to level 1)
+        const subNameLower = selectedSubclass.toLowerCase();
+        const subFullLower = (subclassObj ? subclassObj.name : selectedSubclass).toLowerCase();
+        const pickIntroFeature = (level) => {
+            const pool = allSubclassFeatures.filter(f =>
+                f.className && f.className.toLowerCase() === selectedClass.toLowerCase() &&
+                f.subclassShortName === selectedSubclass &&
+                f.level === level &&
+                (f.source === selectedSubclassSource || !selectedSubclassSource)
+            );
+            return pool.find(f => {
+                const n = f.name.toLowerCase();
+                return n.includes(subNameLower) || n.includes(subFullLower) || n.includes(selectedClass.toLowerCase());
+            }) || pool[0] || null;
+        };
+        const stripTags = s => s.replace(/\{@\w+\s+([^}|]+)(?:\|[^}]*)?\}/g, (_, t) => t);
+        const walk = (obj, depth = 0, out = []) => {
+            if (!obj) return out;
+            if (typeof obj === 'string') { const s = stripTags(obj.trim()); if (s.length > 20) out.push(s); return out; }
+            if (Array.isArray(obj)) { obj.forEach(o => walk(o, depth, out)); return out; }
+            if (typeof obj === 'object') {
+                if (obj.type === 'quote' || obj.type === 'image' || obj.type === 'table') return out;
+                if (depth >= 1 && obj.name && obj.entries) return out;
+                if (obj.entries) walk(obj.entries, depth + 1, out);
+                else if (obj.entry) walk(obj.entry, depth + 1, out);
+            }
+            return out;
+        };
+        const extractParagraphs = (feature) =>
+            feature && feature.entries ? walk(feature.entries).filter(t => t.length > 30).slice(0, 2) : [];
+
+        let introFeature = pickIntroFeature(3);
+        let paragraphs = extractParagraphs(introFeature);
+        if (!paragraphs.length) {
+            introFeature = pickIntroFeature(2);
+            paragraphs = extractParagraphs(introFeature);
+        }
+        if (!paragraphs.length) {
+            introFeature = pickIntroFeature(1);
+            paragraphs = extractParagraphs(introFeature);
+        }
+        console.log('[SubclassFluff] introFeature:', introFeature ? introFeature.name : null, '| paragraphs:', paragraphs.length);
+
+        // Image: use fluff if available, otherwise start directly from fallback chain
+        const imgUrlFromFluff = fluff ? extractFluffImageUrl(fluff) : null;
+        const src = imgUrlFromFluff || 'data:,';
+        const subSrc = selectedSubclassSource || 'XPHB';
+        const subFullName = subclassObj ? subclassObj.name : selectedSubclass;
+        const enc = encodeURIComponent;
+        const ghBase = `https://raw.githubusercontent.com/TheGiddyLimit/homebrew-img/refs/heads/main/img/${enc(subSrc)}`;
+        const underscore = s => s.replace(/ /g, '_');
+        const hyphen = s => s.replace(/ /g, '-');
+        const subFallbacks = [
+            `https://5e.tools/img/subclasses/${enc(subSrc)}/${enc(selectedSubclass)}.webp`,
+            // {ClassName}_{FullName} with underscores (CrookedMoon24 style)
+            `${ghBase}/Subclasses/${enc(underscore(selectedClass) + '_' + underscore(subFullName))}.webp`,
+            // {ClassName}_{FullName} with %20 spaces
+            `${ghBase}/Subclasses/${enc(selectedClass)}_${enc(subFullName)}.webp`,
+            // {source}/Subclass/{ClassName}/{ShortName}.webp
+            `${ghBase}/Subclass/${enc(selectedClass)}/${enc(selectedSubclass)}.webp`,
+            // {source}/Subclasses/{ShortName}.webp
+            `${ghBase}/Subclasses/${enc(selectedSubclass)}.webp`,
+            // {source}/Subclasses/{ShortName with hyphens}.webp (GriffonsSaddlebag2 style)
+            `${ghBase}/Subclasses/${enc(hyphen(selectedSubclass))}.webp`,
+            // {source}/Subclasses/{FullName with hyphens}.webp
+            `${ghBase}/Subclasses/${enc(hyphen(subFullName))}.webp`,
+            // {source}/Subclasses/{ClassName}.webp (class-level image)
+            `${ghBase}/Subclasses/${enc(selectedClass)}.webp`,
+        ];
+        console.log('[SubclassFluff] paragraphs:', paragraphs.length, '| imgUrlFromFluff:', imgUrlFromFluff, '| subFallbacks:', subFallbacks);
+        if (!paragraphs.length && !imgUrlFromFluff) { block.style.display = 'none'; block.innerHTML = ''; return; }
+        block.style.cssText = 'margin-bottom:16px; padding:14px 16px; background:rgba(212,165,116,0.12); border:1px solid var(--gold); border-radius:4px;';
+        const imgHtml = imgTag(src, selectedSubclass, 'max-width:300px; max-height:300px; float:right; margin:0 0 10px 14px; border-radius:4px;', subFallbacks);
+        block.innerHTML = imgHtml +
+            `<div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-light); margin-bottom:6px;">${selectedSubclass}</div>` +
+            paragraphs.map((p, i) =>
+                `<p style="margin:${i < paragraphs.length - 1 ? '0 0 8px' : '0'}; font-size:0.9rem; color:var(--ink); line-height:1.6; font-style:italic;">${p}</p>`
+            ).join('') +
+            '<div style="clear:both;"></div>';
+        block.style.display = 'block';
+        console.log('[SubclassFluff] rendered successfully');
+    }
+
+    function renderClassFluff() {
+        const block = document.getElementById('creator-class-fluff');
+        if (!block) return;
+        if (!selectedClass) { block.innerHTML = ''; return; }
+        const fluff = allClassFluff.find(f => f.name === selectedClass && f.source === currentClassSource)
+            || allClassFluff.find(f => f.name === selectedClass);
+        if (!fluff) { block.innerHTML = ''; return; }
+        const texts = [];
+        if (fluff.entries) {
+            const walk = (obj) => {
+                if (!obj) return;
+                if (typeof obj === 'string') { if (obj.trim().length > 20) texts.push(obj.trim()); return; }
+                if (Array.isArray(obj)) { obj.forEach(walk); return; }
+                if (typeof obj === 'object') {
+                    if (obj.type === 'quote' || obj.type === 'image') return;
+                    if (obj.entries) walk(obj.entries);
+                    else if (obj.entry) walk(obj.entry);
+                }
+            };
+            fluff.entries.forEach(walk);
+        }
+        const paragraphs = texts.filter(t => t.length > 30).slice(0, 3);
+        const imgUrl = extractFluffImageUrl(fluff);
+        if (!paragraphs.length && !imgUrl) { block.innerHTML = ''; return; }
+        const imgHtml = imgUrl
+            ? imgTag(imgUrl, selectedClass, 'max-width:300px; max-height:300px; float:right; margin:0 0 10px 16px; border-radius:4px;', stdFallbacks('classes', currentClassSource || 'XPHB', selectedClass))
+            : '';
+        block.style.cssText = 'margin-bottom:16px; padding:14px 16px; background:rgba(212,165,116,0.08); border:1px solid var(--gold); border-radius:4px;';
+        block.innerHTML = imgHtml +
+            `<div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-light); margin-bottom:8px;">${selectedClass}</div>` +
+            paragraphs.map((p, i) =>
+                `<p style="margin:${i < paragraphs.length - 1 ? '0 0 8px' : '0'}; font-size:0.9rem; color:var(--ink); line-height:1.6; font-style:italic;">${p}</p>`
+            ).join('') +
+            '<div style="clear:both;"></div>';
     }
 
     // Navigation Logic
@@ -975,6 +1197,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (container) {
             container.style.gridColumn = "1 / -1";
             container.style.width = "100%";
+            container.style.display = "flex";
+            container.style.flexDirection = "column";
         }
 
         // Capture open state of features before clearing
@@ -1447,90 +1671,14 @@ document.addEventListener('DOMContentLoaded', () => {
         parentElement.appendChild(container);
     }
 
-    function renderClassPreview() {
-        if (!selectedClass) return;
-        const className = selectedClass;
-        const container = document.getElementById('creator-class-preview');
-        container.innerHTML = '';
-
-        // Show all base class features 1-20
-        let features = allClassFeatures.filter(f => 
-            f.className && f.className.toLowerCase() === className.toLowerCase() && 
-            f.source === currentClassSource &&
-            !f.subclassShortName
-        ).sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
-
-        const uniqueFeatures = [];
-        const seen = new Set();
-        features.forEach(f => {
-            const key = `${f.name}-${f.level}`;
-            if (!seen.has(key)) { seen.add(key); uniqueFeatures.push(f); }
-        });
-
-        if (uniqueFeatures.length === 0) {
-            container.innerHTML = '<div>No features found.</div>';
-            return;
-        }
-
-        uniqueFeatures.forEach(f => {
-            const div = document.createElement('div');
-            div.style.marginBottom = '8px';
-            div.style.borderBottom = '1px dashed var(--gold)';
-            div.style.paddingBottom = '4px';
-            div.style.cursor = 'pointer';
-            
-            let desc = processEntries(f.entries || f.entry);
-            desc = formatDescription(desc);
-
-            const uniqueId = `preview-${f.name.replace(/[^a-zA-Z0-9]/g, '')}-${f.level}-${Math.random().toString(36).substr(2, 5)}`;
-
-            div.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <span class="font-bold text-red-dark" style="margin-right:5px;">Lvl ${f.level}</span> 
-                        <span class="font-bold">${f.name}</span>
-                    </div>
-                    <span class="toggle-icon text-small text-ink-light">▼</span>
-                </div>
-                <div id="${uniqueId}" class="mt-2 text-small text-ink p-2 rounded" style="display:none; line-height:1.4; background: rgba(255,255,255,0.5);">
-                    ${desc || "No description available."}
-                </div>
-            `;
-
-            div.onclick = (e) => {
-                const content = document.getElementById(uniqueId);
-                const icon = div.querySelector('.toggle-icon');
-                if (content.style.display === 'none') {
-                    content.style.display = 'block';
-                    icon.textContent = '▲';
-                    icon.style.color = 'var(--red)';
-                } else {
-                    content.style.display = 'none';
-                    icon.textContent = '▼';
-                    icon.style.color = 'var(--ink-light)';
-                }
-            };
-
-            container.appendChild(div);
-        });
-    }
-
     function renderCoreTraits() {
-        // In new layout, we might render this into the 'equipment-container-target' or separate
-        // The original code rendered into `creator-class-table` or `creator-class-preview`.
-        
-        let container = document.getElementById('creator-class-table');
+        const container = document.getElementById('creator-class-table');
         const equipContainer = document.getElementById('equipment-container-target');
 
         if (equipContainer) equipContainer.innerHTML = '';
 
-        let isFallback = false;
-        if (!container) {
-            container = document.getElementById('creator-class-preview');
-            isFallback = true;
-        }
         if (!container || !selectedClass) return;
-        if (!isFallback) container.innerHTML = '';
+        container.innerHTML = '';
 
         const clsObj = allClasses.find(c => c.name === selectedClass && c.source === currentClassSource);
         if (!clsObj) return;
@@ -1644,7 +1792,10 @@ document.addEventListener('DOMContentLoaded', () => {
              }
 
              // Clean tags
-             const clean = (str) => str.replace(/\{@\w+\s*([^}]+)?\}/g, (m, c) => c ? c.split('|')[0] : "");
+             const clean = (str) => {
+                if (typeof str !== 'string') return JSON.stringify(str);
+                return str.replace(/\{@\w+\s*([^}]+)?\}/g, (_m, c) => c ? c.split('|')[0] : "");
+            };
              
              // Check for multiple choice lines (e.g. Mystic)
              const choiceLines = equipItems.filter(i => typeof i === 'string' && /\(a\)/.test(i) && /\(b\)/.test(i));
@@ -1764,14 +1915,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         html += `</div></div>`;
-        
-        if (isFallback) {
-            const wrapper = document.createElement('div');
-            wrapper.innerHTML = html;
-            container.appendChild(wrapper);
-        } else {
-            container.innerHTML = html;
-        }
+
+        container.innerHTML = html;
 
         // Add event listeners to prevent duplicate skill selection
         const skillSelects = container.querySelectorAll('.skill-select-dropdown');
@@ -1898,10 +2043,9 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = '';
         
         const clsObj = allClasses.find(c => c.name === selectedClass && c.source === currentClassSource);
-        if (!clsObj) {
-            // container.innerHTML = '<div style="padding:10px;">Class data not found.</div>';
-            return;
-        }
+        if (!clsObj) return;
+
+        renderClassFluff();
 
         const table = document.createElement('table');
         table.className = 'currency-table';
@@ -2374,113 +2518,150 @@ document.addEventListener('DOMContentLoaded', () => {
         const spellTable = document.createElement('table');
         spellTable.style.cssText = 'width:100%; border-collapse:collapse; font-size:0.8rem;';
 
-        const thead = document.createElement('thead');
-        thead.innerHTML = `<tr style="background:var(--parchment-dark); border-bottom:2px solid var(--gold-dark); text-align:left;">
-            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600; white-space:nowrap;">Lvl</th>
-            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600;">Time</th>
-            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600;">Name</th>
-            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600;">School</th>
-            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600; text-align:center;" title="Ritual">R</th>
-            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600; text-align:center;" title="Concentration">C</th>
-            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600; text-align:center;" title="Material Component">M</th>
-            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600;">Range</th>
-            <th style="padding:4px 6px; color:var(--ink-light); font-weight:600;">Source</th>
-        </tr>`;
-        spellTable.appendChild(thead);
+        // Sort state for this spell table
+        let _sortKey = 'level', _sortDir = 'asc';
+
+        const ORDINALS = ['','1st','2nd','3rd','4th','5th','6th','7th','8th','9th'];
+
+        const getSortVal = (s, key) => {
+            if (key === 'level')  return s.level;
+            if (key === 'name')   return s.name.toLowerCase();
+            if (key === 'school') return s.school || '';
+            if (key === 'time')   return getTimeStr(s);
+            if (key === 'conc')   return (s.duration && s.duration.some(d => d.concentration)) ? 0 : 1;
+            if (key === 'ritual') return (s.meta && s.meta.ritual) ? 0 : 1;
+            if (key === 'mat')    return (s.components && s.components.m) ? 0 : 1;
+            if (key === 'range')  return getRangeStr(s);
+            if (key === 'source') return s.source || '';
+            return '';
+        };
 
         const tbody = document.createElement('tbody');
 
-        const ORDINALS = ['','1st','2nd','3rd','4th','5th','6th','7th','8th','9th'];
-        let currentLevel = null;
-        let groupIdx = 0;
+        const renderTbody = () => {
+            tbody.innerHTML = '';
+            const sorted = [...availableSpells].sort((a, b) => {
+                let va = getSortVal(a, _sortKey), vb = getSortVal(b, _sortKey);
+                let cmp = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb));
+                if (cmp === 0 && _sortKey !== 'name') cmp = a.name.localeCompare(b.name);
+                return _sortDir === 'asc' ? cmp : -cmp;
+            });
 
-        availableSpells.forEach(s => {
-            // Insert level header row when level changes
-            if (s.level !== currentLevel) {
-                currentLevel = s.level;
-                groupIdx = 0;
-                const headerRow = document.createElement('tr');
-                const label = s.level === 0 ? 'Cantrips' : `${ORDINALS[s.level] || s.level} Level`;
-                headerRow.innerHTML = `<td colspan="9" style="padding:6px 6px 3px; font-weight:700; font-size:0.78rem; color:var(--red-dark); background:var(--parchment-dark); border-top:2px solid var(--gold-dark); letter-spacing:0.04em; text-transform:uppercase;">${label}</td>`;
-                headerRow.dataset.headerLevel = s.level;
-                tbody.appendChild(headerRow);
-            }
-
-            const idx = groupIdx++;
-            const row = document.createElement('tr');
-            row.style.cssText = `border-bottom:1px solid var(--gold-light,#e8d9a0); cursor:pointer; transition:background 0.1s;`;
-            row.dataset.level  = s.level;
-            row.dataset.name   = s.name;
-
-            const isRitual  = !!(s.meta && s.meta.ritual);
-            const isConc    = !!(s.duration && s.duration.some(d => d.concentration));
-            const hasMat    = !!(s.components && s.components.m);
-            const school    = SCHOOL_ABBR[s.school] || s.school || '';
-            const schoolAbr = s.school || '';
-            const timeStr   = getTimeStr(s);
-            const rangeStr  = getRangeStr(s);
-
-            row.dataset.school = schoolAbr;
-            row.dataset.time   = timeStr;
-            row.dataset.range  = rangeStr;
-            row.dataset.conc   = isConc  ? '1' : '0';
-            row.dataset.ritual = isRitual ? '1' : '0';
-            row.dataset.mat    = hasMat  ? '1' : '0';
-
-            const updateRowStyle = () => {
-                const sel = selectedSpells.has(s.name);
-                row.style.background = sel ? 'var(--red)' : (idx % 2 === 0 ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.1)');
-                row.style.color = sel ? 'white' : 'var(--ink)';
-            };
-            updateRowStyle();
-
-            row.innerHTML = `
-                <td style="padding:3px 6px; white-space:nowrap;">${s.level === 0 ? 'C' : s.level}</td>
-                <td style="padding:3px 6px; white-space:nowrap;">${timeStr}</td>
-                <td style="padding:3px 6px; font-weight:500;">${s.name}</td>
-                <td style="padding:3px 6px; white-space:nowrap;">${school}</td>
-                <td style="padding:3px 6px; text-align:center;">${isRitual ? '✦' : ''}</td>
-                <td style="padding:3px 6px; text-align:center;">${isConc ? '●' : ''}</td>
-                <td style="padding:3px 6px; text-align:center;">${hasMat ? '◆' : ''}</td>
-                <td style="padding:3px 6px; white-space:nowrap;">${rangeStr}</td>
-                <td style="padding:3px 6px; white-space:nowrap; font-size:0.75rem; opacity:0.7;">${s.source || ''}</td>
-            `;
-
-            row.onmouseenter = () => { if (!selectedSpells.has(s.name)) row.style.background = 'rgba(180,140,60,0.15)'; };
-            row.onmouseleave = () => updateRowStyle();
-
-            row.onclick = () => {
-                if (selectedSpells.has(s.name)) selectedSpells.delete(s.name);
-                else {
-                    const currentSelected = Array.from(selectedSpells).map(name => allSpells.find(sp => sp.name === name)).filter(Boolean);
-                    const activeFeats = getActiveFeatures();
-                    const featureSpells = getFeatureSpells(activeFeats);
-                    const countedSelected = currentSelected.filter(sp => !featureSpells.has(sp.name));
-
-                    if (s.level === 0) {
-                        const cantripCount = countedSelected.filter(sp => sp.level === 0).length;
-                        if (cantripLimit !== Infinity && cantripCount >= cantripLimit) {
-                            alert(`You can only select ${cantripLimit} cantrips.`);
-                            return;
-                        }
-                    } else if (specificSpellLevel === null) {
-                        const relevantSpellCount = countedSelected.filter(sp => sp.level > 0 && sp.level <= maxSpellLevel).length;
-                        if (spellLimit !== Infinity && relevantSpellCount >= spellLimit) {
-                            alert(`You can only select ${spellLimit} spells.`);
-                            return;
-                        }
-                    }
-                    selectedSpells.add(s.name);
+            let currentLevel = null, groupIdx = 0;
+            sorted.forEach(s => {
+                if (_sortKey === 'level' && s.level !== currentLevel) {
+                    currentLevel = s.level;
+                    groupIdx = 0;
+                    const headerRow = document.createElement('tr');
+                    const label = s.level === 0 ? 'Cantrips' : `${ORDINALS[s.level] || s.level} Level`;
+                    headerRow.innerHTML = `<td colspan="9" style="padding:6px 6px 3px; font-weight:700; font-size:0.78rem; color:var(--red-dark); background:var(--parchment-dark); border-top:2px solid var(--gold-dark); letter-spacing:0.04em; text-transform:uppercase;">${label}</td>`;
+                    tbody.appendChild(headerRow);
                 }
+
+                const idx = groupIdx++;
+                const row = document.createElement('tr');
+                row.style.cssText = `border-bottom:1px solid var(--gold-light,#e8d9a0); cursor:pointer; transition:background 0.1s;`;
+                row.dataset.level = s.level; row.dataset.name = s.name;
+
+                const isRitual = !!(s.meta && s.meta.ritual);
+                const isConc   = !!(s.duration && s.duration.some(d => d.concentration));
+                const hasMat   = !!(s.components && s.components.m);
+                const school   = SCHOOL_ABBR[s.school] || s.school || '';
+                const timeStr  = getTimeStr(s);
+                const rangeStr = getRangeStr(s);
+
+                const updateRowStyle = () => {
+                    const sel = selectedSpells.has(s.name);
+                    row.style.background = sel ? 'var(--red)' : (idx % 2 === 0 ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.1)');
+                    row.style.color = sel ? 'white' : 'var(--ink)';
+                };
                 updateRowStyle();
-                updateCounter();
-                renderGrantedSpells(); renderSidebarSpellChoices();
-                renderSpellDescription(s);
-            };
 
-            tbody.appendChild(row);
+                row.innerHTML = `
+                    <td style="padding:3px 6px; white-space:nowrap;">${s.level === 0 ? 'C' : s.level}</td>
+                    <td style="padding:3px 6px; white-space:nowrap;">${timeStr}</td>
+                    <td style="padding:3px 6px; font-weight:500;">${s.name}</td>
+                    <td style="padding:3px 6px; white-space:nowrap;">${school}</td>
+                    <td style="padding:3px 6px; text-align:center;">${isRitual ? '✦' : ''}</td>
+                    <td style="padding:3px 6px; text-align:center;">${isConc ? '●' : ''}</td>
+                    <td style="padding:3px 6px; text-align:center;">${hasMat ? '◆' : ''}</td>
+                    <td style="padding:3px 6px; white-space:nowrap;">${rangeStr}</td>
+                    <td style="padding:3px 6px; white-space:nowrap; font-size:0.75rem; opacity:0.7;">${s.source || ''}</td>
+                `;
+                row.onmouseenter = () => { if (!selectedSpells.has(s.name)) row.style.background = 'rgba(180,140,60,0.15)'; };
+                row.onmouseleave = () => updateRowStyle();
+                row.onclick = () => {
+                    if (selectedSpells.has(s.name)) selectedSpells.delete(s.name);
+                    else {
+                        const currentSelected = Array.from(selectedSpells).map(name => allSpells.find(sp => sp.name === name)).filter(Boolean);
+                        const activeFeats = getActiveFeatures();
+                        const featureSpells = getFeatureSpells(activeFeats);
+                        const countedSelected = currentSelected.filter(sp => !featureSpells.has(sp.name));
+                        if (s.level === 0) {
+                            const cantripCount = countedSelected.filter(sp => sp.level === 0).length;
+                            if (cantripLimit !== Infinity && cantripCount >= cantripLimit) { alert(`You can only select ${cantripLimit} cantrips.`); return; }
+                        } else if (specificSpellLevel === null) {
+                            const relevantSpellCount = countedSelected.filter(sp => sp.level > 0 && sp.level <= maxSpellLevel).length;
+                            if (spellLimit !== Infinity && relevantSpellCount >= spellLimit) { alert(`You can only select ${spellLimit} spells.`); return; }
+                        }
+                        selectedSpells.add(s.name);
+                    }
+                    updateRowStyle();
+                    updateCounter();
+                    renderGrantedSpells(); renderSidebarSpellChoices();
+                    renderSpellDescription(s);
+                };
+                tbody.appendChild(row);
+            });
+        };
+
+        // Build sortable thead
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        headerRow.style.cssText = 'background:var(--parchment-dark); border-bottom:2px solid var(--gold-dark); text-align:left;';
+        const thBase = 'padding:4px 6px; color:var(--ink-light); font-weight:600; cursor:pointer; user-select:none; white-space:nowrap;';
+        const cols = [
+            { key: 'level',  label: 'Lvl',    style: '' },
+            { key: 'time',   label: 'Time',   style: '' },
+            { key: 'name',   label: 'Name',   style: '' },
+            { key: 'school', label: 'School', style: '' },
+            { key: 'ritual', label: 'R',      style: 'text-align:center;', title: 'Ritual' },
+            { key: 'conc',   label: 'C',      style: 'text-align:center;', title: 'Concentration' },
+            { key: 'mat',    label: 'M',      style: 'text-align:center;', title: 'Material Component' },
+            { key: 'range',  label: 'Range',  style: '' },
+            { key: 'source', label: 'Source', style: '' },
+        ];
+        const updateHeaders = () => {
+            headerRow.querySelectorAll('th').forEach(th => {
+                const k = th.dataset.sortKey;
+                const isActive = k === _sortKey;
+                th.style.color = isActive ? 'var(--red-dark)' : 'var(--ink-light)';
+                const ind = isActive ? (_sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+                th.textContent = (th.dataset.label || '') + ind;
+                if (th.dataset.title) th.title = th.dataset.title;
+            });
+        };
+        cols.forEach(col => {
+            const th = document.createElement('th');
+            th.style.cssText = thBase + (col.style || '');
+            th.dataset.sortKey = col.key;
+            th.dataset.label   = col.label;
+            if (col.title) th.dataset.title = col.title;
+            th.addEventListener('click', () => {
+                if (_sortKey === col.key) {
+                    if (_sortDir === 'asc') _sortDir = 'desc';
+                    else { _sortKey = 'level'; _sortDir = 'asc'; } // third click: reset to default
+                } else { _sortKey = col.key; _sortDir = 'asc'; }
+                updateHeaders();
+                renderTbody();
+            });
+            headerRow.appendChild(th);
         });
+        updateHeaders();
+        thead.appendChild(headerRow);
+        spellTable.appendChild(thead);
 
+        renderTbody();
         spellTable.appendChild(tbody);
         container.appendChild(spellTable);
         updateCounter();
@@ -4480,8 +4661,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderBackgroundList() {
         const list = document.getElementById('backgroundList');
         if (!list) return;
-        list.innerHTML = '';
-        
+
         const uniqueMap = new Map();
         allBackgrounds.forEach(b => {
             if (!uniqueMap.has(b.name)) {
@@ -4494,52 +4674,201 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const sortedBackgrounds = Array.from(uniqueMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
+        // ── helpers to extract ability/skill sets from a background ──────────
+        const getBgAbilitySet = (bg) => {
+            const codes = new Set();
+            if (bg.ability) {
+                bg.ability.forEach(a => {
+                    if (a.choose?.weighted?.from) a.choose.weighted.from.forEach(c => codes.add(c));
+                    else if (a.choose?.from) a.choose.from.forEach(c => codes.add(c));
+                    Object.keys(a).forEach(k => { if (['str','dex','con','int','wis','cha'].includes(k)) codes.add(k); });
+                });
+            }
+            return codes;
+        };
+        const getBgSkillSet = (bg) => {
+            const skills = new Set();
+            if (bg.skillProficiencies) {
+                bg.skillProficiencies.forEach(entry => {
+                    if (entry.choose?.from) entry.choose.from.forEach(s => skills.add(s.toLowerCase()));
+                    Object.keys(entry).forEach(k => { if (k !== 'choose') skills.add(k.toLowerCase()); });
+                });
+            }
+            return skills;
+        };
+
+        // ── filter application ────────────────────────────────────────────────
+        const applyFilters = () => {
+            const term = (document.getElementById('bgSearchInput')?.value || '').toLowerCase();
+            list.querySelectorAll('.list-item').forEach(item => {
+                const bg = sortedBackgrounds.find(b => b.name === item.dataset.bgName);
+                if (!bg) { item.style.display = 'none'; return; }
+                if (term && !bg.name.toLowerCase().includes(term)) { item.style.display = 'none'; return; }
+                if (bgFilterAbilities.size > 0) {
+                    const set = getBgAbilitySet(bg);
+                    if (![...bgFilterAbilities].every(a => set.has(a))) { item.style.display = 'none'; return; }
+                }
+                if (bgFilterSkills.size > 0) {
+                    const set = getBgSkillSet(bg);
+                    if (![...bgFilterSkills].every(s => set.has(s))) { item.style.display = 'none'; return; }
+                }
+                item.style.display = '';
+            });
+        };
+
+        // ── build filter popup (once) ─────────────────────────────────────────
+        const filterBtn = document.getElementById('bgFilterBtn');
+        const filterPopup = document.getElementById('bg-filter-popup');
+        if (filterBtn && filterPopup && !filterPopup.dataset.built) {
+            filterPopup.dataset.built = '1';
+
+            const ABIL_KEYS = ['str','dex','con','int','wis','cha'];
+            const ABIL_LABELS = { str:'STR', dex:'DEX', con:'CON', int:'INT', wis:'WIS', cha:'CHA' };
+            const ALL_SKILLS = ['acrobatics','animal handling','arcana','athletics','deception','history',
+                'insight','intimidation','investigation','medicine','nature','perception',
+                'performance','persuasion','religion','sleight of hand','stealth','survival'];
+            const cap = s => s.split(' ').map(w => w[0].toUpperCase()+w.slice(1)).join(' ');
+
+            const mkSectionLabel = (text) => {
+                const el = document.createElement('div');
+                el.style.cssText = 'font-size:0.72rem; font-weight:700; color:var(--ink-light); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:5px;';
+                el.textContent = text;
+                return el;
+            };
+            const mkBtnWrap = () => {
+                const wrap = document.createElement('div');
+                wrap.style.cssText = 'display:flex; flex-wrap:wrap; gap:3px;';
+                return wrap;
+            };
+            const mkBtn = (label, onToggle) => {
+                const btn = document.createElement('button');
+                btn.textContent = label;
+                btn.style.cssText = 'font-size:0.72rem; padding:2px 7px; border-radius:3px; border:1px solid var(--border-color); background:transparent; cursor:pointer; color:var(--ink); transition:background 0.12s, color 0.12s;';
+                btn.dataset.active = '0';
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const active = btn.dataset.active === '1';
+                    btn.dataset.active = active ? '0' : '1';
+                    btn.style.background = active ? 'transparent' : 'var(--red-dark)';
+                    btn.style.color = active ? 'var(--ink)' : '#fff';
+                    btn.style.borderColor = active ? 'var(--border-color)' : 'var(--red-dark)';
+                    onToggle(!active);
+                    applyFilters();
+                    // update filter button indicator
+                    const total = bgFilterAbilities.size + bgFilterSkills.size;
+                    filterBtn.textContent = total > 0 ? `Filter (${total})` : 'Filter';
+                };
+                return btn;
+            };
+
+            // ASI section
+            filterPopup.appendChild(mkSectionLabel('Ability Score Improvement'));
+            const asiWrap = mkBtnWrap();
+            ABIL_KEYS.forEach(key => {
+                asiWrap.appendChild(mkBtn(ABIL_LABELS[key], active => {
+                    if (active) bgFilterAbilities.add(key); else bgFilterAbilities.delete(key);
+                }));
+            });
+            filterPopup.appendChild(asiWrap);
+
+            // Skills section
+            const skillsLabel = mkSectionLabel('Skill Proficiencies');
+            skillsLabel.style.marginTop = '10px';
+            filterPopup.appendChild(skillsLabel);
+            const skillWrap = mkBtnWrap();
+            ALL_SKILLS.forEach(skill => {
+                skillWrap.appendChild(mkBtn(cap(skill), active => {
+                    if (active) bgFilterSkills.add(skill); else bgFilterSkills.delete(skill);
+                }));
+            });
+            filterPopup.appendChild(skillWrap);
+
+            // Clear button
+            const clearBtn = document.createElement('button');
+            clearBtn.textContent = '↩ Clear';
+            clearBtn.style.cssText = 'font-size:0.72rem; padding:3px 10px; margin-top:10px; border-radius:3px; border:1px solid var(--border-color); background:transparent; cursor:pointer; color:var(--ink-light); display:block;';
+            clearBtn.onclick = (e) => {
+                e.stopPropagation();
+                bgFilterAbilities.clear(); bgFilterSkills.clear();
+                filterPopup.querySelectorAll('button[data-active="1"]').forEach(b => {
+                    b.dataset.active = '0';
+                    b.style.background = 'transparent';
+                    b.style.color = 'var(--ink)';
+                    b.style.borderColor = 'var(--border-color)';
+                });
+                filterBtn.textContent = 'Filter';
+                applyFilters();
+            };
+            filterPopup.appendChild(clearBtn);
+
+            // Toggle popup open/close
+            filterBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const open = filterPopup.style.display !== 'none';
+                filterPopup.style.display = open ? 'none' : 'block';
+            });
+
+            // Close on outside click
+            document.addEventListener('click', (e) => {
+                if (!filterPopup.contains(e.target) && e.target !== filterBtn) {
+                    filterPopup.style.display = 'none';
+                }
+            });
+        }
+
+        // ── populate list ─────────────────────────────────────────────────────
+        list.innerHTML = '';
         sortedBackgrounds.forEach(b => {
             const div = document.createElement('div');
             div.className = 'list-item';
+            div.dataset.bgName = b.name;
             div.textContent = b.name;
-            
             if (b.source) {
                 const meta = document.createElement('span');
                 meta.className = 'list-item-meta';
                 meta.textContent = `[${b.source}]`;
                 div.appendChild(meta);
             }
-
             div.onclick = () => {
-                document.querySelectorAll('#backgroundList .list-item').forEach(i => i.classList.remove('selected'));
+                list.querySelectorAll('.list-item').forEach(i => i.classList.remove('selected'));
                 div.classList.add('selected');
-                console.log("Selected Background:", b.name);
                 selectedBackground = b.name;
+                selectedBgSkills = [];
                 renderBackgroundInfo();
             };
             list.appendChild(div);
         });
 
-        // Filter logic
-        const searchInput = document.getElementById('bgSearchInput');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                const term = e.target.value.toLowerCase();
-                document.querySelectorAll('#backgroundList .list-item').forEach(item => {
-                    item.style.display = item.textContent.toLowerCase().includes(term) ? 'block' : 'none';
-                });
+        // re-select current background if any
+        if (selectedBackground) {
+            list.querySelectorAll('.list-item').forEach(i => {
+                if (i.dataset.bgName === selectedBackground) i.classList.add('selected');
             });
         }
+
+        // search input
+        const searchInput = document.getElementById('bgSearchInput');
+        if (searchInput) {
+            searchInput.oninput = applyFilters;
+        }
+
+        applyFilters();
     }
 
-    function renderFluffHtml(fluff, name, maxHeight) {
+    function renderFluffHtml(fluff, name, maxHeight, type, source) {
+        const imgStyle = `max-width:100%; max-height:${maxHeight}px; object-fit:cover; border-radius:4px; margin-bottom:12px; display:block;`;
         let html = '';
         // Top-level img string on the fluff object itself
         if (fluff.img) {
-            html += `<img src="${fluff.img}" alt="${name}" style="max-width:100%; max-height:${maxHeight}px; object-fit:cover; border:1px solid var(--border-color); border-radius:4px; margin-bottom:12px; display:block;">`;
+            const src = typeof fluff.img === 'string' ? fluff.img : (fluff.img?.url || fluff.img?.path || null);
+            if (src) html += (type && source) ? imgTag(src, name, imgStyle, stdFallbacks(type, source, name)) : `<img src="${src}" alt="${name}" style="${imgStyle}" onerror="this.style.display='none'">`;
         }
         if (fluff.images && fluff.images.length > 0) {
             fluff.images.forEach(img => {
                 // Support href.url, href.path, img.url, img.path
-                const href = img.href?.url || img.href?.path || img.url || img.path || null;
+                const href = img.href?.path ? 'https://5e.tools/img/' + img.href.path : (img.href?.url || img.url || img.path || null);
                 if (href) {
-                    html += `<img src="${href}" alt="${name}" style="max-width:100%; max-height:${maxHeight}px; object-fit:cover; border:1px solid var(--border-color); border-radius:4px; margin-bottom:12px; display:block;">`;
+                    html += (type && source) ? imgTag(href, name, imgStyle, stdFallbacks(type, source, name)) : `<img src="${href}" alt="${name}" style="${imgStyle}" onerror="this.style.display='none'">`;
                 }
             });
         }
@@ -4583,7 +4912,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 || allBackgroundFluff.find(f => f.name === bg.name)
                 || bg.fluff || null;
             if (bgFluff) {
-                container.innerHTML = renderFluffHtml(bgFluff, bg.name, 240);
+                container.innerHTML = renderFluffHtml(bgFluff, bg.name, 240, 'backgrounds', bg.source);
             }
 
             if (bg.entries) {
@@ -4787,6 +5116,81 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(window.saveCharacter) window.saveCharacter();
                     alert("Ability scores updated!");
                 });
+
+                // --- Background Skill Proficiency Picker ---
+                // Parse fixed skills and choose entries from skillProficiencies
+                const ALL_SKILLS = ['acrobatics','animal handling','arcana','athletics','deception','history',
+                    'insight','intimidation','investigation','medicine','nature','perception',
+                    'performance','persuasion','religion','sleight of hand','stealth','survival'];
+                const fixedBgSkills = new Set();
+                const chooseEntries = []; // { from: string[], count: number }
+                if (bg.skillProficiencies) {
+                    bg.skillProficiencies.forEach(entry => {
+                        if (entry.choose) {
+                            const from = (entry.choose.from || []).map(s => s.toLowerCase());
+                            const count = entry.choose.count || 1;
+                            chooseEntries.push({ from, count });
+                        }
+                        Object.keys(entry).forEach(k => {
+                            if (k !== 'choose') fixedBgSkills.add(k.toLowerCase());
+                        });
+                    });
+                }
+
+                const totalChoices = chooseEntries.reduce((n, e) => n + e.count, 0);
+
+                if (chooseEntries.length > 0) {
+                    const skillDiv = document.createElement('div');
+                    skillDiv.className = 'feature-box';
+                    skillDiv.style.cssText = 'margin-top:14px; border:2px solid var(--gold);';
+
+                    // Build flat pick list from all choose entries
+                    const allChooseFrom = [...new Set(chooseEntries.flatMap(e => e.from))];
+                    // If no explicit list given, offer all skills minus fixed ones
+                    const pickFrom = allChooseFrom.length > 0
+                        ? allChooseFrom.filter(s => !fixedBgSkills.has(s))
+                        : ALL_SKILLS.filter(s => !fixedBgSkills.has(s));
+                    const cap = s => s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+                    skillDiv.innerHTML = `
+                        <div class="feature-header" style="border-bottom:1px solid var(--gold); margin-bottom:10px;">
+                            <strong>Background Skill Proficiencies</strong>
+                        </div>
+                        <div style="font-size:0.88rem; margin-bottom:10px; color:var(--ink-light);">
+                            Choose <strong>${totalChoices}</strong> skill${totalChoices > 1 ? 's' : ''} from:
+                            <em>${pickFrom.map(cap).join(', ')}</em>
+                        </div>
+                        <div id="bg-skill-choices" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+                        ${fixedBgSkills.size > 0 ? `<div style="margin-top:10px; font-size:0.82rem; color:var(--ink-light);">Fixed: <strong>${[...fixedBgSkills].map(cap).join(', ')}</strong></div>` : ''}
+                    `;
+                    container.appendChild(skillDiv);
+
+                    const choicesContainer = skillDiv.querySelector('#bg-skill-choices');
+                    const renderSkillButtons = () => {
+                        choicesContainer.innerHTML = '';
+                        pickFrom.forEach(skill => {
+                            const btn = document.createElement('button');
+                            const isSelected = selectedBgSkills.includes(skill);
+                            btn.textContent = cap(skill);
+                            btn.className = isSelected ? 'btn' : 'btn btn-secondary';
+                            btn.style.cssText = `padding:5px 10px; font-size:0.82rem; ${isSelected ? 'outline:2px solid var(--gold-dark);' : ''}`;
+                            btn.onclick = () => {
+                                if (isSelected) {
+                                    selectedBgSkills = selectedBgSkills.filter(s => s !== skill);
+                                } else {
+                                    if (selectedBgSkills.length >= totalChoices) {
+                                        // Replace oldest
+                                        selectedBgSkills.shift();
+                                    }
+                                    selectedBgSkills.push(skill);
+                                }
+                                renderSkillButtons();
+                            };
+                            choicesContainer.appendChild(btn);
+                        });
+                    };
+                    renderSkillButtons();
+                }
 
                 // Check for Feats in entries and render them
                 const featsInFeature = new Set();
@@ -5205,10 +5609,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 || allRaceFluff.find(f => f.name === race.name)
                 || race.fluff || null;
             if (raceFluff) {
-                container.innerHTML = renderFluffHtml(raceFluff, race.name, 280);
+                container.innerHTML = renderFluffHtml(raceFluff, race.name, 280, 'races', race.source);
             } else if (race.img) {
                 const imgSrc = typeof race.img === 'string' ? race.img : (race.img?.url || race.img?.path || null);
-                if (imgSrc) container.innerHTML = `<img src="${imgSrc}" alt="${race.name}" style="max-width:100%; max-height:280px; object-fit:cover; border:1px solid var(--border-color); border-radius:4px; margin-bottom:12px; display:block;">`;
+                if (imgSrc) container.innerHTML = imgTag(imgSrc, race.name, 'max-width:100%; max-height:280px; object-fit:cover; border-radius:4px; margin-bottom:12px; display:block;', stdFallbacks('races', race.source, race.name));
             }
 
             // 1. Render Main Description
@@ -5847,7 +6251,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sec.appendChild(sub);
 
             const card = document.createElement('div');
-            card.style.cssText = 'padding:10px 12px; background:rgba(255,255,255,0.5); border:1px solid var(--gold); border-radius:4px;';
+            card.style.cssText = 'padding:10px 18px 10px 18px; background:rgba(255,255,255,0.5); border:1px solid var(--gold); border-radius:4px;';
 
             const cardTitle = document.createElement('div');
             cardTitle.style.cssText = 'font-weight:bold; color:var(--red-dark); margin-bottom:4px;';
@@ -5867,7 +6271,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (feat) {
                 const choicesArea = document.createElement('div');
-                choicesArea.style.cssText = 'margin-top:10px;';
+                choicesArea.style.cssText = 'margin-top:10px; padding-left:6px;';
                 const baseFeat = allFeats.find(f => f.name === bgFeatName) || feat;
                 renderFeatChoices(choicesArea, baseFeat, bgFeatName, () => renderFeatChoices(choicesArea, baseFeat, bgFeatName, null));
                 if (choicesArea.hasChildNodes()) sec.appendChild(choicesArea);
@@ -5998,7 +6402,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const pickerArea = document.createElement('div');
                 const choicesArea = document.createElement('div');
-                choicesArea.style.cssText = 'margin-top:10px;';
+                choicesArea.style.cssText = 'margin-top:10px; padding-left:6px;';
                 bodyDiv.appendChild(pickerArea);
                 bodyDiv.appendChild(choicesArea);
 
@@ -7223,17 +7627,22 @@ document.addEventListener('DOMContentLoaded', () => {
                  features.push({ title: "Background Feature", desc: cleanedDesc, type: 'background' });
                  addToActionLists(bg, "Background Feature", cleanedDesc);
             }
-            // Background Skills
+            // Background Skills — fixed skills + player-chosen skills from choose entries
             if (bg.skillProficiencies) {
                 bg.skillProficiencies.forEach(entry => {
-                    Object.keys(entry).forEach(k => { 
+                    Object.keys(entry).forEach(k => {
                         if (k !== 'choose') {
                             const key = k.toLowerCase().replace(/ /g, '_');
-                            skillProficiency[key] = true; 
+                            skillProficiency[key] = true;
                         }
                     });
                 });
             }
+            // Apply chosen skills (from skill picker UI)
+            selectedBgSkills.forEach(skill => {
+                const key = skill.toLowerCase().replace(/ /g, '_');
+                skillProficiency[key] = true;
+            });
             // Background Tools
             if (bg.toolProficiencies) {
                 bg.toolProficiencies.forEach(entry => {
