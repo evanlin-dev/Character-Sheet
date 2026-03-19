@@ -3099,13 +3099,11 @@ window.renderWeaponsCard = function() {
 
     const items = Array.from(document.querySelectorAll('.weapon-item'));
     if (items.length === 0) {
-        card.innerHTML = `
-            <div class="weapons-card-header">
-                <span class="weapons-card-title">Weapons</span>
-            </div>
-            <div style="color:var(--ink-light); font-style:italic; font-size:0.82rem; padding:4px 0;">No weapons added yet.</div>`;
+        card.style.display = 'none';
+        card.innerHTML = '';
         return;
     }
+    card.style.display = '';
 
     const pb = getPB();
     const rowsHtml = items.map((item, i) => {
@@ -6662,8 +6660,8 @@ window.mountActionsView = function() {
         const bar = document.createElement('div');
         bar.id = 'actions-filter-bar';
         bar.className = 'actions-filter-bar';
-        bar.innerHTML = ['All','Actions','Bonus Actions','Reactions'].map((label, i) => {
-            const key = ['all','action','bonus','reaction'][i];
+        bar.innerHTML = ['All','Actions','Bonus Actions','Reactions','Other'].map((label, i) => {
+            const key = ['all','action','bonus','reaction','other'][i];
             return `<button class="act-filter-pill${i === 0 ? ' active' : ''}" data-filter="${key}" onclick="window.filterActionsView('${key}')">${label}</button>`;
         }).join('');
         const hdr = document.getElementById('act-view-header');
@@ -6687,6 +6685,13 @@ window.mountActionsView = function() {
         const resCard = document.getElementById('mobile-resources-card');
         view.insertBefore(wcard, resCard ? resCard.nextSibling : view.children[2] || null);
         window.renderWeaponsCard();
+    }
+
+    // Inject "Other" container (for spells with no standard casting time, rituals, etc.)
+    if (!document.getElementById('mobile-other-spells-section')) {
+        const sec = document.createElement('div');
+        sec.id = 'mobile-other-spells-section';
+        view.appendChild(sec);
     }
 
     // Move actions, bonus actions, reactions sections
@@ -6720,6 +6725,8 @@ window.filterActionsView = function(filter) {
         const section = document.getElementById(id)?.closest('[data-act-moved]');
         if (section) section.style.display = (filter === 'all' || filter === key) ? '' : 'none';
     });
+    const otherSec = document.getElementById('mobile-other-spells-section');
+    if (otherSec) otherSec.style.display = (filter === 'all' || filter === 'other') ? '' : 'none';
 };
 
 window.unmountActionsView = function() {
@@ -6735,6 +6742,7 @@ window.unmountActionsView = function() {
     ['auto-act-spells', 'auto-bonus-spells', 'auto-react-spells'].forEach(id => {
         document.getElementById(id)?.remove();
     });
+    document.getElementById('mobile-other-spells-section')?.remove();
 
     // Restore moved sections (also reset any filter-hidden display)
     document.querySelectorAll('[data-act-moved]').forEach(el => {
@@ -6772,11 +6780,22 @@ window.refreshSpellsInActionsView = function() {
         return '';
     };
 
-    // Extract damage dice from description
-    const extractDmg = (desc) => {
+    // Extract damage dice + type from description
+    const _dmgTypePatterns = [
+        'acid','bludgeoning','cold','fire','force','lightning','necrotic',
+        'piercing','poison','psychic','radiant','slashing','thunder'
+    ];
+    const extractDmgFull = (desc) => {
         const text = desc.replace(/<[^>]+>/g, ' ');
-        const dmgMatch = text.match(/\b(\d+d\d+(?:[+\-]\d+)?)\b/);
-        return dmgMatch ? dmgMatch[1] : '';
+        const m = text.match(/\b(\d+d\d+(?:\s*[+\-]\s*\d+)?)\s+(\w+)\s+damage/i);
+        if (m) {
+            const dice = m[1].replace(/\s+/g, '');
+            const type = m[2].toLowerCase();
+            if (_dmgTypePatterns.includes(type)) return { dice, type };
+            return { dice, type: '' };
+        }
+        const m2 = text.match(/\b(\d+d\d+(?:\s*[+\-]\s*\d+)?)\b/);
+        return m2 ? { dice: m2[1].replace(/\s+/g, ''), type: '' } : null;
     };
 
     const allRows = [
@@ -6784,7 +6803,7 @@ window.refreshSpellsInActionsView = function() {
         ...Array.from(document.querySelectorAll('#cantripList .spell-row'))
     ];
 
-    const groups = { action: [], bonus: [], reaction: [] };
+    const groups = { action: [], bonus: [], reaction: [], other: [] };
     allRows.forEach(row => {
         const time = row.querySelector('.spell-time')?.value || '';
         const name = row.querySelector('.spell-name')?.value || '';
@@ -6793,7 +6812,7 @@ window.refreshSpellsInActionsView = function() {
         const range = row.querySelector('.spell-range')?.value || '';
         const lvl = parseInt(row.querySelector('.spell-lvl')?.value) || 0;
         const lvlLabel = lvl === 0 ? 'Cantrip' : `Lv ${lvl}`;
-        // Resolve attack/save type: stored data attrs first, then description fallback
+        const ritual = row.querySelector('.spell-ritual')?.checked || false;
         let atkType = row.dataset.atkType || '';
         let saveAb = row.dataset.saveAbility || '';
         if (!atkType && !saveAb && desc) {
@@ -6803,8 +6822,41 @@ window.refreshSpellsInActionsView = function() {
             else { const sm = _SPELL_SAVE_PATTERN.exec(d); if (sm) saveAb = _SAVE_NAME_MAP[sm[1].toLowerCase()] || ''; }
         }
         const cat = classify(time);
-        if (cat) groups[cat].push({ name, desc, range, atkType, saveAb, lvlLabel });
+        const timeLabel = time || '';
+        const entry = { name, desc, range, atkType, saveAb, lvlLabel, ritual, timeLabel };
+        if (cat) groups[cat].push(entry);
+        else groups.other.push(entry);
     });
+
+    const buildItemsHtml = (spells, autoId) => spells.map((s, idx) => {
+        const descHtml = s.desc
+            ? s.desc.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+            : '';
+        const pills = [];
+        if (s.range) pills.push(`<span class="asp-pill asp-pill-range">${s.range}</span>`);
+        const dmg = extractDmgFull(s.desc);
+        if (dmg) {
+            const dmgLabel = dmg.type ? `${dmg.dice} ${dmg.type}` : dmg.dice;
+            pills.push(`<span class="asp-pill asp-pill-dmg">${dmgLabel}</span>`);
+        }
+        const hitdc = getHitDC(s.atkType, s.saveAb);
+        if (hitdc) {
+            const cls = s.atkType ? 'asp-pill asp-pill-atk' : 'asp-pill asp-pill-save';
+            pills.push(`<span class="${cls}">${hitdc}</span>`);
+        }
+        if (s.ritual) pills.push(`<span class="asp-pill asp-pill-ritual">Ritual</span>`);
+        const pillsHtml = pills.length ? `<div class="asp-pills">${pills.join('')}</div>` : '';
+        return `<div class="auto-spell-item">
+            <div class="auto-spell-header" onclick="var d=document.getElementById('${autoId}-d-${idx}');if(d)d.classList.toggle('open')">
+                <div class="auto-spell-left">
+                    <span class="auto-spell-name">${s.name}</span>
+                    <span class="auto-spell-lvl">${s.lvlLabel}</span>
+                </div>
+                ${pillsHtml}
+            </div>
+            ${descHtml ? `<div class="auto-spell-desc" id="${autoId}-d-${idx}">${descHtml}</div>` : ''}
+        </div>`;
+    }).join('');
 
     const inject = (containerId, spells, autoId) => {
         const container = document.getElementById(containerId);
@@ -6816,40 +6868,22 @@ window.refreshSpellsInActionsView = function() {
             container.parentElement.insertBefore(autoDiv, container);
         }
         if (spells.length === 0) { autoDiv.innerHTML = ''; return; }
-        const labelHtml = `<div class="auto-spells-label">From Spells</div>`;
-        const itemsHtml = spells.map((s, idx) => {
-            const descHtml = s.desc
-                ? s.desc.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-                : '';
-            const metaParts = [];
-            if (s.range) metaParts.push(`<span class="auto-spell-meta-txt">${s.range}</span>`);
-            const dmg = extractDmg(s.desc);
-            if (dmg) metaParts.push(`<span class="auto-spell-meta-txt">${dmg}</span>`);
-            const hitdc = getHitDC(s.atkType, s.saveAb);
-            if (hitdc) {
-                const cls = s.atkType ? 'msv-tag msv-tag-atk' : 'msv-tag msv-tag-save';
-                metaParts.push(`<span class="${cls}">${hitdc}</span>`);
-            }
-            const statsHtml = metaParts.length
-                ? `<div class="auto-spell-stats">${metaParts.join('')}</div>`
-                : '';
-            return `<div class="auto-spell-item">
-                <div class="auto-spell-header" onclick="var d=document.getElementById('${autoId}-d-${idx}');if(d)d.classList.toggle('open')">
-                    <div class="auto-spell-left">
-                        <span class="auto-spell-name">${s.name}</span>
-                        <span class="auto-spell-lvl">${s.lvlLabel}</span>
-                    </div>
-                    ${statsHtml}
-                </div>
-                ${descHtml ? `<div class="auto-spell-desc" id="${autoId}-d-${idx}">${descHtml}</div>` : ''}
-            </div>`;
-        }).join('');
-        autoDiv.innerHTML = labelHtml + itemsHtml;
+        autoDiv.innerHTML = `<div class="auto-spells-label">From Spells</div>` + buildItemsHtml(spells, autoId);
+    };
+
+    const injectOther = (spells) => {
+        const sec = document.getElementById('mobile-other-spells-section');
+        if (!sec) return;
+        if (spells.length === 0) { sec.innerHTML = ''; return; }
+        sec.innerHTML = `<div class="act-section-header">Other</div>
+            <div class="auto-spells-label">Rituals &amp; Non-Standard Casting</div>` +
+            buildItemsHtml(spells, 'auto-other-spells');
     };
 
     inject('actionsContainer', groups.action, 'auto-act-spells');
     inject('bonusActionsContainer', groups.bonus, 'auto-bonus-spells');
     inject('reactionsContainer', groups.reaction, 'auto-react-spells');
+    injectOther(groups.other);
 };
 
 // ===== DEFENSES VIEW (Mobile) =====
