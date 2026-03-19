@@ -617,6 +617,61 @@ body.app-view-active .header { display: none !important; }
     cursor: pointer;
     flex-shrink: 0;
 }
+.msv-cast-btn {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border: 1px solid var(--red);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--red) 10%, white);
+    color: var(--red-dark);
+    font-family: 'Cinzel', serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+}
+.msv-cast-btn:active { background: var(--red); color: white; }
+
+/* Cast Spell Modal */
+.cast-conc-note {
+    text-align: center;
+    color: var(--gold-dark);
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+.cast-level-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.cast-level-btn {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border: 1px solid var(--gold);
+    border-radius: 6px;
+    background: var(--parchment);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.cast-level-btn:active { background: color-mix(in srgb, var(--gold) 25%, var(--parchment)); }
+.cast-level-btn.cast-level-disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+.cast-level-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--ink);
+}
+.cast-level-slots {
+    font-family: 'Crimson Text', serif;
+    font-size: 0.82rem;
+    color: var(--ink-light);
+}
 
 /* Manage Spells Modal */
 .msv-manage-group { margin-bottom: 16px; }
@@ -725,7 +780,7 @@ body.swap-scores.app-view-active #view-stats .stat-value { font-size: 0.75rem !i
 /* Inventory view: header aligned to compact item columns */
 body.app-view-active #view-inventory .inventory-header {
     display: grid;
-    grid-template-columns: 20px 1fr 36px 36px 24px 24px 20px;
+    grid-template-columns: 20px 1fr 62px 36px 24px 24px 20px;
     gap: 6px;
     padding: 2px 8px;
     font-size: 0.7rem;
@@ -746,7 +801,7 @@ body.app-view-active #view-inventory .inventory-header span:nth-child(7) { grid-
 /* Inventory view: single-row compact items matching skill/save row style */
 body.app-view-active #view-inventory .inventory-item {
     display: grid;
-    grid-template-columns: 20px 1fr 36px 36px 24px 24px 20px;
+    grid-template-columns: 20px 1fr 62px 36px 24px 24px 20px;
     grid-template-areas: "drag name qty weight equip note del";
     grid-template-rows: 1fr;
     gap: 6px;
@@ -768,7 +823,40 @@ body.app-view-active #view-inventory .inventory-item button {
 }
 body.app-view-active #view-inventory .inventory-item .drag-handle { grid-area: drag; font-size: 0.75rem; color: var(--ink-light); justify-self: center; }
 body.app-view-active #view-inventory .inventory-item .name-field { grid-area: name; font-size: 0.9rem; font-weight: 600; width: 100%; border-bottom: none; }
-body.app-view-active #view-inventory .inventory-item .qty-field { grid-area: qty; font-size: 0.8rem; text-align: center; width: 100%; }
+body.app-view-active #view-inventory .inventory-item .qty-field { grid-area: qty; font-size: 0.8rem; text-align: center; width: 100%; appearance: textfield; -moz-appearance: textfield; }
+body.app-view-active #view-inventory .inventory-item .qty-field::-webkit-inner-spin-button,
+body.app-view-active #view-inventory .inventory-item .qty-field::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+body.app-view-active #view-inventory .inv-qty-stepper {
+    grid-area: qty;
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+body.app-view-active #view-inventory .inv-qty-stepper .qty-field {
+    width: 24px;
+    text-align: center;
+    font-size: 0.8rem;
+    border: none;
+    background: transparent;
+    padding: 0;
+}
+body.app-view-active #view-inventory .inv-qty-btn {
+    width: 18px;
+    height: 18px;
+    border: 1px solid var(--gold);
+    border-radius: 3px;
+    background: var(--parchment);
+    color: var(--ink);
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+}
+body.app-view-active #view-inventory .inv-qty-btn:active { background: var(--gold-light); }
 body.app-view-active #view-inventory .inventory-item .weight-field { grid-area: weight; font-size: 0.8rem; text-align: center; width: 100%; }
 body.app-view-active #view-inventory .inventory-item .equip-check { grid-area: equip; margin: 0 auto; display: block; width: 16px; height: 16px !important; min-height: 0 !important; padding: 0; }
 body.app-view-active #view-inventory .inventory-item .note-btn { grid-area: note; font-size: 0.95rem; height: 28px !important; }
@@ -940,6 +1028,7 @@ body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) {
 
 .delete-feature-btn { background: none; border: none; color: var(--ink-light); font-size: 1.2rem; cursor: pointer; line-height: 1; padding: 0 4px; }
 .delete-feature-btn:hover { color: var(--red); }
+.feat-mobile-chevron { background: none; border: 1px solid var(--gold); border-radius: 4px; color: var(--gold-dark); font-size: 1rem; cursor: pointer; padding: 4px 10px; line-height: 1; flex-shrink: 0; min-width: 36px; text-align: center; }
 
 .mini-btn { background: var(--red); color: white; border: none; border-radius: 4px; width: 20px; height: 20px; line-height: 1; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; }
 .sheet-actions { margin-top: 40px; border-top: 2px solid var(--gold); padding-top: 20px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
@@ -1920,6 +2009,14 @@ body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) {
   .note-modal textarea {
     font-size: 16px !important;
   }
+  .note-modal { padding: 14px; gap: 8px; }
+  .note-controls { gap: 6px; flex-wrap: wrap; }
+  .note-controls .btn,
+  .note-controls .btn-secondary,
+  .note-controls button {
+    font-size: 0.72rem !important;
+    padding: 4px 10px !important;
+  }
 
   /* Character Creator Mobile Overrides */
   #sa-container { grid-template-columns: 1fr !important; }
@@ -2884,6 +2981,53 @@ body.swap-scores.dense-mode .stat-modifier input {
     color: var(--red);
 }
 
+.mh-conc-banner {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 6px 10px;
+    background: color-mix(in srgb, var(--gold) 20%, var(--parchment));
+    border: 1px solid var(--gold);
+    border-radius: 6px;
+    cursor: pointer;
+    animation: conc-pulse 2s ease-in-out infinite;
+}
+.mh-conc-banner:active { opacity: 0.7; }
+.mh-conc-icon {
+    color: var(--gold-dark);
+    font-size: 0.85rem;
+    animation: conc-glow 2s ease-in-out infinite;
+}
+.mh-conc-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--ink-light);
+    letter-spacing: 0.03em;
+}
+.mh-conc-name {
+    flex: 1;
+    font-family: 'Crimson Text', serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--ink);
+}
+.mh-conc-drop {
+    font-size: 0.85rem;
+    color: var(--red);
+    font-weight: 700;
+    padding: 0 2px;
+}
+@keyframes conc-pulse {
+    0%, 100% { border-color: var(--gold); }
+    50% { border-color: var(--gold-dark); }
+}
+@keyframes conc-glow {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
 @media (max-width: 900px) {
   .header { display: none !important; }
 
@@ -3689,6 +3833,27 @@ body.swap-scores.dense-mode .stat-modifier input {
     line-height: 1.3;
 }
 .weapon-card-detail.open { display: block; }
+.wcard-prop-block {
+    margin-top: 4px;
+    padding: 4px 7px;
+    background: color-mix(in srgb, var(--ink) 5%, var(--parchment));
+    border-left: 2px solid var(--ink-light);
+    border-radius: 3px;
+}
+.wcard-prop-name {
+    font-family: 'Cinzel', serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: 0.03em;
+    margin-right: 5px;
+}
+.wcard-prop-desc {
+    font-family: 'Crimson Text', serif;
+    font-size: 0.8rem;
+    color: var(--ink-light);
+    line-height: 1.3;
+}
 .wcard-mastery-block {
     margin-top: 5px;
     padding: 5px 7px;

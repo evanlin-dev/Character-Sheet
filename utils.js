@@ -39,7 +39,7 @@ window.EQUIPMENT_PACKS = {
     "scholar's pack":    ["Backpack", "Book of Lore", "Ink (1 ounce bottle)", "Ink Pen", "10 Parchment (one sheet)", "Sand (little bag)", "Small Knife"],
 };
 
-// ── D&D Weapons Database ─────────────────
+// ── Weapons Database ─────────────────
 // Used as base data in character_creator; extended from IndexedDB in script.js
 window.dndWeaponsDB = {
     "Club":           { type: "Simple",  cat: "Melee",  dmg: "1d4",  dtype: "bludgeoning", props: ["Light"],                                        mastery: "Slow"   },
@@ -83,8 +83,7 @@ window.dndWeaponsDB = {
     "Pistol":         { type: "Martial", cat: "Ranged", dmg: "1d10", dtype: "piercing",     props: ["Ammunition (30/90)", "Loading"],                mastery: "Vex"    },
 };
 
-// ── D&D Entry Renderer ───────────────────
-// Recursively converts 5etools JSON entries to HTML
+// ── Entry Renderer ───────────────────
 window.processEntries = function (entries, depth) {
     depth = depth || 0;
     if (!entries) return "";
@@ -153,8 +152,7 @@ window.processEntries = function (entries, depth) {
     return result;
 };
 
-// ── D&D Tag Cleaner ──────────────────────
-// Converts 5etools inline tags like {@hit 5}, {@dc 14}, etc. to readable text
+// ── Tag Cleaner ──────────────────────
 window.cleanText = function (str) {
     if (!str) return "";
     const cleaned = str.replace(/\{@(\w+)\s*([^}]+)?\}/g, (match, tag, content) => {

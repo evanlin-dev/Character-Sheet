@@ -177,6 +177,7 @@ let resourcesData = [];
 let summonsData = [];
 let hitDiceUsed = 0;
 let pbScores = { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 };
+let concentrationSpell = ''; // name of the spell being concentrated on
 
 // Class resource definitions for auto-detection
 // colLabel: regex to match class table column; formula: fn(level, abilityMod) => max; levelMin: earliest level
@@ -888,6 +889,9 @@ window.switchFeaturesFilter = function(filter) {
   document.querySelectorAll('.feature-section').forEach(s => {
     s.style.display = (filter === 'all' || s.id === sectionMap[filter]) ? '' : 'none';
   });
+  if (document.getElementById('view-features') && window._applyFeatureMobileCollapse) {
+    window._applyFeatureMobileCollapse();
+  }
   saveCharacter();
 };
 
@@ -1391,6 +1395,8 @@ function loadItemsFromData(parsedData) {
   if (!parsedData) return;
   window.dndItemsDB = {};
   window.dndItemWeightsDB = {};
+  window.dndPropertyDescriptions = window.dndPropertyDescriptions || {};
+  window.dndMasteryDescriptions = window.dndMasteryDescriptions || {};
   parsedData.forEach((json) => {
     try {
       const arrays = [json.item, json.items, json.baseitem, json.baseitems, json.magicvariant, json.magicvariants];
@@ -1408,6 +1414,40 @@ function loadItemsFromData(parsedData) {
                   if (wt) window.dndItemWeightsDB[key] = parseFloat(wt) || 0;
               });
           }
+      });
+      // Extract weapon property definitions
+      const propArrays = [json.itemProperty, json.itemProperties];
+      propArrays.forEach(arr => {
+          if (!Array.isArray(arr)) return;
+          arr.forEach(prop => {
+              if (!prop.entries || !prop.entries.length) return;
+              const abbr = (prop.abbreviation || prop.name || '').toLowerCase().trim();
+              const name = (prop.name || prop.abbreviation || '').toLowerCase().trim();
+              let desc = '';
+              prop.entries.forEach(entry => {
+                  if (typeof entry === 'string') desc = entry;
+                  else if (entry && entry.entries) {
+                      entry.entries.forEach(e => { if (typeof e === 'string' && !desc) desc = e; });
+                  }
+              });
+              if (desc) {
+                  desc = window.cleanText ? window.cleanText(desc) : desc;
+                  if (abbr) window.dndPropertyDescriptions[abbr] = desc;
+                  if (name && name !== abbr) window.dndPropertyDescriptions[name] = desc;
+              }
+          });
+      });
+      // Extract weapon mastery definitions
+      const mastArrays = [json.itemMastery, json.itemMasteries];
+      mastArrays.forEach(arr => {
+          if (!Array.isArray(arr)) return;
+          arr.forEach(mast => {
+              if (!mast.name || !mast.entries) return;
+              const key = mast.name.toLowerCase().trim();
+              let desc = '';
+              mast.entries.forEach(e => { if (typeof e === 'string' && !desc) desc = e; });
+              if (desc) window.dndMasteryDescriptions[key] = window.cleanText ? window.cleanText(desc) : desc;
+          });
       });
     } catch (e) {}
   });
@@ -3035,6 +3075,24 @@ const MASTERY_DESCRIPTIONS = {
     vex:     'On a hit that deals damage, you gain Advantage on your next attack roll against the same target before your next turn.',
 };
 
+const WEAPON_PROPERTY_DESCRIPTIONS = {
+    ammunition: 'Requires ammunition to make ranged attacks. Drawing ammo is part of the attack. Recover half after a fight.',
+    finesse: 'Use your choice of Strength or Dexterity modifier for attack and damage rolls.',
+    heavy: 'Disadvantage on attacks if your Strength (melee) or Dexterity (ranged) score is below 13.',
+    light: 'When you attack with this weapon, you can make one extra attack as a Bonus Action with a different Light weapon (no ability mod to damage).',
+    loading: 'You can fire only one piece of ammunition per action, bonus action, or reaction, regardless of extra attacks.',
+    reach: 'Adds 5 feet to your reach when you attack and for opportunity attacks.',
+    thrown: 'You can throw this weapon for a ranged attack, using the same ability modifier as melee.',
+    'two-handed': 'Requires two hands to attack with.',
+    versatile: 'Can be used with one or two hands. Two-handed deals the damage shown in parentheses.',
+    // Firearm / modern properties
+    af: 'Firearm ammunition. Bullets are destroyed upon use. Futuristic firearms use energy cells that may be rechargeable.',
+    bf: 'As an action, expend 10 ammo to spray a 10-ft cube within normal range. Each creature must succeed on a DC 15 Dexterity save or take the weapon\'s damage.',
+    rld: 'Limited shots before you must reload as an action or bonus action.',
+    // Homebrew / 3rd-party
+    haft: 'After attacking with this weapon, you can use a Bonus Action to make a melee attack with the haft, dealing 1d6 bludgeoning damage + ability modifier.',
+};
+
 window.renderWeaponsCard = function() {
     const card = document.getElementById('mobile-weapons-card');
     if (!card) return;
@@ -3067,17 +3125,28 @@ window.renderWeaponsCard = function() {
         // Parse mastery from notes (e.g. "Finesse, Light, Mastery: Vex")
         const masteryMatch = notes.match(/Mastery:\s*(\w+)/i);
         const masteryName = masteryMatch ? masteryMatch[1] : '';
-        const masteryDesc = masteryName ? MASTERY_DESCRIPTIONS[masteryName.toLowerCase()] : '';
+        const masteryDesc = masteryName ? (MASTERY_DESCRIPTIONS[masteryName.toLowerCase()] || (window.dndMasteryDescriptions || {})[masteryName.toLowerCase()] || '') : '';
 
-        // Notes without the "Mastery: X" part (avoid duplicate display)
+        // Parse weapon properties from notes
         const notesWithoutMastery = notes.replace(/,?\s*Mastery:\s*\w+/gi, '').trim().replace(/^,\s*/, '');
+        const _propLookup = p => WEAPON_PROPERTY_DESCRIPTIONS[p] || (window.dndPropertyDescriptions || {})[p] || '';
+        const propertyNames = notesWithoutMastery.split(/,\s*/).map(p => p.trim().toLowerCase()).filter(Boolean);
+        const matchedProperties = propertyNames.filter(p => _propLookup(p));
+        const unmatchedNotes = notesWithoutMastery.split(/,\s*/).filter(p => !_propLookup(p.trim().toLowerCase())).join(', ').trim();
 
         const detailParts = [];
-        if (notesWithoutMastery) detailParts.push(`<span class="wcard-notes">${notesWithoutMastery}</span>`);
+        if (unmatchedNotes) detailParts.push(`<span class="wcard-notes">${unmatchedNotes}</span>`);
         if (dcStr) detailParts.push(`<span class="wcard-notes">${dcStr}</span>`);
         const hasMastery = !!(masteryName && masteryDesc);
-        const hasDetail = detailParts.length > 0 || hasMastery;
+        const hasProperties = matchedProperties.length > 0;
+        const hasDetail = detailParts.length > 0 || hasMastery || hasProperties;
         const expandId = `wcard-detail-${i}`;
+
+        const propsHtml = hasProperties ? matchedProperties.map(p => `
+            <div class="wcard-prop-block">
+                <span class="wcard-prop-name">${p.charAt(0).toUpperCase() + p.slice(1)}</span>
+                <span class="wcard-prop-desc">${_propLookup(p)}</span>
+            </div>`).join('') : '';
 
         const masteryHtml = hasMastery ? `
             <div class="wcard-mastery-block">
@@ -3093,7 +3162,7 @@ window.renderWeaponsCard = function() {
                 <span class="weapon-card-dmg">${dmg}</span>
                 ${hasDetail ? `<span class="wcard-chevron">▾</span>` : '<span style="width:12px;flex-shrink:0;"></span>'}
             </div>
-            ${hasDetail ? `<div class="weapon-card-detail" id="${expandId}">${detailParts.join(' · ')}${masteryHtml}</div>` : ''}
+            ${hasDetail ? `<div class="weapon-card-detail" id="${expandId}">${detailParts.join(' · ')}${propsHtml}${masteryHtml}</div>` : ''}
         </div>`;
     }).join('');
 
@@ -3904,6 +3973,8 @@ window._applyLongRest = function() {
     if (window.updateHpBar) window.updateHpBar();
     spellSlotsData.forEach(s => s.used = 0);
     renderSpellSlots();
+    if (window.refreshMobileSpellSlots) window.refreshMobileSpellSlots();
+    if (concentrationSpell) window.dropConcentration();
     resourcesData.forEach(r => r.used = 0);
     renderResources();
     if (document.getElementById('mobile-resources-card')) window.renderMobileResources();
@@ -4403,15 +4474,16 @@ window.applyMoneyChange = function (multiplier) {
 
 window.openXpTableModal = function () {
   const container = document.getElementById("xpTableContent");
-  if (!container.innerHTML.trim()) {
-    let html =
-      '<table class="currency-table"><thead><tr><th>Level</th><th>XP</th><th>Prof</th></tr></thead><tbody>';
-    xpTable.forEach((row) => {
-      html += `<tr><td>${row.lvl}</td><td>${row.xp.toLocaleString()}</td><td>+${row.prof}</td></tr>`;
-    });
-    html += "</tbody></table>";
-    container.innerHTML = html;
-  }
+  const currentLevel = parseInt(document.getElementById('level')?.value) || 1;
+  let html =
+    '<table class="currency-table"><thead><tr><th>Level</th><th>XP</th><th>To Next</th><th>Prof</th></tr></thead><tbody>';
+  xpTable.forEach((row, i) => {
+    const isCurrent = row.lvl === currentLevel;
+    const nextXp = i < xpTable.length - 1 ? (xpTable[i + 1].xp - row.xp).toLocaleString() : '—';
+    html += `<tr${isCurrent ? ' style="background:color-mix(in srgb, var(--gold) 25%, var(--parchment)); font-weight:700;"' : ''}><td>${row.lvl}</td><td>${row.xp.toLocaleString()}</td><td>${nextXp}</td><td>+${row.prof}</td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
   const modal = document.getElementById("xpTableModal");
   const modalContent = modal.querySelector('.info-modal-content');
   if (modalContent) {
@@ -4747,6 +4819,7 @@ window.saveCharacter = function () {
     ],
     spellSlotsData: spellSlotsData,
     hitDiceUsed: hitDiceUsed,
+    concentrationSpell: concentrationSpell,
     cantripsList: Array.from(
       document.querySelectorAll("#cantripList .spell-row"),
     ).map((row) => ({
@@ -6474,10 +6547,40 @@ window.mountInventoryView = function() {
         pouchSection.dataset.invMoved = 'ph-inv-pouch';
         document.getElementById('mobile-inv-pouch-slot').appendChild(pouchSection);
     }
+
+    // Add quantity steppers to inventory items
+    invView.querySelectorAll('.inventory-item').forEach(item => {
+        const qtyInput = item.querySelector('.qty-field');
+        if (!qtyInput || qtyInput.dataset.stepperAdded) return;
+        qtyInput.dataset.stepperAdded = '1';
+        const wrapper = document.createElement('div');
+        wrapper.className = 'inv-qty-stepper';
+        qtyInput.parentNode.insertBefore(wrapper, qtyInput);
+        const minusBtn = document.createElement('button');
+        minusBtn.className = 'inv-qty-btn';
+        minusBtn.textContent = '−';
+        minusBtn.onclick = () => { qtyInput.value = Math.max(0, (parseInt(qtyInput.value) || 0) - 1); qtyInput.dispatchEvent(new Event('input')); };
+        const plusBtn = document.createElement('button');
+        plusBtn.className = 'inv-qty-btn';
+        plusBtn.textContent = '+';
+        plusBtn.onclick = () => { qtyInput.value = (parseInt(qtyInput.value) || 0) + 1; qtyInput.dispatchEvent(new Event('input')); };
+        wrapper.appendChild(minusBtn);
+        wrapper.appendChild(qtyInput);
+        wrapper.appendChild(plusBtn);
+    });
 };
 
 window.unmountInventoryView = function() {
     document.getElementById('mobile-money-card')?.remove();
+    // Restore qty inputs from stepper wrappers
+    document.querySelectorAll('.inv-qty-stepper').forEach(wrapper => {
+        const qtyInput = wrapper.querySelector('.qty-field');
+        if (qtyInput) {
+            delete qtyInput.dataset.stepperAdded;
+            wrapper.parentNode.insertBefore(qtyInput, wrapper);
+        }
+        wrapper.remove();
+    });
     document.querySelectorAll('[data-inv-moved]').forEach(section => {
         const ph = document.getElementById(section.dataset.invMoved);
         if (ph) { ph.parentNode.insertBefore(section, ph); ph.remove(); }
@@ -6933,6 +7036,33 @@ window.unmountSummonsView = function() {
 };
 
 // ===== FEATURES VIEW (Mobile) =====
+window._applyFeatureMobileCollapse = function() {
+    const view = document.getElementById('view-features');
+    if (!view) return;
+    view.querySelectorAll('.feature-box').forEach(box => {
+        const header = box.querySelector('.feature-header');
+        const descContainer = box.querySelector('.feature-desc-container');
+        if (!header || !descContainer || header.dataset.mobileToggleAdded) return;
+
+        descContainer.dataset.mobileCollapsed = '1';
+        descContainer.style.display = 'none';
+
+        const chevron = document.createElement('button');
+        chevron.className = 'feat-mobile-chevron';
+        chevron.textContent = '▾';
+        chevron.dataset.mobileChevron = '1';
+        chevron.onclick = (e) => {
+            e.stopPropagation();
+            const collapsed = descContainer.dataset.mobileCollapsed === '1';
+            descContainer.dataset.mobileCollapsed = collapsed ? '0' : '1';
+            descContainer.style.display = collapsed ? '' : 'none';
+            chevron.textContent = collapsed ? '▴' : '▾';
+        };
+        header.insertBefore(chevron, header.querySelector('.delete-feature-btn'));
+        header.dataset.mobileToggleAdded = '1';
+    });
+};
+
 window.mountFeaturesView = function() {
     const view = document.getElementById('view-features');
     if (!view) return;
@@ -6940,9 +7070,25 @@ window.mountFeaturesView = function() {
     ['features-filter-row','class-features','race-features','background-features','feats'].forEach(id =>
         moveEl(document.getElementById(id))
     );
+    window._applyFeatureMobileCollapse();
 };
 
 window.unmountFeaturesView = function() {
+    // Remove chevrons and restore descriptions
+    document.querySelectorAll('[data-feat-moved]').forEach(section => {
+        section.querySelectorAll('.feature-box').forEach(box => {
+            const header = box.querySelector('.feature-header');
+            const descContainer = box.querySelector('.feature-desc-container');
+            if (header) {
+                header.querySelectorAll('[data-mobile-chevron]').forEach(c => c.remove());
+                delete header.dataset.mobileToggleAdded;
+            }
+            if (descContainer) {
+                descContainer.style.display = '';
+                delete descContainer.dataset.mobileCollapsed;
+            }
+        });
+    });
     document.querySelectorAll('[data-feat-moved]').forEach(el => {
         const ph = document.getElementById(el.dataset.featMoved);
         if (ph) { ph.parentNode.insertBefore(el, ph); ph.remove(); }
@@ -7070,7 +7216,8 @@ window.refreshMobileSpellView = function() {
                 spell.material ? '<span class="msv-tag">M</span>' : '',
             ].join('');
             const hasDesc = spell.description.trim().length > 0;
-            const spellIdx = window._msvSpells.push({ name: spell.name, desc: spell.description, row: spell._row }) - 1;
+            const spellIdx = window._msvSpells.push({ name: spell.name, desc: spell.description, row: spell._row, level: spell.level, concentration: spell.concentration }) - 1;
+            const isLeveled = spell.level > 0;
             html += `<div class="msv-spell-card">
                 <div class="msv-spell-card-main">
                     <div class="msv-drag-handle" ontouchstart="window.msvDragStart(event,${spellIdx})" onmousedown="window.msvDragStart(event,${spellIdx})">☰</div>
@@ -7083,6 +7230,7 @@ window.refreshMobileSpellView = function() {
                         ${rcmTags}
                         ${spell.time ? `<span class="msv-spell-meta">${spell.time}</span>` : ''}
                         ${spell.range ? `<span class="msv-spell-meta">${spell.range}</span>` : ''}
+                        ${isLeveled ? `<button class="msv-cast-btn" onclick="window.openCastModal(${spellIdx})">Cast</button>` : ''}
                         ${hasDesc ? `<button class="msv-info-btn" onclick="window.showMsvSpellInfo(${spellIdx})">?</button>` : ''}
                     </div>
                 </div>
@@ -7101,6 +7249,67 @@ window.showMsvSpellInfo = function(idx) {
         ? s.desc.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>')
         : 'No description available.';
     document.getElementById('infoModal').style.display = 'flex';
+};
+
+window.openCastModal = function(idx) {
+    const s = window._msvSpells?.[idx];
+    if (!s || s.level < 1) return;
+
+    const lvlLabels = ['','1st','2nd','3rd','4th','5th','6th','7th','8th','9th'];
+
+    // Build level options: from spell's level up to max available slot level
+    let btnsHtml = '';
+    spellSlotsData.forEach((slot, slotIdx) => {
+        if (slot.level < s.level) return;
+        const available = slot.total - slot.used;
+        const disabled = available <= 0;
+        const label = lvlLabels[slot.level] || `${slot.level}th`;
+        btnsHtml += `<button class="cast-level-btn${disabled ? ' cast-level-disabled' : ''}"
+            ${disabled ? 'disabled' : `onclick="window.castSpellAtLevel(${idx}, ${slotIdx})"`}>
+            <span class="cast-level-label">${label} Level</span>
+            <span class="cast-level-slots">${available} / ${slot.total} slots</span>
+        </button>`;
+    });
+
+    if (!btnsHtml) btnsHtml = '<div style="text-align:center;color:var(--ink-light);padding:12px;font-style:italic;">No spell slots available.</div>';
+
+    let modal = document.getElementById('castSpellModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'castSpellModal';
+        modal.className = 'info-modal-overlay';
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+        <div class="info-modal-content" style="max-width:320px;">
+            <button class="info-modal-close" onclick="document.getElementById('castSpellModal').style.display='none'">×</button>
+            <h3 class="info-modal-title">Cast ${s.name}</h3>
+            ${s.concentration ? '<div class="cast-conc-note">◉ Concentration</div>' : ''}
+            <div class="cast-level-grid">${btnsHtml}</div>
+        </div>`;
+    modal.style.display = 'flex';
+};
+
+window.castSpellAtLevel = function(spellIdx, slotIdx) {
+    const s = window._msvSpells?.[spellIdx];
+    const slot = spellSlotsData[slotIdx];
+    if (!s || !slot || slot.used >= slot.total) return;
+
+    // Expend slot
+    slot.used++;
+    renderSpellSlots();
+    window.refreshMobileSpellSlots();
+
+    // Handle concentration
+    if (s.concentration) {
+        window.setConcentration(s.name);
+    }
+
+    saveCharacter();
+
+    // Close modal
+    const modal = document.getElementById('castSpellModal');
+    if (modal) modal.style.display = 'none';
 };
 
 window.msvDragStart = function(e, idx) {
@@ -7717,6 +7926,30 @@ window.syncMobileHeaderToReal = function() {
         if (sCb) sCb.checked = document.getElementById(`deathSuccess${i}`)?.classList.contains('checked') || false;
         if (fCb) fCb.checked = document.getElementById(`deathFailure${i}`)?.classList.contains('checked') || false;
     });
+    window.updateConcentrationBanner();
+};
+
+window.setConcentration = function(spellName) {
+    concentrationSpell = spellName || '';
+    window.updateConcentrationBanner();
+    saveCharacter();
+};
+
+window.dropConcentration = function() {
+    concentrationSpell = '';
+    window.updateConcentrationBanner();
+    saveCharacter();
+};
+
+window.updateConcentrationBanner = function() {
+    const banner = document.getElementById('mh-concentration-banner');
+    if (!banner) return;
+    if (concentrationSpell) {
+        document.getElementById('mh-conc-name').textContent = concentrationSpell;
+        banner.style.display = 'flex';
+    } else {
+        banner.style.display = 'none';
+    }
 };
 
 window.initMobileHeader = function() {
@@ -7772,6 +8005,12 @@ window.initMobileHeader = function() {
         <div style="display:flex; gap:6px; margin-top:6px;">
             <button class="rest-btn rest-btn-sr" style="flex:1; padding:6px 4px;" onclick="window.doShortRest()">Short Rest</button>
             <button class="rest-btn rest-btn-lr" style="flex:1; padding:6px 4px;" onclick="window.doLongRest()">Long Rest</button>
+        </div>
+        <div id="mh-concentration-banner" class="mh-conc-banner" style="display:none;" onclick="window.dropConcentration()">
+            <span class="mh-conc-icon">◉</span>
+            <span class="mh-conc-label">Concentrating:</span>
+            <span id="mh-conc-name" class="mh-conc-name"></span>
+            <span class="mh-conc-drop">✕</span>
         </div>
     `;
     sheet.prepend(mh);
@@ -7916,8 +8155,11 @@ window.openMobileMoreModal = function() {
                     <input type="text" id="mh-modal-align" style="font-weight:bold; color: var(--red-dark); cursor: pointer;" readonly>
                 </div>
                 <div class="field" style="margin-bottom: 15px; text-align: left;">
-                    <span class="field-label">Experience</span>
-                    <div style="display:flex; gap:8px; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span class="field-label" style="margin:0;">Experience</span>
+                        <button class="msv-info-btn" onclick="if(window.openXpTableModal) window.openXpTableModal();" title="XP Table" style="width:18px;height:18px;font-size:0.65rem;">?</button>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center; margin-top:4px;">
                         <input type="number" id="mh-modal-exp" style="font-weight:bold; color: var(--ink); flex:1; text-align:left;">
                         <button class="btn btn-secondary" onclick="const btn = document.getElementById('addExpBtn'); if(btn) btn.click(); document.getElementById('mhMoreModal').style.display='none';" style="padding: 4px 12px; font-size: 0.85rem;">+ XP</button>
                     </div>
@@ -8349,6 +8591,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (data.resourcesData) resourcesData = data.resourcesData;
       if (data.summonsData) summonsData = data.summonsData;
       if (data.hitDiceUsed !== undefined) hitDiceUsed = data.hitDiceUsed;
+      if (data.concentrationSpell !== undefined) concentrationSpell = data.concentrationSpell;
       
       document.getElementById("cantripList").innerHTML = "";
       (data.cantripsList || []).forEach((s) => {
