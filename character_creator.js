@@ -7643,42 +7643,43 @@ document.addEventListener('DOMContentLoaded', () => {
         // ── Build class resources ────────────────────────────────────────────
         // formulaKey maps to RESOURCE_FORMULA_OPTS keys in script.js so the settings popup shows correct scaling
         const CREATOR_RESOURCE_DEFS = {
+            // Rages: [2,2,3,3,3,4,4,4,4,4,4,5,5,5,5,5,6,6,6,6] (XPHB)
             'Barbarian': [
-                { name: 'Rages', colLabel: /^Rages$/i, formula: (lvl) => lvl >= 20 ? 99 : lvl >= 17 ? 6 : lvl >= 12 ? 5 : lvl >= 6 ? 4 : lvl >= 3 ? 3 : 2, formulaKey: 'fixed', reset: 'lr' }
+                { name: 'Rages', colLabel: /^Rages$/i, formula: (lvl) => lvl >= 17 ? 6 : lvl >= 12 ? 5 : lvl >= 6 ? 4 : lvl >= 3 ? 3 : 2, formulaKey: 'rages', reset: 'lr' }
             ],
+            // Bardic Inspiration uses = Proficiency Bonus (XPHB); restore on short rest at 5+ via Font of Inspiration
             'Bard': [
-                { name: 'Bardic Inspiration', formula: (_lvl, chaMod) => Math.max(1, chaMod), formulaKey: 'cha_mod', levelMin: 1, reset: 'lr' }
+                { name: 'Bardic Inspiration', formula: (_lvl, _cha, pb) => pb, formulaKey: 'pb', levelMin: 1, reset: 'lr' }
             ],
+            // Channel Divinity: [—,2,2,2,2,3,3,3,…,4,4,4] (XPHB: 2 uses at lvl2, 3 at lvl6, 4 at lvl18)
             'Cleric': [
-                { name: 'Channel Divinity', formula: (lvl) => lvl >= 18 ? 3 : lvl >= 6 ? 2 : 1, formulaKey: 'fixed', levelMin: 2, reset: 'sr' }
+                { name: 'Channel Divinity', formula: (lvl) => lvl >= 18 ? 4 : lvl >= 6 ? 3 : 2, formulaKey: 'channel_div_c', levelMin: 2, reset: 'sr' }
             ],
+            // Wild Shape: [—,2,2,2,2,3,3,…,4,4,4,4] (XPHB: 2 at lvl2, 3 at lvl6, 4 at lvl17)
             'Druid': [
-                { name: 'Wild Shape', formula: () => 2, formulaKey: 'fixed', levelMin: 2, reset: 'sr' }
+                { name: 'Wild Shape', formula: (lvl) => lvl >= 17 ? 4 : lvl >= 6 ? 3 : 2, formulaKey: 'wild_shape', levelMin: 2, reset: 'sr' }
             ],
+            // Second Wind: [2,2,2,3,3,…,4,…] (XPHB: starts at 2, 3 at lvl4, 4 at lvl10)
             'Fighter': [
-                { name: 'Second Wind', formula: () => 1, formulaKey: 'fixed', levelMin: 1, reset: 'sr' },
-                { name: 'Action Surge', formula: (lvl) => lvl >= 17 ? 2 : 1, formulaKey: 'fixed', levelMin: 2, reset: 'sr' },
-                { name: 'Indomitable', formula: (lvl) => lvl >= 17 ? 3 : lvl >= 13 ? 2 : 1, formulaKey: 'fixed', levelMin: 9, reset: 'lr' }
+                { name: 'Second Wind', formula: (lvl) => lvl >= 10 ? 4 : lvl >= 4 ? 3 : 2, formulaKey: 'second_wind', levelMin: 1, reset: 'sr' },
+                { name: 'Action Surge', formula: (lvl) => lvl >= 17 ? 2 : 1, formulaKey: 'action_surge', levelMin: 2, reset: 'sr' },
+                { name: 'Indomitable', formula: (lvl) => lvl >= 17 ? 3 : lvl >= 13 ? 2 : 1, formulaKey: 'indomitable', levelMin: 9, reset: 'lr' }
             ],
+            // Focus Points (XPHB) / Discipline Points (2024 PHB) / Ki Points (old PHB): = monk level starting at 2
             'Monk': [
-                { name: 'Discipline Points', colLabel: /^Discipline Points$/i, formula: (lvl) => lvl, formulaKey: 'level', levelMin: 1, reset: 'sr' },
-                { name: 'Ki Points', colLabel: /^Ki Points$/i, formula: (lvl) => lvl, formulaKey: 'level', levelMin: 2, reset: 'sr' }
+                { name: 'Focus Points', colLabel: /^(Focus|Discipline|Ki) Points?$/i, formula: (lvl) => lvl, formulaKey: 'level', levelMin: 2, reset: 'sr' }
             ],
+            // Channel Divinity: [—,—,2,2,…,3,3,…] (XPHB: 2 at lvl3, 3 at lvl11)
             'Paladin': [
                 { name: 'Lay on Hands', formula: (lvl) => lvl * 5, formulaKey: 'level_x5', levelMin: 1, reset: 'lr' },
-                { name: 'Channel Divinity', formula: () => 1, formulaKey: 'fixed', levelMin: 3, reset: 'sr' }
+                { name: 'Channel Divinity', formula: (lvl) => lvl >= 11 ? 3 : 2, formulaKey: 'channel_div_p', levelMin: 3, reset: 'sr' }
             ],
-            'Ranger': [
-                { name: "Hunter's Mark", formula: () => 1, formulaKey: 'fixed', levelMin: 1, reset: 'lr' }
-            ],
-            'Rogue': [
-                { name: 'Cunning Strike', formula: () => 1, formulaKey: 'fixed', levelMin: 5, reset: 'sr' }
-            ],
+            // Sorcery Points: = sorcerer level, starting at level 2
             'Sorcerer': [
                 { name: 'Sorcery Points', colLabel: /^Sorcery Points$/i, formula: (lvl) => lvl, formulaKey: 'level', levelMin: 2, reset: 'lr' }
             ],
             'Warlock': [
-                { name: 'Mystic Arcanum', formula: (lvl) => Math.max(0, Math.min(4, Math.floor((lvl - 9) / 2) + 1)), formulaKey: 'fixed', levelMin: 11, reset: 'lr' }
+                { name: 'Mystic Arcanum', formula: (lvl) => Math.max(0, Math.min(4, Math.floor((lvl - 9) / 2) + 1)), formulaKey: 'mystic_arcanum', levelMin: 11, reset: 'lr' }
             ],
             'Wizard': [
                 { name: 'Arcane Recovery', formula: () => 1, formulaKey: 'fixed', levelMin: 1, reset: 'lr' }
@@ -7704,12 +7705,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return null;
         };
 
+        const _pb = selectedLevel >= 17 ? 6 : selectedLevel >= 13 ? 5 : selectedLevel >= 9 ? 4 : selectedLevel >= 5 ? 3 : 2;
         const resourcesData = [];
         const _resDefs = CREATOR_RESOURCE_DEFS[selectedClass] || [];
         for (const def of _resDefs) {
             if (def.levelMin && selectedLevel < def.levelMin) continue;
             let maxVal = def.colLabel ? _getColVal(def.colLabel) : null;
-            if (maxVal === null && def.formula) maxVal = def.formula(selectedLevel, _chaMod);
+            if (maxVal === null && def.formula) maxVal = def.formula(selectedLevel, _chaMod, _pb);
             if (!maxVal || maxVal <= 0) continue;
             resourcesData.push({ name: def.name, max: maxVal, used: 0, reset: def.reset, auto: false, ...(def.formulaKey ? { formulaKey: def.formulaKey } : {}) });
         }

@@ -216,24 +216,35 @@ const CLASS_RESOURCE_DEFS = {
 
 // Formula options for custom resource max and weapon stats
 const RESOURCE_FORMULA_OPTS = [
+    // General
     { key: 'fixed',         label: 'Fixed number' },
-    { key: 'pb',            label: 'Proficiency Bonus',    compute: () => getPB() },
-    { key: 'pb_x2',         label: 'Prof. Bonus × 2',      compute: () => getPB() * 2 },
-    { key: 'level',         label: 'Level',                compute: () => getLevel() },
-    { key: 'half_level',    label: 'Half Level',           compute: () => Math.max(1, Math.floor(getLevel() / 2)) },
-    { key: 'level_x5',      label: 'Level × 5',            compute: () => getLevel() * 5 },
-    { key: 'str_mod',    label: 'STR modifier',         compute: () => Math.max(1, getAbilityMod('str')) },
-    { key: 'dex_mod',    label: 'DEX modifier',         compute: () => Math.max(1, getAbilityMod('dex')) },
-    { key: 'con_mod',    label: 'CON modifier',         compute: () => Math.max(1, getAbilityMod('con')) },
-    { key: 'int_mod',    label: 'INT modifier',         compute: () => Math.max(1, getAbilityMod('int')) },
-    { key: 'wis_mod',    label: 'WIS modifier',         compute: () => Math.max(1, getAbilityMod('wis')) },
-    { key: 'cha_mod',    label: 'CHA modifier',         compute: () => Math.max(1, getAbilityMod('cha')) },
-    { key: 'str_mod_pb', label: 'STR mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('str') + getPB()) },
-    { key: 'dex_mod_pb', label: 'DEX mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('dex') + getPB()) },
-    { key: 'con_mod_pb', label: 'CON mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('con') + getPB()) },
-    { key: 'int_mod_pb', label: 'INT mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('int') + getPB()) },
-    { key: 'wis_mod_pb', label: 'WIS mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('wis') + getPB()) },
-    { key: 'cha_mod_pb', label: 'CHA mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('cha') + getPB()) },
+    { key: 'pb',            label: 'Proficiency Bonus',     compute: () => getPB() },
+    { key: 'pb_x2',         label: 'Prof. Bonus × 2',       compute: () => getPB() * 2 },
+    { key: 'level',         label: 'Level',                 compute: () => getLevel() },
+    { key: 'half_level',    label: 'Half Level',            compute: () => Math.max(1, Math.floor(getLevel() / 2)) },
+    { key: 'level_x5',      label: 'Level × 5',             compute: () => getLevel() * 5 },
+    // Ability modifiers
+    { key: 'str_mod',       label: 'STR modifier',          compute: () => Math.max(1, getAbilityMod('str')) },
+    { key: 'dex_mod',       label: 'DEX modifier',          compute: () => Math.max(1, getAbilityMod('dex')) },
+    { key: 'con_mod',       label: 'CON modifier',          compute: () => Math.max(1, getAbilityMod('con')) },
+    { key: 'int_mod',       label: 'INT modifier',          compute: () => Math.max(1, getAbilityMod('int')) },
+    { key: 'wis_mod',       label: 'WIS modifier',          compute: () => Math.max(1, getAbilityMod('wis')) },
+    { key: 'cha_mod',       label: 'CHA modifier',          compute: () => Math.max(1, getAbilityMod('cha')) },
+    { key: 'str_mod_pb',    label: 'STR mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('str') + getPB()) },
+    { key: 'dex_mod_pb',    label: 'DEX mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('dex') + getPB()) },
+    { key: 'con_mod_pb',    label: 'CON mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('con') + getPB()) },
+    { key: 'int_mod_pb',    label: 'INT mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('int') + getPB()) },
+    { key: 'wis_mod_pb',    label: 'WIS mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('wis') + getPB()) },
+    { key: 'cha_mod_pb',    label: 'CHA mod + Prof. Bonus', compute: () => Math.max(1, getAbilityMod('cha') + getPB()) },
+    // Class resources (stepped by level tier, auto-recompute on level change)
+    { key: 'rages',         label: 'Rages (Barbarian)',           group: 'class', compute: () => { const l = getLevel(); return l >= 17 ? 6 : l >= 12 ? 5 : l >= 6 ? 4 : l >= 3 ? 3 : 2; } },
+    { key: 'channel_div_c', label: 'Channel Divinity (Cleric)',   group: 'class', compute: () => { const l = getLevel(); return l >= 18 ? 4 : l >= 6 ? 3 : 2; } },
+    { key: 'wild_shape',    label: 'Wild Shape (Druid)',          group: 'class', compute: () => { const l = getLevel(); return l >= 17 ? 4 : l >= 6 ? 3 : 2; } },
+    { key: 'second_wind',   label: 'Second Wind (Fighter)',       group: 'class', compute: () => { const l = getLevel(); return l >= 10 ? 4 : l >= 4 ? 3 : 2; } },
+    { key: 'action_surge',  label: 'Action Surge (Fighter)',      group: 'class', compute: () => getLevel() >= 17 ? 2 : 1 },
+    { key: 'indomitable',   label: 'Indomitable (Fighter)',       group: 'class', compute: () => { const l = getLevel(); return l >= 17 ? 3 : l >= 13 ? 2 : 1; } },
+    { key: 'channel_div_p', label: 'Channel Divinity (Paladin)',  group: 'class', compute: () => getLevel() >= 11 ? 3 : 2 },
+    { key: 'mystic_arcanum',label: 'Mystic Arcanum (Warlock)',    group: 'class', compute: () => { const l = getLevel(); return Math.max(0, Math.min(4, Math.floor((l - 9) / 2) + 1)); } },
 ];
 
 const ABILITY_OPTS = [
@@ -1529,6 +1540,7 @@ async function checkDataUploadStatus() {
       const btnCustomData = document.getElementById("btn-custom-data-manager");
       const btnDataBrowser = document.getElementById("btn-data-browser");
       const hasData = req.result && req.result.length > 0;
+      window._5eDataLoaded = !!hasData;
 
       // Inject Feat Search Button if missing
       let btnFeats = document.getElementById("btn-search-feats-zip");
@@ -4072,9 +4084,15 @@ window.openResourceSettingsModal = function(index) {
     if (!res) return;
     const currentKey = res.formulaKey || 'fixed';
     const currentFixed = res.fixedMax ?? res.max;
-    const optHtml = RESOURCE_FORMULA_OPTS.map(o =>
-        `<option value="${o.key}" ${currentKey === o.key ? 'selected' : ''}>${o.label}</option>`
-    ).join('');
+    const _mkOpt = o => `<option value="${o.key}" ${currentKey === o.key ? 'selected' : ''}>${o.label}</option>`;
+    const _generalOpts = RESOURCE_FORMULA_OPTS.filter(o => !o.group);
+    const _classOpts   = RESOURCE_FORMULA_OPTS.filter(o => o.group === 'class');
+    // Only show Class Resources group when 5e data is loaded; always show current key if it's a class formula
+    const _showClassGroup = !!window._5eDataLoaded;
+    const optHtml = _generalOpts.map(_mkOpt).join('') +
+        (_showClassGroup
+            ? `<optgroup label="─── Class Resources ───">${_classOpts.map(_mkOpt).join('')}</optgroup>`
+            : (_classOpts.some(o => o.key === currentKey) ? _classOpts.filter(o => o.key === currentKey).map(_mkOpt).join('') : ''));
     const preview = window.computeResourceMax(res);
 
     let modal = document.getElementById('resFormulaModal');
