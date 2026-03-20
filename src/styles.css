@@ -917,7 +917,7 @@ body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) {
 @media (min-width: 1200px) {
   .character-sheet:not(.creator-mode):not(.dm-mode) {
     display: block;
-    column-count: 2;
+    column-count: 1;
     column-gap: 40px;
     padding-left: 20px;
   }
@@ -1178,13 +1178,12 @@ body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) {
 /* =========================================
    11. MODALS
    ========================================= */
-.info-modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 2000; justify-content: center; align-items: center; animation: fadeIn 0.2s ease-out; }
+.info-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 2000; display: flex; justify-content: center; align-items: center; animation: fadeIn 0.2s ease-out; }
 .info-modal-content { background: var(--parchment); padding: 24px; border-radius: 8px; border: 2px solid var(--gold); box-shadow: 0 4px 20px black; width: 90%; max-width: 400px; position: relative; max-height: 90vh; overflow-y: auto; }
 .info-modal-title { font-family: "Cinzel", serif; color: var(--red); font-size: 1.2rem; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--gold); }
 .info-modal-close { position: absolute; top: 8px; right: 10px; background: none; border: none; font-size: 1.5rem; color: var(--ink-light); cursor: pointer; line-height: 1; padding: 2px 4px; }
 .info-modal-close:hover { color: var(--red); }
 .info-modal-text { font-size: 1rem; line-height: 1.6; color: var(--ink); }
-.close-modal-btn { position: absolute; top: 10px; right: 15px; background: none; border: none; font-size: 1.5rem; color: var(--ink-light); cursor: pointer; }
 
 /* Ensure modals opened from Level Up appear on top */
 #spellSearchModal,
@@ -3970,4 +3969,131 @@ body.swap-scores.dense-mode .stat-modifier input {
     font-size: 0.82rem;
     color: var(--ink);
     line-height: 1.35;
+}
+/* =========================================
+   React App Additional Styles
+   ========================================= */
+
+/* DM Screen / header nav buttons */
+.dm-screen-button {
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  color: var(--ink-light);
+  text-decoration: none;
+  padding: 5px 10px;
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  background: var(--parchment-dark);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.dm-screen-button:hover {
+  background: var(--gold);
+  color: var(--ink);
+}
+/* Header nav group */
+.header-nav-group {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 60%;
+}
+@media (max-width: 600px) {
+  .header-nav-group { position: static; transform: none; margin-top: 6px; max-width: 100%; justify-content: center; }
+}
+
+/* Mobile app view styles */
+.app-view-content {  }
+#app-views-container .app-view { background: var(--parchment); }
+/* HP Manage concentration banner */
+.mh-conc-banner { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 6px 10px; background: rgba(139,0,0,0.08); border: 1px solid var(--red); border-radius: 4px; cursor: pointer; }
+.mh-conc-icon { color: var(--red); font-size: 1rem; }
+.mh-conc-label { font-family: 'Cinzel', serif; font-size: 0.75rem; color: var(--red-dark); font-weight: 700; }
+.mh-conc-name { flex: 1; font-style: italic; color: var(--ink); font-size: 0.85rem; }
+.mh-conc-drop { color: var(--red); font-weight: 700; }
+
+/* Prof tag for weapon proficiency display */
+.prof-tag {
+  display: inline-block;
+  background: var(--parchment-dark);
+  border: 1px solid var(--gold-dark);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 0.8rem;
+  margin: 2px;
+  font-family: 'Crimson Text', serif;
+}
+
+/* Skill item proficiency states */
+.skill-checkbox { width: 16px; height: 16px; border: 2px solid var(--gold-dark); border-radius: 2px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.skill-checkbox .checkmark { display: none; font-size: 0.7rem; color: var(--ink); }
+.skill-checkbox.checked { background: var(--gold); }
+.skill-checkbox.checked .checkmark { display: block; }
+.skill-checkbox.expertise { background: var(--red); border-color: var(--red-dark); }
+.skill-checkbox.expertise .checkmark { display: block; color: white; }
+
+/* HP bar fill elements */
+.hp-fill-current { position: absolute; top: 0; left: 0; height: 100%; background: var(--red); transition: width 0.3s; border-radius: 4px 0 0 4px; }
+.hp-fill-temp { position: absolute; top: 0; height: 100%; background: #4a9eff; opacity: 0.7; transition: width 0.3s, left 0.3s; }
+
+/* Death save check filled state */
+.death-save-check.filled { background: var(--gold); }
+.death-save-check.failure { background: var(--red); }
+
+/* Tab active state for tab-content */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Styled select */
+.styled-select {
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: 'Crimson Text', serif;
+  font-size: 0.9rem;
+  background: var(--parchment);
+  color: var(--ink);
+  outline: none;
+}
+
+/* Score modal */
+.score-modal-tabs { display: flex; border-bottom: 2px solid var(--gold); margin-bottom: 16px; }
+.score-tab { padding: 8px 16px; cursor: pointer; font-family: 'Cinzel', serif; font-size: 0.85rem; color: var(--ink-light); border-bottom: 2px solid transparent; margin-bottom: -2px; }
+.score-tab.active { color: var(--red-dark); border-bottom-color: var(--red); font-weight: 700; }
+.score-method-container { display: none; }
+.score-method-container.active { display: block; }
+.sa-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+.sa-item { display: flex; flex-direction: column; gap: 4px; }
+.sa-select { border: 1px solid var(--gold); border-radius: 4px; padding: 6px; font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 700; text-align: center; background: white; }
+.point-buy-header { text-align: center; font-family: 'Cinzel', serif; font-size: 1rem; margin-bottom: 16px; color: var(--ink); }
+
+/* Alignment grid */
+.alignment-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 16px; }
+.alignment-option { padding: 10px; border: 1px solid var(--gold); border-radius: 4px; cursor: pointer; font-family: 'Cinzel', serif; font-size: 0.8rem; text-align: center; background: white; transition: all 0.2s; }
+.alignment-option:hover { background: var(--gold); }
+
+/* Close modal button */
+.close-modal-btn { position: absolute; top: 12px; right: 12px; background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--ink-light); padding: 0; line-height: 1; width: auto; min-height: unset; }
+.close-modal-btn:hover { color: var(--red); }
+
+/* Resource badge colors */
+.res-badge { display: inline-block; border-radius: 3px; padding: 1px 5px; font-family: 'Cinzel', serif; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.res-badge-sr { background: #d5e8d4; color: #2d6a4f; border: 1px solid #2d6a4f; }
+.res-badge-lr { background: #dae8fc; color: #1f3a93; border: 1px solid #1f3a93; }
+.res-badge-both { background: #e1d5e7; color: #4a148c; border: 1px solid #4a148c; }
+
+/* Feature box */
+.feature-box { background: white; border: 1px solid var(--gold); border-radius: 6px; padding: 12px; }
+.feature-title { font-family: 'Cinzel', serif; font-size: 0.9rem; font-weight: 700; color: var(--red-dark); display: block; width: 100%; border: none; background: transparent; outline: none; padding: 0; margin-bottom: 4px; min-height: unset; }
+.feature-desc { font-family: 'Crimson Text', serif; font-size: 0.95rem; width: 100%; border: none; background: transparent; outline: none; padding: 0; resize: vertical; color: var(--ink); min-height: 40px; }
+
+/* DM screen responsive */
+@media (max-width: 768px) {
+  .session-content > div { grid-template-columns: 1fr !important; }
 }
