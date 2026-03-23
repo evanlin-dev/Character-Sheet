@@ -10,6 +10,7 @@ import NPCPage from 'src/pages/NPCPage';
 import RoomsPage from 'src/pages/RoomsPage';
 import RoomViewPage from 'src/pages/RoomViewPage';
 import CompendiumPage from 'src/pages/CompendiumPage';
+import DataTutorialPage from 'src/pages/DataTutorialPage';
 import 'src/styles.css';
 import 'src/tailwind.css';
 
@@ -29,6 +30,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/npcs" element={<NPCPage />} />
           <Route path="/compendium" element={<CompendiumPage />} />
+          <Route path="/data-tutorial" element={<DataTutorialPage />} />
           <Route path="/rooms" element={<RoomsPage />} />
           <Route path="/rooms/:roomId" element={<RoomViewPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
