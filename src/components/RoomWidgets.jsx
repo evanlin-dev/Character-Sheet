@@ -362,7 +362,7 @@ export function SharedLootPanel({ sharedPiles, isDM, handleGrabItem, toggleItemE
               </ul>
             </div>
           ))}
-        </CardBody>
+        </CardBody> 
       )}
     </Card>
   );
