@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useCharacter } from "src/context/CharacterContext";
-import { openDB, STORE_NAME } from "src/utils/db";
+import { checkDataLoaded, openDB, STORE_NAME } from "src/utils/db";
 import { processEntries, cleanText } from "src/utils/dndEntries";
 import { ModalOverlay, ModalBox, ModalTitle, CloseBtn } from "src/styles/shared";
 import RichTextModal from "src/components/RichTextModal";
@@ -743,6 +743,11 @@ export default function SummonsTab({ initiativeList = [], socket = null, roomId 
   const summons = character.summonsData || [];
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
+
+  useEffect(() => {
+    checkDataLoaded().then(setDataLoaded);
+  }, []);
 
   const updateSummon = (index, newSummon) => {
     update({
@@ -886,9 +891,11 @@ export default function SummonsTab({ initiativeList = [], socket = null, roomId 
         <button className="add-feature-btn" style={{ flex: 1 }} onClick={addSummon}>
           + Add Blank
         </button>
-        <button className="add-feature-btn" style={{ flex: 1 }} onClick={() => setIsModalOpen(true)}>
-          🔍 Search Creatures
-        </button>
+        {dataLoaded && (
+          <button className="add-feature-btn" style={{ flex: 1 }} onClick={() => setIsModalOpen(true)}>
+            🔍 Search Creatures
+          </button>
+        )}
       </div>
 
       {isModalOpen && (
