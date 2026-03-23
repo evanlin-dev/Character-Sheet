@@ -4,6 +4,7 @@ import { calcMod, formatMod } from '../utils/calculations';
 import { conditionsDB, conditionIcons } from '../data/constants';
 import { openDB, STORE_NAME } from '../utils/db';
 import { processEntries, cleanText } from '../utils/dndEntries';
+import { getGlobalSourcePriority } from '../utils/formatHelpers';
 
 export default function CombatStats() {
   const { character, update, openModal } = useCharacter();
@@ -139,14 +140,108 @@ export default function CombatStats() {
       </div>
 
       <div className="field">
-        <label className="field-label">Defenses</label>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <label className="field-label" style={{ marginBottom: 0 }}>Defenses</label>
+          <button className="btn" style={{ padding: '2px 10px', fontSize: '0.7rem', minHeight: 0, height: 'auto' }} onClick={() => openModal('defenses')}>Manage</button>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[['resistances','Resistances','e.g. Fire, Poison...'], ['immunities','Immunities','e.g. Charmed, Frightened...'], ['vulnerabilities','Vulnerabilities','e.g. Cold...']].map(([field, label, ph]) => (
-            <div key={field}>
-              <div className="field-label" style={{ fontSize: '0.7rem', marginBottom: 2 }}>{label}</div>
-              <textarea value={character[field] || ''} onChange={(e) => update({ [field]: e.target.value })} placeholder={ph} style={{ minHeight: 44 }} />
+          {[['resistances','Resistances'], ['immunities','Immunities'], ['vulnerabilities','Vulnerabilities']].map(([field, label]) => {
+            const items = (character[field] || '').split(',').map(s => s.trim()).filter(Boolean);
+            return (
+              <div key={field}>
+                <div className="field-label" style={{ fontSize: '0.7rem', marginBottom: 2 }}>{label}</div>
+                <div className="tag-display" onClick={() => openModal('defenses')} style={{ minHeight: 44, padding: '6px 8px', cursor: 'pointer' }}>
+                  {items.length > 0 ? items.map(item => (
+                    <span key={item} className="tag-item" style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: 12, background: 'var(--parchment-dark)', border: '1px solid var(--gold-dark)', display: 'inline-flex', alignItems: 'center', height: 'fit-content' }}>{item}</span>
+                  )) : <span style={{ color: 'var(--ink-light)', fontStyle: 'italic', fontSize: '0.9rem' }}>None</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function DefensesModal() {
+  const { modals, closeModal, character, update } = useCharacter();
+  const [activeTab, setActiveTab] = useState('resistances');
+  const [customInput, setCustomInput] = useState('');
+
+  if (!modals.defenses) return null;
+
+  const elementalDamage = ["Acid", "Cold", "Fire", "Force", "Lightning", "Necrotic", "Poison", "Psychic", "Radiant", "Thunder"];
+  const weaponDamage = ["Bludgeoning", "Piercing", "Slashing"];
+  const conditions = ["Blinded", "Charmed", "Deafened", "Exhaustion", "Frightened", "Grappled", "Incapacitated", "Invisible", "Paralyzed", "Petrified", "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious"];
+
+  const currentList = (character[activeTab] || '').split(',').map(s => s.trim()).filter(Boolean);
+  const customItems = currentList.filter(item => !elementalDamage.includes(item) && !weaponDamage.includes(item) && !conditions.includes(item));
+
+  const toggle = (item) => {
+    if (currentList.includes(item)) {
+      update({ [activeTab]: currentList.filter(p => p !== item).join(', ') });
+    } else {
+      update({ [activeTab]: [...currentList, item].join(', ') });
+    }
+  };
+
+  const handleAddCustom = () => {
+    const val = customInput.trim();
+    if (val && !currentList.includes(val)) {
+      update({ [activeTab]: [...currentList, val].join(', ') });
+    }
+    setCustomInput('');
+  };
+
+  return (
+    <div className="info-modal-overlay" style={{ display: 'flex', zIndex: 1200 }} onClick={(e) => { if (e.target === e.currentTarget) closeModal('defenses'); }}>
+      <div className="info-modal-content" style={{ maxWidth: 500 }}>
+        <button className="close-modal-btn" onClick={() => closeModal('defenses')}>&times;</button>
+        <h3 className="info-modal-title" style={{ textAlign: 'center' }}>Manage Defenses</h3>
+        
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+          <button className={`btn ${activeTab !== 'resistances' ? 'btn-secondary' : ''}`} style={{ flex: 1, padding: '8px 4px', fontSize: '0.85rem' }} onClick={() => { setActiveTab('resistances'); setCustomInput(''); }}>Resistances</button>
+          <button className={`btn ${activeTab !== 'immunities' ? 'btn-secondary' : ''}`} style={{ flex: 1, padding: '8px 4px', fontSize: '0.85rem' }} onClick={() => { setActiveTab('immunities'); setCustomInput(''); }}>Immunities</button>
+          <button className={`btn ${activeTab !== 'vulnerabilities' ? 'btn-secondary' : ''}`} style={{ flex: 1, padding: '8px 4px', fontSize: '0.85rem' }} onClick={() => { setActiveTab('vulnerabilities'); setCustomInput(''); }}>Vulnerabilities</button>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+            <div className="field-label" style={{ marginBottom: 8 }}>Elemental Damage</div>
+            <div className="checklist-grid">
+              {elementalDamage.map(item => <label key={item} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: 'white', border: '1px solid var(--gold)', borderRadius: 4, cursor: 'pointer' }}><input type="checkbox" checked={currentList.includes(item)} onChange={() => toggle(item)} style={{ width: 16, height: 16, cursor: 'pointer' }} /><span style={{ fontSize: '0.9rem', color: 'var(--ink)' }}>{item}</span></label>)}
             </div>
-          ))}
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+            <div className="field-label" style={{ marginBottom: 8 }}>Weapon Damage</div>
+            <div className="checklist-grid">
+              {weaponDamage.map(item => <label key={item} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: 'white', border: '1px solid var(--gold)', borderRadius: 4, cursor: 'pointer' }}><input type="checkbox" checked={currentList.includes(item)} onChange={() => toggle(item)} style={{ width: 16, height: 16, cursor: 'pointer' }} /><span style={{ fontSize: '0.9rem', color: 'var(--ink)' }}>{item}</span></label>)}
+            </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+            <div className="field-label" style={{ marginBottom: 8 }}>Conditions</div>
+            <div className="checklist-grid">
+              {conditions.map(item => <label key={item} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: 'white', border: '1px solid var(--gold)', borderRadius: 4, cursor: 'pointer' }}><input type="checkbox" checked={currentList.includes(item)} onChange={() => toggle(item)} style={{ width: 16, height: 16, cursor: 'pointer' }} /><span style={{ fontSize: '0.9rem', color: 'var(--ink)' }}>{item}</span></label>)}
+            </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+            <div className="field-label" style={{ marginBottom: 8 }}>Custom</div>
+            {customItems.length > 0 && (
+              <div className="checklist-grid" style={{ marginBottom: 8 }}>
+                {customItems.map(item => <label key={item} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: 'white', border: '1px solid var(--gold)', borderRadius: 4, cursor: 'pointer' }}><input type="checkbox" checked={currentList.includes(item)} onChange={() => toggle(item)} style={{ width: 16, height: 16, cursor: 'pointer' }} /><span style={{ fontSize: '0.9rem', color: 'var(--ink)' }}>{item}</span></label>)}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="text" value={customInput} onChange={(e) => setCustomInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleAddCustom(); }} placeholder="Add custom..." style={{ flex: 1, padding: '6px 10px', border: '1px solid var(--gold)', borderRadius: 4, fontSize: '0.9rem', minHeight: 0, height: 'auto', background: 'white' }} />
+              <button className="btn" style={{ padding: '6px 12px', minHeight: 0, height: 'auto' }} onClick={handleAddCustom}>Add</button>
+            </div>
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: 16, borderTop: '1px solid var(--gold)', paddingTop: 10 }}>
+          <button className="btn" onClick={() => closeModal('defenses')}>Done</button>
         </div>
       </div>
     </div>
@@ -172,6 +267,7 @@ export function ConditionModal() {
         if (!data) return;
 
         const conditionMap = new Map();
+
         data.forEach((file) => {
           if (!file.name.toLowerCase().endsWith(".json")) return;
           try {
@@ -185,8 +281,9 @@ export function ConditionModal() {
                             conditionMap.set(c.name, c);
                         } else {
                             const existing = conditionMap.get(c.name);
-                            if (c.source === 'XPHB') conditionMap.set(c.name, c);
-                            else if (c.source === 'PHB' && existing.source !== 'XPHB') conditionMap.set(c.name, c);
+                            if (getGlobalSourcePriority(c.source) > getGlobalSourcePriority(existing.source)) {
+                                conditionMap.set(c.name, c);
+                            }
                         }
                     });
                 }
@@ -293,9 +390,9 @@ export function WeaponProfModal() {
             <div className="field-label" style={{ marginBottom: 8 }}>{cat.category}</div>
             <div className="checklist-grid">
               {cat.items.map(item => (
-                <label key={item} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: 'white', border: '1px solid var(--gold)', borderRadius: 4, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={currentProfs.includes(item)} onChange={() => toggle(item)} />
-                  {item}
+                <label key={item} className="checklist-item" style={{ padding: '6px 12px', margin: 0 }}>
+                  <input type="checkbox" checked={currentProfs.includes(item)} onChange={() => toggle(item)} style={{ margin: 0 }} />
+                  <span style={{ fontSize: '0.9rem', color: 'var(--ink)' }}>{item}</span>
                 </label>
               ))}
             </div>

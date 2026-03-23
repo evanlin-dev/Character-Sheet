@@ -49,6 +49,7 @@ export const CloseBtn = styled.button`
   color: var(--ink-light);
   line-height: 1;
   padding: 2px 6px;
+  z-index: 10;
   &:hover { color: var(--ink); }
 `;
 

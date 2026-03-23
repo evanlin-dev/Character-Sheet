@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import JSZip from 'jszip';
 import { openDB, STORE_NAME, DB_NAME } from 'src/utils/db';
+import { clearImageCache } from 'src/components/FluffImage';
 
 function FormatValue({ val }) {
   if (val === null || val === undefined) return null;
@@ -277,6 +278,11 @@ export default function DataViewerPage() {
     req.onblocked = () => alert('Database deletion blocked. Please close other tabs using this app and try again.');
   };
 
+  const handleClearImageCache = () => {
+    const count = clearImageCache();
+    alert(`Cleared ${count} cached image results.`);
+  };
+
   const changePage = (delta) => {
     const newPage = currentPage + delta;
     if (newPage >= 1 && newPage <= allFiles.length) {
@@ -323,6 +329,9 @@ export default function DataViewerPage() {
                 <button className="btn btn-danger" style={{ padding: '8px 16px', fontSize: '0.9rem' }} onClick={clearStorage}>Clear Saved Data</button>
               )}
               <button className="btn btn-danger" style={{ padding: '8px 16px', fontSize: '0.9rem' }} onClick={deleteDatabase}>Delete DB</button>
+              <button className="btn btn-secondary" style={{ padding: '8px 16px', fontSize: '0.9rem' }} onClick={handleClearImageCache}>
+                Clear Image Cache
+              </button>
             </div>
           </div>
 

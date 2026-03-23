@@ -4,9 +4,23 @@ import { getWeightCapacity, getTotalWeight } from "src/utils/calculations";
 import { checkDataLoaded, openDB, STORE_NAME } from "src/utils/db";
 import { processEntries, cleanText } from "src/utils/dndEntries";
 import RichTextModal from "src/components/RichTextModal";
+import FluffImage from "src/components/FluffImage";
+import styled from "styled-components";
 
 function InventoryItem({ item, index, onUpdate, onDelete, showEquip }) {
   const [showNotes, setShowNotes] = useState(false);
+
+  useEffect(() => {
+    if (showNotes) {
+      window.__modalCount = (window.__modalCount || 0) + 1;
+      document.body.classList.add('modal-open');
+      return () => {
+        window.__modalCount = Math.max(0, (window.__modalCount || 0) - 1);
+        if (window.__modalCount === 0) document.body.classList.remove('modal-open');
+      };
+    }
+  }, [showNotes]);
+
   return (
     <div
       className="inventory-item"
@@ -55,7 +69,9 @@ function InventoryItem({ item, index, onUpdate, onDelete, showEquip }) {
         type="number"
         className="qty-field"
         value={item.qty ?? 1}
-        onChange={(e) => onUpdate({ ...item, qty: e.target.value.replace(/^0+(?=\d)/, "") })}
+        onChange={(e) =>
+          onUpdate({ ...item, qty: e.target.value.replace(/^0+(?=\d)/, "") })
+        }
         min="0"
         style={{ textAlign: "center", fontSize: "0.9rem" }}
         title="Quantity"
@@ -64,7 +80,9 @@ function InventoryItem({ item, index, onUpdate, onDelete, showEquip }) {
         type="number"
         className="weight-field"
         value={item.weight ?? 0}
-        onChange={(e) => onUpdate({ ...item, weight: e.target.value.replace(/^0+(?=\d)/, "") })}
+        onChange={(e) =>
+          onUpdate({ ...item, weight: e.target.value.replace(/^0+(?=\d)/, "") })
+        }
         min="0"
         step="0.1"
         style={{ textAlign: "center", fontSize: "0.9rem" }}
@@ -101,53 +119,113 @@ function InventoryItem({ item, index, onUpdate, onDelete, showEquip }) {
 
 const getItemCategory = (name) => {
   const n = (name || "").toLowerCase();
-  if (/sword|dagger|bow|axe|mace|staff|spear|crossbow|wand|hammer|lance|pike|trident|rapier|whip|club|flail|sling|javelin|dart|quarterstaff|greatclub|glaive|halberd|maul|morningstar|scimitar|handaxe|shortsword|longsword|greatsword|blowgun|net|kukri|sickle|hatchet|cleaver/.test(n)) return 'Weapons';
-  if (/armor|shield|helmet|gauntlet|plate|chainmail|chain mail|leather armor|breastplate|hide armor|padded|studded|ring mail|scale mail|splint|half plate|brigandine|buckler|pauldron|vambrace/.test(n)) return 'Armor & Shields';
-  if (/potion|scroll|elixir|tincture|vial|philter|antitoxin|acid flask|alchemist/.test(n)) return 'Potions & Scrolls';
-  if (/cloak|robe|hat|cape|ring|amulet|necklace|bracelet|gloves|belt|boots|goggles|glasses|crown|circlet|earring|brooch|pendant|tunic|coat|vestment/.test(n)) return 'Clothing & Accessories';
-  if (/tool|kit|instrument|thieves|herbalism|navigator|poisoner|tinker|forgery|disguise|calligrapher|cartographer|cobbler|cook|glassblower|jeweler|leatherworker|mason|painter|potter|smith|weaver|woodcarver/.test(n)) return 'Tools & Kits';
-  if (/ration|food|drink|water|meal|provision|bread|meat|cheese|wine|ale|mead|soup|jerky/.test(n)) return 'Food & Drink';
-  if (/rope|bag|pack|backpack|bedroll|blanket|lantern|torch|candle|mirror|tent|waterskin|flask|oil|piton|spike|crowbar|grappling|ladder|manacles|lock|ink|paper|parchment|book|chest|barrel|bucket|jug|pot|sack|ball bearing|block|tackle|holy water|signal whistle|soap|string|wire|fishing|shovel|pickaxe|sledge|magnifying|hourglass|compass|map|net|saddlebag|saddle|bit|bridle/.test(n)) return 'Adventuring Gear';
-  return 'Miscellaneous';
+  if (
+    /sword|dagger|bow|axe|mace|staff|spear|crossbow|wand|hammer|lance|pike|trident|rapier|whip|club|flail|sling|javelin|dart|quarterstaff|greatclub|glaive|halberd|maul|morningstar|scimitar|handaxe|shortsword|longsword|greatsword|blowgun|net|kukri|sickle|hatchet|cleaver/.test(
+      n,
+    )
+  )
+    return "Weapons";
+  if (
+    /armor|shield|helmet|gauntlet|plate|chainmail|chain mail|leather armor|breastplate|hide armor|padded|studded|ring mail|scale mail|splint|half plate|brigandine|buckler|pauldron|vambrace/.test(
+      n,
+    )
+  )
+    return "Armor & Shields";
+  if (
+    /potion|scroll|elixir|tincture|vial|philter|antitoxin|acid flask|alchemist/.test(
+      n,
+    )
+  )
+    return "Potions & Scrolls";
+  if (
+    /cloak|robe|hat|cape|ring|amulet|necklace|bracelet|gloves|belt|boots|goggles|glasses|crown|circlet|earring|brooch|pendant|tunic|coat|vestment/.test(
+      n,
+    )
+  )
+    return "Clothing & Accessories";
+  if (
+    /tool|kit|instrument|thieves|herbalism|navigator|poisoner|tinker|forgery|disguise|calligrapher|cartographer|cobbler|cook|glassblower|jeweler|leatherworker|mason|painter|potter|smith|weaver|woodcarver/.test(
+      n,
+    )
+  )
+    return "Tools & Kits";
+  if (
+    /ration|food|drink|water|meal|provision|bread|meat|cheese|wine|ale|mead|soup|jerky/.test(
+      n,
+    )
+  )
+    return "Food & Drink";
+  if (
+    /rope|bag|pack|backpack|bedroll|blanket|lantern|torch|candle|mirror|tent|waterskin|flask|oil|piton|spike|crowbar|grappling|ladder|manacles|lock|ink|paper|parchment|book|chest|barrel|bucket|jug|pot|sack|ball bearing|block|tackle|holy water|signal whistle|soap|string|wire|fishing|shovel|pickaxe|sledge|magnifying|hourglass|compass|map|net|saddlebag|saddle|bit|bridle/.test(
+      n,
+    )
+  )
+    return "Adventuring Gear";
+  return "Miscellaneous";
 };
 
-export function EncumbranceChartModal({ allItems, maxWeight, totalWeight, onClose }) {
+export function EncumbranceChartModal({
+  allItems,
+  maxWeight,
+  totalWeight,
+  onClose,
+}) {
   const [expandedCats, setExpandedCats] = useState({});
 
   const COLORS = {
-    'Weapons':               '#c0392b',
-    'Armor & Shields':       '#2980b9',
-    'Potions & Scrolls':     '#8e44ad',
-    'Clothing & Accessories':'#e67e22',
-    'Tools & Kits':          '#16a085',
-    'Food & Drink':          '#f39c12',
-    'Adventuring Gear':      '#27ae60',
-    'Miscellaneous':         '#7f8c8d',
-    'Free Capacity':         '#e8e0d0',
+    Weapons: "#c0392b",
+    "Armor & Shields": "#2980b9",
+    "Potions & Scrolls": "#8e44ad",
+    "Clothing & Accessories": "#e67e22",
+    "Tools & Kits": "#16a085",
+    "Food & Drink": "#f39c12",
+    "Adventuring Gear": "#27ae60",
+    Miscellaneous: "#7f8c8d",
+    "Free Capacity": "#e8e0d0",
   };
 
+  useEffect(() => {
+    window.__modalCount = (window.__modalCount || 0) + 1;
+    document.body.classList.add('modal-open');
+    return () => {
+      window.__modalCount = Math.max(0, (window.__modalCount || 0) - 1);
+      if (window.__modalCount === 0) document.body.classList.remove('modal-open');
+    };
+  }, []);
+
   const groups = {};
-  allItems.forEach(item => {
+  allItems.forEach((item) => {
     if (!item.name) return;
     const cat = getItemCategory(item.name);
     if (!groups[cat]) groups[cat] = { weight: 0, items: [] };
     const w = (parseFloat(item.qty) || 0) * (parseFloat(item.weight) || 0);
     groups[cat].weight += w;
-    if (w > 0) groups[cat].items.push({...item, totalWt: w});
+    if (w > 0) groups[cat].items.push({ ...item, totalWt: w });
   });
 
   const free = Math.max(0, maxWeight - totalWeight);
   const slices = Object.entries(groups)
     .filter(([, g]) => g.weight > 0)
-    .sort((a,b) => b[1].weight - a[1].weight)
-    .map(([cat, g]) => ({ label: cat, value: g.weight, color: COLORS[cat] || '#95a5a6', items: g.items }));
-  
-  if (free > 0) slices.push({ label: 'Free Capacity', value: free, color: COLORS['Free Capacity'], items: [] });
+    .sort((a, b) => b[1].weight - a[1].weight)
+    .map(([cat, g]) => ({
+      label: cat,
+      value: g.weight,
+      color: COLORS[cat] || "#95a5a6",
+      items: g.items,
+    }));
+
+  if (free > 0)
+    slices.push({
+      label: "Free Capacity",
+      value: free,
+      color: COLORS["Free Capacity"],
+      items: [],
+    });
 
   const chartTotal = slices.reduce((s, sl) => s + sl.value, 0);
-  
+
   let cumulativePct = 0;
-  const svgSlices = slices.map(slice => {
+  const svgSlices = slices.map((slice) => {
     const pct = chartTotal > 0 ? slice.value / chartTotal : 0;
     const dasharray = `${pct * 100} ${100 - pct * 100}`;
     const dashoffset = -cumulativePct * 100;
@@ -155,48 +233,212 @@ export function EncumbranceChartModal({ allItems, maxWeight, totalWeight, onClos
     return { ...slice, dasharray, dashoffset, pct };
   });
 
-  const weightlessItems = allItems.filter(i => {
+  const weightlessItems = allItems.filter((i) => {
     const w = (parseFloat(i.qty) || 0) * (parseFloat(i.weight) || 0);
-    return w === 0 && i.name && i.name.trim() !== '';
+    return w === 0 && i.name && i.name.trim() !== "";
   });
 
   return (
-    <div className="info-modal-overlay" style={{ display: 'flex' }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="info-modal-content" style={{ maxWidth: 460, maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
-        <button className="close-modal-btn" onClick={onClose}>&times;</button>
-        <h3 className="info-modal-title" style={{ textAlign: 'center' }}>Weight Breakdown</h3>
-        <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--ink-light)', marginBottom: 12 }}>
+    <div
+      className="info-modal-overlay"
+      style={{ display: "flex" }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="info-modal-content"
+        style={{
+          maxWidth: 460,
+          maxHeight: "88vh",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <button className="close-modal-btn" onClick={onClose}>
+          &times;
+        </button>
+        <h3 className="info-modal-title" style={{ textAlign: "center" }}>
+          Weight Breakdown
+        </h3>
+        <div
+          style={{
+            textAlign: "center",
+            fontSize: "0.85rem",
+            color: "var(--ink-light)",
+            marginBottom: 12,
+          }}
+        >
           <b>{totalWeight.toFixed(1)}</b> / {maxWeight} lbs carried
-          {totalWeight > maxWeight && <span style={{color: 'var(--red-dark)', fontWeight: 'bold'}}> — Encumbered!</span>}
+          {totalWeight > maxWeight && (
+            <span style={{ color: "var(--red-dark)", fontWeight: "bold" }}>
+              {" "}
+              — Encumbered!
+            </span>
+          )}
         </div>
-        <div style={{ position: 'relative', width: 220, height: 220, margin: '0 auto 16px', flexShrink: 0 }}>
-          <svg viewBox="0 0 42 42" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+        <div
+          style={{
+            position: "relative",
+            width: 220,
+            height: 220,
+            margin: "0 auto 16px",
+            flexShrink: 0,
+          }}
+        >
+          <svg
+            viewBox="0 0 42 42"
+            style={{
+              width: "100%",
+              height: "100%",
+              transform: "rotate(-90deg)",
+            }}
+          >
             {svgSlices.map((s, i) => (
-              <circle key={i} r="15.915494309189533" cx="21" cy="21" fill="transparent" stroke={s.color} strokeWidth="8" pathLength="100" strokeDasharray={s.dasharray} strokeDashoffset={s.dashoffset} />
+              <circle
+                key={i}
+                r="15.915494309189533"
+                cx="21"
+                cy="21"
+                fill="transparent"
+                stroke={s.color}
+                strokeWidth="8"
+                pathLength="100"
+                strokeDasharray={s.dasharray}
+                strokeDashoffset={s.dashoffset}
+              />
             ))}
           </svg>
-          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ color: '#4a3728', fontWeight: 'bold', fontSize: '1.2rem', fontFamily: 'Cinzel, serif' }}>{totalWeight.toFixed(1)}</div>
-            <div style={{ fontSize: '0.8rem', color: '#888' }}>lbs carried</div>
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <div
+              style={{
+                color: "#4a3728",
+                fontWeight: "bold",
+                fontSize: "1.2rem",
+                fontFamily: "Cinzel, serif",
+              }}
+            >
+              {totalWeight.toFixed(1)}
+            </div>
+            <div style={{ fontSize: "0.8rem", color: "#888" }}>lbs carried</div>
           </div>
         </div>
-        <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 6, padding: '0 2px' }}>
-          {svgSlices.map(s => {
+        <div
+          style={{
+            overflowY: "auto",
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            padding: "0 2px",
+          }}
+        >
+          {svgSlices.map((s) => {
             const hasItems = s.items && s.items.length > 0;
             return (
-              <div key={s.label} style={{ border: '1px solid var(--gold)', borderRadius: 6, overflow: 'hidden', background: 'white' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: hasItems ? 'pointer' : 'default' }} onClick={() => hasItems && setExpandedCats(p => ({...p, [s.label]: !p[s.label]}))}>
-                  <span style={{ width: 14, height: 14, borderRadius: 3, background: s.color, border: '1px solid rgba(0,0,0,0.15)', flexShrink: 0 }}></span>
-                  <span style={{ flex: 1, fontWeight: 600, fontSize: '0.85rem' }}>{s.label}</span>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--ink-light)' }}>{s.value.toFixed(1)} lbs · {(s.pct * 100).toFixed(1)}%</span>
-                  {hasItems && <span style={{ fontSize: '0.75rem', color: 'var(--ink-light)', marginLeft: 4 }}>{expandedCats[s.label] ? '▴' : '▾'}</span>}
+              <div
+                key={s.label}
+                style={{
+                  border: "1px solid var(--gold)",
+                  borderRadius: 6,
+                  overflow: "hidden",
+                  background: "white",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "6px 10px",
+                    cursor: hasItems ? "pointer" : "default",
+                  }}
+                  onClick={() =>
+                    hasItems &&
+                    setExpandedCats((p) => ({ ...p, [s.label]: !p[s.label] }))
+                  }
+                >
+                  <span
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 3,
+                      background: s.color,
+                      border: "1px solid rgba(0,0,0,0.15)",
+                      flexShrink: 0,
+                    }}
+                  ></span>
+                  <span
+                    style={{ flex: 1, fontWeight: 600, fontSize: "0.85rem" }}
+                  >
+                    {s.label}
+                  </span>
+                  <span
+                    style={{ fontSize: "0.8rem", color: "var(--ink-light)" }}
+                  >
+                    {s.value.toFixed(1)} lbs · {(s.pct * 100).toFixed(1)}%
+                  </span>
+                  {hasItems && (
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--ink-light)",
+                        marginLeft: 4,
+                      }}
+                    >
+                      {expandedCats[s.label] ? "▴" : "▾"}
+                    </span>
+                  )}
                 </div>
                 {hasItems && expandedCats[s.label] && (
-                  <div style={{ background: 'var(--parchment)', borderTop: '1px solid var(--gold)', padding: '6px 10px 6px 32px', fontSize: '0.85rem', color: 'var(--ink)' }}>
+                  <div
+                    style={{
+                      background: "var(--parchment)",
+                      borderTop: "1px solid var(--gold)",
+                      padding: "6px 10px 6px 32px",
+                      fontSize: "0.85rem",
+                      color: "var(--ink)",
+                    }}
+                  >
                     {s.items.map((item, idx) => (
-                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px dashed var(--gold-light)' }}>
-                        <span>{item.name} {item.equipped && <em style={{color:'var(--ink-light)', fontSize: '0.8em'}}>(E)</em>} ×{item.qty}</span>
-                        <span style={{ color: 'var(--ink-light)' }}>{item.totalWt.toFixed(1)} lbs</span>
+                      <div
+                        key={idx}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          padding: "3px 0",
+                          borderBottom: "1px dashed var(--gold-light)",
+                        }}
+                      >
+                        <span>
+                          {item.name}{" "}
+                          {item.equipped && (
+                            <em
+                              style={{
+                                color: "var(--ink-light)",
+                                fontSize: "0.8em",
+                              }}
+                            >
+                              (E)
+                            </em>
+                          )}{" "}
+                          ×{item.qty}
+                        </span>
+                        <span style={{ color: "var(--ink-light)" }}>
+                          {item.totalWt.toFixed(1)} lbs
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -205,8 +447,17 @@ export function EncumbranceChartModal({ allItems, maxWeight, totalWeight, onClos
             );
           })}
           {weightlessItems.length > 0 && (
-            <div style={{ fontSize: '0.8rem', color: 'var(--ink-light)', fontStyle: 'italic', marginTop: 8, padding: '6px 8px', borderTop: '1px dashed var(--gold)' }}>
-              Weightless items: {weightlessItems.map(i => i.name).join(', ')}
+            <div
+              style={{
+                fontSize: "0.8rem",
+                color: "var(--ink-light)",
+                fontStyle: "italic",
+                marginTop: 8,
+                padding: "6px 8px",
+                borderTop: "1px dashed var(--gold)",
+              }}
+            >
+              Weightless items: {weightlessItems.map((i) => i.name).join(", ")}
             </div>
           )}
         </div>
@@ -223,6 +474,15 @@ export default function EquipmentTab() {
   const [itemSearchOpen, setItemSearchOpen] = useState(false);
   const [chartOpen, setChartOpen] = useState(false);
   const [searchTargetList, setSearchTargetList] = useState("backpack");
+
+  useEffect(() => {
+    window.__modalCount = (window.__modalCount || 0) + 1;
+    document.body.classList.add('modal-open');
+    return () => {
+      window.__modalCount = Math.max(0, (window.__modalCount || 0) - 1);
+      if (window.__modalCount === 0) document.body.classList.remove('modal-open');
+    };
+  }, []);
 
   useEffect(() => {
     checkDataLoaded().then(setDataLoaded);
@@ -374,7 +634,9 @@ export default function EquipmentTab() {
             <span>Item Name</span>
             <span style={{ textAlign: "center" }}>Qty</span>
             <span style={{ textAlign: "center" }}>Lbs</span>
-            <span title="Notes / Description" style={{ textAlign: "center" }}>📝</span>
+            <span title="Notes / Description" style={{ textAlign: "center" }}>
+              📝
+            </span>
             <span></span>
           </div>
           <div
@@ -420,7 +682,9 @@ export default function EquipmentTab() {
             <span>Item Name</span>
             <span style={{ textAlign: "center" }}>Qty</span>
             <span style={{ textAlign: "center" }}>Lbs</span>
-            <span title="Notes / Description" style={{ textAlign: "center" }}>📝</span>
+            <span title="Notes / Description" style={{ textAlign: "center" }}>
+              📝
+            </span>
             <span></span>
           </div>
           <div
@@ -440,12 +704,12 @@ export default function EquipmentTab() {
             ))}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-          <button
-            className="add-feature-btn"
-            onClick={() => addItem("backpack")}
-          >
-            + Add Custom
-          </button>
+            <button
+              className="add-feature-btn"
+              onClick={() => addItem("backpack")}
+            >
+              + Add Custom
+            </button>
             {dataLoaded && (
               <button
                 className="add-feature-btn"
@@ -473,11 +737,19 @@ export default function EquipmentTab() {
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               Carrying Capacity: {totalWeight.toFixed(1)} / {maxWeight} lbs
-              <button 
-                className="skill-info-btn" 
+              <button
+                className="skill-info-btn"
                 onClick={() => setChartOpen(true)}
                 title="View Weight Breakdown"
-                style={{ position: 'relative', top: 'auto', left: 'auto', margin: 0, width: 20, height: 20, fontSize: '0.8rem' }}
+                style={{
+                  position: "relative",
+                  top: "auto",
+                  left: "auto",
+                  margin: 0,
+                  width: 20,
+                  height: 20,
+                  fontSize: "0.8rem",
+                }}
               >
                 ?
               </button>
@@ -557,14 +829,26 @@ export default function EquipmentTab() {
               update({
                 componentPouch: [
                   ...componentPouch,
-                  { name: item.name, qty: 1, weight: item.weight, equipped: false, description: item.description },
+                  {
+                    name: item.name,
+                    qty: 1,
+                    weight: item.weight,
+                    equipped: false,
+                    description: item.description,
+                  },
                 ],
               });
             } else {
               update({
                 inventory: [
                   ...inventory,
-                  { name: item.name, qty: 1, weight: item.weight, equipped: false, description: item.description },
+                  {
+                    name: item.name,
+                    qty: 1,
+                    weight: item.weight,
+                    equipped: false,
+                    description: item.description,
+                  },
                 ],
               });
             }
@@ -744,7 +1028,7 @@ export function SplitMoneyModal() {
 }
 
 export function ManageMoneyModal() {
-  const { modals, closeModal, character, update } = useCharacter();
+  const { modals, closeModal, character, update } = useCharacter() || {};
   const [amounts, setAmounts] = useState({ cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 });
 
   if (!modals.manageMoney) return null;
@@ -835,10 +1119,58 @@ export function ManageMoneyModal() {
   );
 }
 
+
+
+
+
+
+const SplitContainer = styled.div`
+  display: flex;
+  flex: 1;
+  gap: 16px;
+  overflow: hidden;
+  flex-direction: row;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 8px;
+  }
+`;
+
+const LeftPane = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  border-right: 1px solid var(--gold);
+  padding-right: 8px;
+
+  @media (max-width: 768px) {
+    border-right: none;
+    border-bottom: 2px solid var(--gold);
+    padding-right: 0;
+    padding-bottom: 12px;
+    flex: none;
+    height: 40%;
+    max-height: 250px;
+  }
+`;
+
+const RightPane = styled.div`
+  flex: 1.5;
+  overflow-y: auto;
+  padding-left: 8px;
+
+  @media (max-width: 768px) {
+    padding-left: 0;
+    padding-top: 4px;
+    flex: 1;
+  }
+`;
+
 export function ItemSearchModal({ onSelect, onClose }) {
   const [search, setSearch] = useState("");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedItem, setSelectedItem] = useState(null);
 
   useEffect(() => {
     async function loadItems() {
@@ -871,6 +1203,7 @@ export function ItemSearchModal({ onSelect, onClose }) {
               json.magicvariant,
               json.magicvariants,
               json.variant,
+              json.itemFluff
             ];
             arraysToCheck.forEach((arr) => {
               if (Array.isArray(arr)) {
@@ -884,11 +1217,20 @@ export function ItemSearchModal({ onSelect, onClose }) {
           } catch (e) {}
         });
 
-        // Deduplicate by name
+        // Deduplicate by name and merge fluff
         const itemMap = new Map();
         rawItems.forEach((i) => {
           if (!itemMap.has(i.name)) {
-            itemMap.set(i.name, i);
+            itemMap.set(i.name, { ...i });
+          } else {
+            const existing = itemMap.get(i.name);
+            if (i.images) existing.images = i.images;
+            if (i.fluff) existing.fluff = i.fluff;
+            if (i.entries && !existing.entries) existing.entries = i.entries;
+            if (i.weight !== undefined) existing.weight = i.weight;
+            if (i.weight_lbs !== undefined) existing.weight_lbs = i.weight_lbs;
+            if (i.value !== undefined) existing.value = i.value;
+            if (i.source && !existing.source) existing.source = i.source;
           }
         });
 
@@ -906,10 +1248,33 @@ export function ItemSearchModal({ onSelect, onClose }) {
 
             desc = cleanText(desc);
 
+            // Replace dynamic 5e.tools tags like {=bonusAc} with their actual object values
+            if (desc) {
+              desc = desc.replace(/\{=([^}]+)\}/g, (match, key) => {
+                if (i[key] !== undefined) return i[key];
+                if (i.inherits && i.inherits[key] !== undefined) return i.inherits[key];
+                return match;
+              });
+            }
+
+            let valStr = "";
+            if (i.value) {
+              if (typeof i.value === "number") {
+                if (i.value % 100 === 0) valStr = `${i.value / 100} gp`;
+                else if (i.value % 10 === 0) valStr = `${i.value / 10} sp`;
+                else valStr = `${i.value} cp`;
+              } else {
+                valStr = String(i.value);
+              }
+            }
+
             return {
               name: i.name,
+              source: i.source,
               weight: weight,
+              value: valStr,
               description: desc,
+              _raw: i
             };
           })
           .sort((a, b) => a.name.localeCompare(b.name));
@@ -927,28 +1292,60 @@ export function ItemSearchModal({ onSelect, onClose }) {
 
   const filteredItems = useMemo(() => {
     const q = search.toLowerCase();
-    return items.filter((i) => i.name.toLowerCase().includes(q));
+    if (!q) return items.slice(0, 100);
+    return items.filter((i) => i.name.toLowerCase().includes(q)).slice(0, 100);
   }, [search, items]);
 
   return (
-    <div className="info-modal-overlay" style={{ display: "flex" }} onClick={onClose}>
+    <div
+      className="info-modal-overlay"
+      style={{ display: "flex" }}
+      onClick={onClose}
+    >
       <div
         className="info-modal-content"
-        style={{ maxWidth: "520px", maxHeight: "85vh", display: "flex", flexDirection: "column" }}
+        style={{
+          width: "900px",
+          maxWidth: "95vw",
+          height: "85vh",
+          display: "flex",
+          flexDirection: "column",
+          padding: 20,
+          position: "relative",
+          zIndex: 1100
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <button className="close-modal-btn" onClick={onClose}>
+        <button
+          className="close-modal-btn"
+          onClick={onClose}
+          style={{
+            zIndex: 10,
+            background: "var(--parchment)",
+            borderRadius: "50%",
+            width: 32,
+            height: 32,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           &times;
         </button>
-        <h3 className="info-modal-title">Search Items</h3>
+        <h3
+          className="info-modal-title"
+          style={{ textAlign: "center", marginTop: 0 }}
+        >
+          Search Items
+        </h3>
         <input
           type="text"
-          placeholder="Search..."
+          placeholder="Search for an item..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{
             width: "100%",
-            padding: "8px 10px",
+            padding: "8px 12px",
             marginBottom: 12,
             fontSize: "1rem",
             border: "1px solid var(--gold)",
@@ -956,60 +1353,139 @@ export function ItemSearchModal({ onSelect, onClose }) {
           }}
           autoFocus
         />
-        <div style={{ maxHeight: "60vh", overflowY: "auto", flex: 1 }}>
-          {loading ? (
-            <em style={{ color: "var(--ink-light)" }}>
-              Loading items from database...
-            </em>
-          ) : filteredItems.length === 0 ? (
-            <em style={{ color: "var(--ink-light)" }}>No items found.</em>
-          ) : (
-            filteredItems.map((item) => (
-              <div
-                key={item.name}
-                onClick={() => onSelect(item)}
-                style={{
-                  padding: "10px 12px",
-                  cursor: "pointer",
-                  borderBottom: "1px solid var(--gold)",
-                  background: "rgba(255,255,255,0.5)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
-                }}
-              >
+        <SplitContainer>
+          <LeftPane>
+            {loading ? (
+              <em style={{ color: "var(--ink-light)" }}>
+                Loading items from database...
+              </em>
+            ) : filteredItems.length === 0 ? (
+              <em style={{ color: "var(--ink-light)" }}>No items found.</em>
+            ) : (
+              filteredItems.map((item) => (
                 <div
+                  key={item.name}
+                  onClick={() => setSelectedItem(item)}
                   style={{
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                    borderBottom: "1px dashed rgba(201, 173, 106, 0.3)",
+                    background:
+                      selectedItem === item
+                        ? "var(--parchment-dark)"
+                        : "transparent",
                     display: "flex",
                     justifyContent: "space-between",
-                    alignItems: "baseline",
+                    alignItems: "center",
+                    transition: "background 0.15s",
                   }}
                 >
-                  <span style={{ fontWeight: "bold" }}>{item.name}</span>
-                  <span
-                    style={{
-                      fontSize: "0.8rem",
-                      color: "var(--ink-light)",
-                      textAlign: "right",
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <strong
+                      style={{
+                        color:
+                          selectedItem === item
+                            ? "var(--red-dark)"
+                            : "var(--ink)",
+                        fontSize: "0.95rem",
+                      }}
+                    >
+                      {item.name}
+                    </strong>
+                    <span
+                      style={{ fontSize: "0.75rem", color: "var(--ink-light)" }}
+                    >
+                      {item.value && (
+                        <span
+                          style={{ marginRight: 8, color: "var(--gold-dark)" }}
+                        >
+                          {item.value}
+                        </span>
+                      )}
+                      {item.weight} lbs
+                    </span>
+                  </div>
+                  <button
+                    className="btn btn-primary"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelect(item);
                     }}
+                    style={{ padding: "4px 10px", fontSize: "0.8rem" }}
                   >
-                    {item.weight} lbs
-                  </span>
+                    Add
+                  </button>
                 </div>
+              ))
+            )}
+          </LeftPane>
+
+          <RightPane>
+            {selectedItem ? (
+              <div>
+                <FluffImage 
+                  fluff={selectedItem._raw} 
+                  baseObj={selectedItem._raw}
+                  type="items" 
+                  name={selectedItem.name} 
+                  source={selectedItem.source || "DMG"} 
+                />
+                <h2
+                  style={{
+                    fontFamily: "'Cinzel', serif",
+                    color: "var(--red-dark)",
+                    marginTop: 0,
+                    marginBottom: 8,
+                  }}
+                >
+                  {selectedItem.name}
+                </h2>
                 <div
                   style={{
-                    fontSize: "0.8rem",
+                    fontSize: "0.85rem",
                     color: "var(--ink-light)",
-                    marginTop: 4,
+                    marginBottom: 12,
+                    paddingBottom: 8,
+                    borderBottom: "1px dashed var(--gold)",
                   }}
                 >
-                  {item.description.replace(/<[^>]*>/g, "").substring(0, 80)}
-                  {item.description.length > 80 ? "..." : ""}
+                  {selectedItem.weight !== undefined && (
+                    <span>{selectedItem.weight} lbs</span>
+                  )}
+                  {selectedItem.value && (
+                    <span> &bull; {selectedItem.value}</span>
+                  )}
                 </div>
+                <div
+                  className="rendered-desc"
+                  style={{
+                    fontSize: "0.9rem",
+                    lineHeight: 1.5,
+                    color: "var(--ink)",
+                  }}
+                  dangerouslySetInnerHTML={{
+                    __html:
+                      selectedItem.description ||
+                      '<em style="color:var(--ink-light)">No description available.</em>',
+                  }}
+                />
               </div>
-            ))
-          )}
-        </div>
+            ) : (
+              <div
+                style={{
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--ink-light)",
+                  fontStyle: "italic",
+                }}
+              >
+                Select an item to view its description
+              </div>
+            )}
+          </RightPane>
+        </SplitContainer>
       </div>
     </div>
   );

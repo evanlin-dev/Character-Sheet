@@ -22,9 +22,9 @@ export default function Sidebar({ children }) {
   );
 }
 
-export function SidebarBtn({ children, onClick, style }) {
+export function SidebarBtn({ children, onClick, style, id }) {
   return (
-    <button className="sidebar-btn" onClick={onClick} style={style}>
+    <button id={id} className="sidebar-btn" onClick={onClick} style={style}>
       {children}
     </button>
   );

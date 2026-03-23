@@ -92,6 +92,11 @@ export function CharacterProvider({ children }) {
     info: { open: false, title: '', text: '' },
     expModal: false,
     hpManage: false,
+    levelUp: { open: false },
+    charManager: false,
+    customData: false,
+    mobileMore: false,
+    defenses: false,
   });
 
   // Auto-save to localStorage

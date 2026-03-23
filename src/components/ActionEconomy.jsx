@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useCharacter } from "src/context/CharacterContext";
 import RichTextModal from "src/components/RichTextModal";
+import { CastSpellModal } from "src/components/tabs/SpellsTab";
 import {
   getSpellDC,
   getSpellAttackBonus,
@@ -17,7 +19,7 @@ const extractDmg = (desc) => {
   return null;
 };
 
-export function AutoSpellItem({ s, dc, atkStr }) {
+export function AutoSpellItem({ s, dc, atkStr, onCast }) {
   const [expanded, setExpanded] = useState(false);
   const dmg = extractDmg(s.description);
   let hitdc = null;
@@ -142,6 +144,15 @@ export function AutoSpellItem({ s, dc, atkStr }) {
               Ritual
             </span>
           )}
+          {onCast && (
+            <button
+              className="btn btn-primary"
+              style={{ padding: "2px 6px", fontSize: "0.65rem", height: "20px", marginLeft: 4 }}
+              onClick={(e) => { e.stopPropagation(); onCast(s); }}
+            >
+              Cast
+            </button>
+          )}
           <span
             style={{
               color: "var(--ink-light)",
@@ -255,7 +266,7 @@ function FeatureItem({ item, onUpdate, onDelete }) {
   );
 }
 
-function ActionGroup({ title, field, addLabel, autoSpells = [], dc, atkStr }) {
+function ActionGroup({ title, field, addLabel, autoSpells = [], dc, atkStr, onCast }) {
   const { character, update } = useCharacter();
   const items = character[field] || [];
 
@@ -296,7 +307,7 @@ function ActionGroup({ title, field, addLabel, autoSpells = [], dc, atkStr }) {
         {autoSpells.length > 0 && (
           <div style={{ marginTop: 12 }}>
             {autoSpells.map((s, i) => (
-              <AutoSpellItem key={i} s={s} dc={dc} atkStr={atkStr} />
+              <AutoSpellItem key={i} s={s} dc={dc} atkStr={atkStr} onCast={onCast} />
             ))}
           </div>
         )}
@@ -312,11 +323,13 @@ function ActionGroup({ title, field, addLabel, autoSpells = [], dc, atkStr }) {
   );
 }
 
-export default function ActionEconomy() {
-  const { character } = useCharacter();
+export default function ActionEconomy({ initiativeList = [], socket = null, roomId = null, myName = "" }) {
+  const { character, update } = useCharacter();
+  const [castSpellTarget, setCastSpellTarget] = useState(null);
 
   const allSpells = [
     ...(character.preparedSpellsList || []),
+    ...(character.spellsList || []),
     ...(character.cantripsList || []),
   ];
 
@@ -348,6 +361,7 @@ export default function ActionEconomy() {
           autoSpells={groups.action}
           dc={dc}
           atkStr={atkStr}
+          onCast={(s) => setCastSpellTarget(s)}
         />
         <ActionGroup
           title="Bonus Actions"
@@ -356,6 +370,7 @@ export default function ActionEconomy() {
           autoSpells={groups.bonus}
           dc={dc}
           atkStr={atkStr}
+          onCast={(s) => setCastSpellTarget(s)}
         />
         <ActionGroup
           title="Reactions"
@@ -364,6 +379,7 @@ export default function ActionEconomy() {
           autoSpells={groups.reaction}
           dc={dc}
           atkStr={atkStr}
+          onCast={(s) => setCastSpellTarget(s)}
         />
         <ActionGroup
           title="Other"
@@ -372,8 +388,21 @@ export default function ActionEconomy() {
           autoSpells={groups.other}
           dc={dc}
           atkStr={atkStr}
+          onCast={(s) => setCastSpellTarget(s)}
         />
       </div>
+      {castSpellTarget && createPortal(
+        <CastSpellModal
+          spell={castSpellTarget}
+          char={character}
+          update={update}
+          onClose={() => setCastSpellTarget(null)}
+          initiativeList={initiativeList}
+          socket={socket}
+          roomId={roomId}
+          myName={myName}
+        />
+      , document.body)}
     </div>
   );
 }

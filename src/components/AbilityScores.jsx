@@ -52,7 +52,7 @@ function SkillItem({ name, isProf, isExpertise, hasAdvantage, mod, label, onTogg
 }
 
 export default function AbilityScores() {
-  const { character, update, openModal } = useCharacter();
+  const { character, update } = useCharacter();
   const [infoModal, setInfoModal] = useState(null);
 
   const pb = parseInt(character.profBonus) || getProfBonus(parseInt(character.level) || 1);
@@ -111,11 +111,6 @@ export default function AbilityScores() {
   return (
     <div className="sheet-section full-width">
       <h2 className="section-title">Ability Scores, Saves &amp; Skills</h2>
-      <div className="setup-scores-container" style={{ textAlign: 'center', marginBottom: 20 }}>
-        <button className="btn btn-secondary" onClick={() => openModal('score')} style={{ fontSize: '0.9rem', padding: '8px 16px' }}>
-          Set Up Ability Scores
-        </button>
-      </div>
 
       <div className="stat-block">
         {abilities.map(ability => {

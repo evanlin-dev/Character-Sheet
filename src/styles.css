@@ -19,6 +19,16 @@ body.modal-open {
   overflow: hidden;
 }
 
+body.compendium-page {
+  padding: 0;
+  overflow: hidden;
+}
+
+@keyframes compendiumFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* Class-Specific Theme Overrides */
 body.theme-artificer { --ink: #1f2e2e; --ink-light: #466d6d; --gold: #b87333; --gold-dark: #8a5220; --red: #008080; --red-dark: #004d4d; }
 body.theme-barbarian { --ink: #2b1b17; --ink-light: #5e4b35; --gold: #a0522d; --gold-dark: #6e2c00; --red: #c0392b; --red-dark: #7b241c; }
@@ -1728,12 +1738,17 @@ body.app-view-active #view-stats .mobile-list-header:not(.mobile-saves-header) {
   padding: 20px;
   background: var(--red);
   color: white;
+  background: var(--parchment-dark);
+  color: var(--ink);
+  border-bottom: 2px solid var(--gold);
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 .sidebar-header h3 { margin: 0; font-family: 'Cinzel', serif; }
 .close-sidebar-btn { background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; }
+.close-sidebar-btn { background: none; border: none; color: var(--ink-light); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; }
+.close-sidebar-btn:hover { color: var(--red); }
 
 .sidebar-content { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 
@@ -4009,7 +4024,6 @@ body.swap-scores.dense-mode .stat-modifier input {
 }
 
 /* Mobile app view styles */
-.app-view-content {  }
 #app-views-container .app-view { background: var(--parchment); }
 /* HP Manage concentration banner */
 .mh-conc-banner { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 6px 10px; background: rgba(139,0,0,0.08); border: 1px solid var(--red); border-radius: 4px; cursor: pointer; }
@@ -4096,4 +4110,277 @@ body.swap-scores.dense-mode .stat-modifier input {
 /* DM screen responsive */
 @media (max-width: 768px) {
   .session-content > div { grid-template-columns: 1fr !important; }
+}
+
+/* =========================================
+   NORMAL DESKTOP LAYOUT
+   ========================================= */
+
+@media (min-width: 901px) {
+  /* Cap ActionEconomy columns so they don't stretch on wide screens */
+  body:not(.dense-mode) .sheet-section .grid.grid-4 > div {
+    max-width: 320px;
+  }
+
+  /* HP (simpler) + Combat Stats (busier) side by side */
+  .normal-hp-combat {
+    display: grid;
+    grid-template-columns: 5fr 7fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .normal-hp-combat > * {
+    min-width: 0;
+  }
+
+  /* More generous section spacing on desktop */
+  body:not(.dense-mode) .sheet-section {
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+
+  body:not(.dense-mode) .section-title {
+    font-size: 1.15rem;
+    margin-bottom: 14px;
+    padding-bottom: 6px;
+  }
+
+}
+
+/* =========================================
+   DENSE MODE LAYOUT
+   ========================================= */
+
+.dense-sheet {
+  max-width: 100% !important;
+  width: 100%;
+  padding: 8px 12px !important;
+  background: var(--parchment);
+  min-height: 100vh;
+}
+
+/* Two-col body: left = ability scores, right = everything else */
+.dense-body {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.dense-left {
+  position: sticky;
+  top: 8px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+
+.dense-right {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* HP bar compact in dense mode */
+body.dense-mode .dense-right .hp-bar-container {
+  height: 10px;
+  margin-bottom: 6px;
+}
+
+/* Combat stats row — force single tight row */
+body.dense-mode .dense-right .combat-stats {
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+/* Armor/weapon/tool proficiency + conditions — compact grid */
+body.dense-mode .dense-right .grid.grid-3 {
+  gap: 8px;
+}
+
+/* Conditions box smaller */
+body.dense-mode .dense-right .combat-stat[style*="gridColumn"] {
+  min-height: 48px !important;
+}
+
+/* Defenses — horizontal 3-col layout */
+body.dense-mode .dense-right .field > div[style*="flex-direction: column"] {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  flex-direction: unset !important;
+}
+
+body.dense-mode .dense-right .field > div[style*="flex-direction: column"] .tag-display {
+  min-height: 32px;
+}
+
+/* Tighten spacing of all sheet-sections inside dense layout */
+body.dense-mode .dense-sheet .sheet-section {
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+
+body.dense-mode .dense-sheet .section-title {
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+}
+
+body.dense-mode .dense-sheet .field {
+  padding: 3px 6px;
+  min-height: unset;
+}
+
+body.dense-mode .dense-sheet .field-label {
+  font-size: 0.62rem;
+  margin-bottom: 0px;
+}
+
+body.dense-mode .dense-sheet input,
+body.dense-mode .dense-sheet select,
+body.dense-mode .dense-sheet textarea {
+  font-size: 0.85rem;
+}
+
+/* Ability scores — horizontal in dense left column */
+body.dense-mode .dense-left .stat-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+body.dense-mode .dense-left .stat-card {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 0;
+}
+
+body.dense-mode .dense-left .stat {
+  flex: none;
+  padding: 6px 4px;
+  border-radius: 0;
+  box-shadow: none;
+  border-right: 1px solid var(--gold);
+  border-bottom: none;
+  justify-content: center;
+  gap: 1px;
+}
+
+body.dense-mode .dense-left .stat-value,
+body.dense-mode .dense-left .stat input.stat-value {
+  font-size: 1.5rem;
+}
+
+body.dense-mode .dense-left .stat-name {
+  font-size: 0.6rem;
+  margin-bottom: 0;
+}
+
+body.dense-mode .dense-left .stat-modifier input {
+  font-size: 0.85rem;
+}
+
+body.dense-mode .dense-left .stat-skills {
+  padding: 3px 5px;
+  gap: 1px;
+  justify-content: center;
+}
+
+body.dense-mode .dense-left .skill-item {
+  font-size: 0.75rem;
+  padding: 1px 2px;
+  gap: 3px;
+  min-height: unset;
+}
+
+body.dense-mode .dense-left .skill-checkbox {
+  width: 11px;
+  height: 11px;
+  min-height: unset;
+}
+
+body.dense-mode .dense-left .expertise-btn {
+  width: 11px;
+  height: 11px;
+  font-size: 0.38rem;
+  min-height: unset;
+}
+
+body.dense-mode .dense-left .adv-toggle {
+  width: 14px;
+  height: 14px;
+  font-size: 0.55rem;
+  min-height: unset;
+}
+
+body.dense-mode .dense-left .skill-name {
+  font-size: 0.75rem;
+}
+
+body.dense-mode .dense-left .skill-mod {
+  font-size: 0.8rem;
+  min-width: 22px;
+}
+
+body.dense-mode .dense-left .checkmark {
+  font-size: 0.65rem;
+}
+
+/* Saves compact */
+body.dense-mode .dense-left .save-row {
+  font-size: 0.75rem;
+  padding: 1px 2px;
+}
+
+/* Combat stats tighter */
+body.dense-mode .dense-right .combat-stat {
+  padding: 4px;
+}
+
+body.dense-mode .dense-right .combat-stat-value {
+  font-size: 1.2rem;
+}
+
+body.dense-mode .dense-right .combat-stat-label {
+  font-size: 0.6rem;
+}
+
+/* HP compact */
+body.dense-mode .dense-right .hp-controls input {
+  font-size: 1.2rem;
+}
+
+/* Tabs - no extra margin needed in dense-right */
+body.dense-mode .dense-right .sheet-section.full-width {
+  margin-top: 0;
+}
+
+/* Responsive: collapse to single column below 1024px */
+@media (max-width: 1024px) {
+  .dense-body {
+    grid-template-columns: 280px 1fr;
+  }
+}
+
+@media (max-width: 800px) {
+  .dense-body {
+    grid-template-columns: 1fr;
+  }
+  .dense-left {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+  body.dense-mode .dense-right .hp-death-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  body.dense-mode .dense-right .field > div[style*="flex-direction: column"] {
+    grid-template-columns: 1fr !important;
+  }
 }

@@ -1,201 +1,47 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { processEntries, cleanText } from "src/utils/dndEntries";
+import { processEntries as originalProcessEntries, cleanText } from "src/utils/dndEntries";
 import FluffImage from "src/components/FluffImage";
 import { skillsMap } from "src/data/constants";
 import "src/styles/CharacterCreatorPage.css";
-
-// Prioritize XPHB > PHB > other sources; used to deduplicate lists
-function sourcePriority(s) {
-  if (s === "XPHB") return 0;
-  if (s === "PHB") return 1;
-  if (s === "EFA") return 2;
-  if (s === "TCE") return 3;
-  return 4;
-}
-function dedup(arr) {
-  const map = new Map();
-  arr.forEach((item) => {
-    const existing = map.get(item.name);
-    if (
-      !existing ||
-      sourcePriority(item.source) < sourcePriority(existing.source)
-    ) {
-      map.set(item.name, item);
-    }
-  });
-  return [...map.values()];
-}
-
-function getBestMatch(arr, name) {
-  const matches = arr.filter((x) => x.name === name);
-  if (!matches.length) return null;
-  return matches.sort(
-    (a, b) => sourcePriority(a.source) - sourcePriority(b.source),
-  )[0];
-}
-
-function resolveFeatureWithCopy(candidates, dbCollections, targetSource) {
-  if (!candidates || candidates.length === 0) return null;
-  let selected = null;
-  if (targetSource)
-    selected = candidates.find((f) => f.source === targetSource);
-  if (!selected) selected = candidates.find((f) => f.source === "XPHB");
-  if (
-    selected &&
-    !selected.entries &&
-    !selected.entry &&
-    !selected.description &&
-    !selected._copy
-  ) {
-    const better = candidates.find(
-      (f) =>
-        (f.entries || f.entry || f.description || f._copy) &&
-        (!targetSource || f.source === targetSource),
-    );
-    if (better) selected = better;
-    else {
-      const anyBetter = candidates.find(
-        (f) => f.entries || f.entry || f.description || f._copy,
-      );
-      if (anyBetter) selected = anyBetter;
-    }
-  }
-  if (!selected)
-    selected =
-      candidates.find((f) => f.source === "PHB") ||
-      candidates.sort(
-        (a, b) => sourcePriority(a.source) - sourcePriority(b.source),
-      )[0];
-
-  if (
-    selected &&
-    (!selected.entries ||
-      (Array.isArray(selected.entries) &&
-        selected.entries.length === 1 &&
-        typeof selected.entries[0] === "string")) &&
-    selected._copy
-  ) {
-    const copyName = selected._copy.name;
-    const copySource = selected._copy.source || selected.source;
-    let original = null;
-    for (const col of dbCollections) {
-      if (!col) continue;
-      original = col.find(
-        (o) =>
-          o.name === copyName &&
-          (o.source === copySource || !selected._copy.source) &&
-          (o.entries || o.entry),
-      );
-      if (original) break;
-    }
-    if (original)
-      selected = {
-        ...original,
-        ...selected,
-        entries: original.entries || original.entry,
-      };
-  }
-  return selected;
-}
-
-function resolveBackgroundWithCopy(bg, allBackgrounds) {
-  if (!bg) return null;
-  let current = bg;
-  let depth = 0;
-  let resolvedEntries = current.entries ? JSON.parse(JSON.stringify(current.entries)) : null;
-  let resolvedSkills = current.skillProficiencies;
-  let resolvedTools = current.toolProficiencies;
-  let resolvedLangs = current.languageProficiencies;
-  let resolvedEquip = current.startingEquipment;
-  
-  while (current._copy && depth < 5) {
-      const original = allBackgrounds.find(b => b.name === current._copy.name && (b.source === current._copy.source || !current._copy.source));
-      if (!original) break;
-      
-      if (!resolvedEntries && original.entries) {
-          resolvedEntries = JSON.parse(JSON.stringify(original.entries));
-      }
-      if (!resolvedSkills && original.skillProficiencies) resolvedSkills = original.skillProficiencies;
-      if (!resolvedTools && original.toolProficiencies) resolvedTools = original.toolProficiencies;
-      if (!resolvedLangs && original.languageProficiencies) resolvedLangs = original.languageProficiencies;
-      if (!resolvedEquip && original.startingEquipment) resolvedEquip = original.startingEquipment;
-
-      if (current._copy._mod && current._copy._mod.entries && resolvedEntries) {
-          const mods = Array.isArray(current._copy._mod.entries) ? current._copy._mod.entries : [current._copy._mod.entries];
-          mods.forEach(mod => {
-              if (mod.mode === 'replaceArr' && mod.replace !== undefined) {
-                  let idx = -1;
-                  if (typeof mod.replace === 'string') {
-                      idx = resolvedEntries.findIndex(e => e.name === mod.replace);
-                  } else if (typeof mod.replace === 'object' && mod.replace.index !== undefined) {
-                      idx = mod.replace.index;
-                  }
-                  if (idx !== -1) {
-                      const items = Array.isArray(mod.items) ? mod.items : [mod.items];
-                      resolvedEntries.splice(idx, 1, ...items);
-                  }
-              } else if (mod.mode === 'insertArr' && mod.index !== undefined) {
-                  const items = Array.isArray(mod.items) ? mod.items : [mod.items];
-                  resolvedEntries.splice(mod.index, 0, ...items);
-              }
-          });
-      }
-      
-      current = original;
-      depth++;
-  }
-  
-  return { 
-      ...bg, 
-      entries: resolvedEntries || bg.entries,
-      skillProficiencies: resolvedSkills || bg.skillProficiencies,
-      toolProficiencies: resolvedTools || bg.toolProficiencies,
-      languageProficiencies: resolvedLangs || bg.languageProficiencies,
-      startingEquipment: resolvedEquip || bg.startingEquipment
-  };
-}
-
-const DB_NAME = "DndDataDB";
-const STORE_NAME = "files";
-const DB_VERSION = 7;
-
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => resolve(req.result);
-    req.onblocked = () =>
-      alert("Database upgrade blocked. Please close other tabs.");
-    req.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (db.objectStoreNames.contains(STORE_NAME))
-        db.deleteObjectStore(STORE_NAME);
-      db.createObjectStore(STORE_NAME);
-    };
-  });
-}
+import { ModalOverlay, ModalBox, ModalTitle, CloseBtn } from "src/styles/shared";
+import {
+  dedup,
+  getBestMatch,
+  resolveFeatureWithCopy,
+  resolveBackgroundWithCopy,
+  resolveRaceWithCopy,
+  capitalizeSkill,
+  resolveFluffWithCopy,
+  formatPrerequisites,
+  extractOptionSets,
+  extractChoiceLists,
+} from "src/utils/creatorLogic";
+import { useCreatorData } from "src/utils/useCreatorData";
+import FeatureChoices from "src/components/FeatureChoices";
+import { getGlobalSourcePriority, replaceAtkTags } from "src/utils/formatHelpers";
+import SpellTable, { schoolMap, getTimeStr, getRangeStr } from "src/components/SpellTable";
 
 const TABS = [
   "class",
   "race",
-  "abilities",
   "background",
   "bgextra",
   "equipment",
   "spells",
   "feats",
+  "abilities",
   "review",
 ];
 const TAB_LABELS = {
   class: "1. Class",
   race: "2. Species",
-  abilities: "3. Abilities",
-  background: "4. Background",
-  bgextra: "5. Bg. Extra",
-  equipment: "6. Equipment",
-  spells: "7. Spells",
-  feats: "8. Feats",
+  background: "3. Background",
+  bgextra: "4. Bg. Extra",
+  equipment: "5. Equipment",
+  spells: "6. Spells",
+  feats: "7. Feats",
+  abilities: "8. Abilities",
   review: "9. Review",
 };
 
@@ -212,6 +58,24 @@ const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"];
 const PB_COSTS = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
 const MAX_POINTS = 27;
 
+const sanitizeTableCells = (obj) => {
+  if (Array.isArray(obj)) return obj.map(sanitizeTableCells);
+  if (obj && typeof obj === "object") {
+    if (obj.type === "cell" && obj.roll && !obj.entry) {
+      if (obj.roll.exact !== undefined) {
+        return String(obj.roll.exact);
+      } else if (obj.roll.min !== undefined && obj.roll.max !== undefined) {
+        return obj.roll.min === obj.roll.max ? String(obj.roll.min) : `${obj.roll.min}-${obj.roll.max}`;
+      }
+    }
+    const res = {};
+    for (const k in obj) res[k] = sanitizeTableCells(obj[k]);
+    return res;
+  }
+  return obj;
+};
+const processEntries = (entries) => originalProcessEntries(sanitizeTableCells(entries));
+
 function calcMod(score) {
   return Math.floor((score - 10) / 2);
 }
@@ -224,251 +88,72 @@ function getPB(level) {
 
 // Renders HTML from processEntries
 function EntryHTML({ html, style }) {
+  const handleClick = (e) => {
+    if (e.target.classList.contains('spell-link')) {
+      const spellName = e.target.getAttribute('data-spell');
+      document.dispatchEvent(new CustomEvent('preview-spell', { detail: spellName }));
+    }
+    if (e.target.classList.contains('feat-link')) {
+      const featName = e.target.getAttribute('data-feat');
+      document.dispatchEvent(new CustomEvent('preview-feat', { detail: featName }));
+    }
+  };
+
+  const toTitleCase = (str) => {
+    const lowers = ["a", "an", "and", "as", "at", "but", "by", "for", "from", "in", "into", "near", "nor", "of", "on", "onto", "or", "the", "to", "with"];
+    return str.split(" ").map((w, i) => {
+      if (i !== 0 && lowers.includes(w.toLowerCase())) return w.toLowerCase();
+      return w.split(/([/-])/).map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()).join('');
+    }).join(" ");
+  };
+
+  let processed = html || "";
+  const spellMapList = [];
+  const featMapList = [];
+  if (typeof processed === 'string') {
+    processed = processed.replace(/\{@spell ([^|}]+)(?:\|[^}]*)?\}/gi, (match, spellName) => {
+        spellMapList.push({ orig: spellName, title: toTitleCase(spellName) });
+        return `__SPELL_LINK_${spellMapList.length - 1}__`;
+    });
+    processed = processed.replace(/\{@feat ([^|}]+)(?:\|[^}]*)?\}/gi, (match, featName) => {
+        featMapList.push({ orig: featName, title: toTitleCase(featName) });
+        return `__FEAT_LINK_${featMapList.length - 1}__`;
+    });
+
+    processed = processed.replace(/\{@recharge\s*([^}]*)\}/gi, (_, p1) => p1 ? `(Recharge ${p1}-6)` : `(Recharge 6)`);
+    processed = replaceAtkTags(processed);
+    processed = processed.replace(/\{@h\}/gi, '<em>Hit:</em> ');
+    processed = processed.replace(/\{@damage\s+([^|}]+)[^}]*\}/gi, '$1');
+    processed = processed.replace(/\{@dice\s+([^|}]+)[^}]*\}/gi, '$1');
+    processed = processed.replace(/\{@hit\s+([^|}]+)[^}]*\}/gi, '+$1');
+    processed = processed.replace(/\{@dc\s+([^|}]+)[^}]*\}/gi, 'DC $1');
+
+    processed = cleanText(processed);
+    spellMapList.forEach((spellItem, i) => {
+        processed = processed.replace(`__SPELL_LINK_${i}__`, `<span class="spell-link" style="color: var(--red-dark); font-weight: bold; cursor: pointer; border-bottom: 1px dashed var(--red-dark);" data-spell="${spellItem.orig.replace(/"/g, '&quot;')}">${spellItem.title}</span>`);
+    });
+    featMapList.forEach((featItem, i) => {
+        processed = processed.replace(`__FEAT_LINK_${i}__`, `<span class="feat-link" style="color: var(--red-dark); font-weight: bold; cursor: pointer; border-bottom: 1px dashed var(--red-dark);" data-feat="${featItem.orig.replace(/"/g, '&quot;')}">${featItem.title}</span>`);
+    });
+  } else {
+    processed = cleanText(processed);
+  }
+
   return (
-    <div dangerouslySetInnerHTML={{ __html: cleanText(html) }} style={style} />
+    <div onClick={handleClick} dangerouslySetInnerHTML={{ __html: processed }} style={style} />
   );
 }
 
-// ── Data Loading Hook ─────────────────────────────────────────────────────────
-function useCreatorData() {
-  const [data, setData] = useState({
-    classes: [],
-    classFeatures: [],
-    subclasses: [],
-    subclassFeatures: [],
-    spells: [],
-    optionalFeatures: [],
-    feats: [],
-    backgrounds: [],
-    backgroundFluff: [],
-    species: [],
-    raceFluff: [],
-    subraces: [],
-    deities: [],
-    items: [],
-    classFluff: [],
-    subclassFluff: [],
-  });
-  const [loading, setLoading] = useState(true);
-  const [noData, setNoData] = useState(false);
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const db = await openDB();
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          setNoData(true);
-          setLoading(false);
-          return;
-        }
-        const tx = db.transaction(STORE_NAME, "readonly");
-        const store = tx.objectStore(STORE_NAME);
-        const files = await new Promise((resolve, reject) => {
-          const req = store.get("currentData");
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => reject(req.error);
-        });
-        if (!files || !files.length) {
-          setNoData(true);
-          setLoading(false);
-          return;
-        }
-
-        const parsed = {
-          classes: [],
-          classFeatures: [],
-          subclasses: [],
-          subclassFeatures: [],
-          spells: [],
-          optionalFeatures: [],
-          feats: [],
-          backgrounds: [],
-          backgroundFluff: [],
-          species: [],
-          raceFluff: [],
-          subraces: [],
-          deities: [],
-          items: [],
-          classFluff: [],
-          subclassFluff: [],
-        };
-
-        // Build spell class map
-        const spellClassMap = {};
-        const processBookEntries = (entries, currentClass = null) => {
-          if (!entries || !Array.isArray(entries)) return;
-          entries.forEach((entry) => {
-            if (!entry) return;
-            let className = currentClass;
-            if (
-              entry.name &&
-              typeof entry.name === "string" &&
-              entry.name.endsWith(" Spells")
-            ) {
-              className = entry.name.replace(" Spells", "").trim();
-            }
-            if (className && entry.items && Array.isArray(entry.items)) {
-              entry.items.forEach((item) => {
-                const itemStr =
-                  typeof item === "string" ? item : item.name || "";
-                const match = /\{@spell ([^}|]+)/.exec(itemStr);
-                if (match) {
-                  const n = match[1].toLowerCase().trim();
-                  if (!spellClassMap[n]) spellClassMap[n] = new Set();
-                  spellClassMap[n].add(className);
-                }
-              });
-            }
-            if (entry.entries) processBookEntries(entry.entries, className);
-          });
-        };
-
-        files.forEach((file) => {
-          if (!file.name.toLowerCase().endsWith(".json")) return;
-          try {
-            const json = JSON.parse(file.content);
-            if (json.data && Array.isArray(json.data))
-              processBookEntries(json.data);
-          } catch {}
-        });
-
-        files.forEach((file) => {
-          if (!file.name.toLowerCase().endsWith(".json")) return;
-          try {
-            const json = JSON.parse(file.content);
-            if (json.classFeature)
-              for (const i of json.classFeature) parsed.classFeatures.push(i);
-            if (json.subclass)
-              for (const i of json.subclass) parsed.subclasses.push(i);
-            if (json.subclassFeature)
-              for (const i of json.subclassFeature)
-                parsed.subclassFeatures.push(i);
-            if (json.class) for (const i of json.class) parsed.classes.push(i);
-            if (json.optionalfeature)
-              for (const i of json.optionalfeature)
-                parsed.optionalFeatures.push(i);
-            if (json.feat) for (const i of json.feat) parsed.feats.push(i);
-            if (json.background)
-              for (const b of json.background) parsed.backgrounds.push(b);
-            if (json.classFluff)
-              for (const f of json.classFluff) parsed.classFluff.push(f);
-            if (json.subclassFluff)
-              for (const f of json.subclassFluff) parsed.subclassFluff.push(f);
-            if (json.backgroundFluff) {
-              const isInline = !!(
-                json.background && json.background.length > 0
-              );
-              for (const f of json.backgroundFluff)
-                parsed.backgroundFluff.push({ ...f, _inline: isInline });
-            }
-            if (json.race) for (const r of json.race) parsed.species.push(r);
-            if (json.raceFluff) {
-              const isInline = !!(json.race && json.race.length > 0);
-              for (const f of json.raceFluff)
-                parsed.raceFluff.push({ ...f, _inline: isInline });
-            }
-            if (json.subrace)
-              for (const s of json.subrace) parsed.subraces.push(s);
-            if (json.deity) for (const d of json.deity) parsed.deities.push(d);
-
-            [json.item, json.items, json.baseitem, json.baseitems].forEach(
-              (arr) => {
-                if (Array.isArray(arr))
-                  for (const i of arr) {
-                    if (i.name) parsed.items.push(i);
-                  }
-              },
-            );
-
-            const spellArr =
-              json.spell ||
-              json.spells ||
-              (json.data && json.data.some?.((s) => s.school || s.time)
-                ? json.data
-                : null);
-            if (spellArr && Array.isArray(spellArr)) {
-              for (const s of spellArr) {
-                if (!s.name || typeof s.level !== "number") continue;
-                const mapped = spellClassMap[s.name.toLowerCase().trim()];
-                if (mapped) {
-                  if (!s.classes) s.classes = { fromClassList: [] };
-                  else if (Array.isArray(s.classes)) {
-                    s.classes = {
-                      fromClassList: s.classes.map((c) =>
-                        typeof c === "string" ? { name: c } : c,
-                      ),
-                    };
-                  }
-                  if (!s.classes.fromClassList) s.classes.fromClassList = [];
-                  mapped.forEach((c) => {
-                    if (!s.classes.fromClassList.some((cl) => cl.name === c)) {
-                      s.classes.fromClassList.push({ name: c, source: "PHB" });
-                    }
-                  });
-                }
-                s._normalizedClasses = new Set();
-                const addC = (c) => {
-                  if (!c) return;
-                  s._normalizedClasses.add(
-                    (typeof c === "string" ? c : c.name).toLowerCase().trim(),
-                  );
-                };
-                if (s.classes) {
-                  if (Array.isArray(s.classes)) s.classes.forEach(addC);
-                  if (s.classes.fromClassList)
-                    s.classes.fromClassList.forEach(addC);
-                  if (s.classes.fromClassListVariant)
-                    s.classes.fromClassListVariant.forEach(addC);
-                }
-                if (json.data === spellArr) {
-                  if (s.school || s.time) parsed.spells.push(s);
-                } else parsed.spells.push(s);
-              }
-            }
-          } catch {}
-        });
-
-        console.log("All Optional Features:", parsed.optionalFeatures);
-        setData(parsed);
-      } catch (e) {
-        console.error("Failed to load creator data:", e);
-        setNoData(true);
-      }
-      setLoading(false);
-    }
-    load();
-  }, []);
-
-  return { data, loading, noData };
-}
-
 // ── Ability Score Tab ─────────────────────────────────────────────────────────
-function AbilitiesTab({ scores, setScores, method, setMethod, speciesBonus }) {
-  const [standardAssign, setStandardAssign] = useState({});
-  const [pbValues, setPbValues] = useState({
-    str: 8,
-    dex: 8,
-    con: 8,
-    int: 8,
-    wis: 8,
-    cha: 8,
-  });
-
+function AbilitiesTab({
+  scores, manualScores, setManualScores, method, setMethod, speciesBonus, backgroundBonus,
+  standardAssign, setStandardAssign, pbValues, setPbValues, selectedClass
+}) {
   const pointsUsed = useMemo(
     () =>
       Object.values(pbValues).reduce((sum, v) => sum + (PB_COSTS[v] || 0), 0),
     [pbValues],
   );
-
-  useEffect(() => {
-    if (method === "manual") return;
-    const final = {};
-    ABILITY_KEYS.forEach((k) => {
-      let base = method === "pointbuy" ? pbValues[k] : standardAssign[k] || 8;
-      final[k] = base + (speciesBonus?.[k] || 0);
-    });
-    setScores(final);
-  }, [method, pbValues, standardAssign, speciesBonus]);
 
   const assignedValues = Object.values(standardAssign);
   const remainingArray = STANDARD_ARRAY.filter((v, i) =>
@@ -479,11 +164,39 @@ function AbilitiesTab({ scores, setScores, method, setMethod, speciesBonus }) {
         STANDARD_ARRAY.filter((x) => x === v).length,
   );
 
+  const handleRecommendStats = () => {
+    if (!selectedClass) return;
+    const classStatPriorities = {
+      Barbarian: ["str", "con", "dex", "wis", "cha", "int"],
+      Bard: ["cha", "dex", "con", "wis", "int", "str"],
+      Cleric: ["wis", "con", "str", "dex", "int", "cha"],
+      Druid: ["wis", "con", "dex", "int", "cha", "str"],
+      Fighter: ["str", "con", "dex", "wis", "int", "cha"],
+      Monk: ["dex", "wis", "con", "str", "int", "cha"],
+      Paladin: ["str", "cha", "con", "wis", "dex", "int"],
+      Ranger: ["dex", "wis", "con", "str", "int", "cha"],
+      Rogue: ["dex", "con", "int", "wis", "cha", "str"],
+      Sorcerer: ["cha", "con", "dex", "wis", "int", "str"],
+      Warlock: ["cha", "con", "dex", "wis", "int", "str"],
+      Wizard: ["int", "con", "dex", "wis", "cha", "str"],
+      Artificer: ["int", "con", "dex", "wis", "cha", "str"],
+    };
+
+    let priority = classStatPriorities[selectedClass] || ["str", "dex", "con", "int", "wis", "cha"];
+    const newAssign = {};
+    const sortedArray = [...STANDARD_ARRAY].sort((a, b) => b - a); // 15, 14, 13, 12, 10, 8
+    priority.forEach((ab, idx) => {
+      newAssign[ab] = sortedArray[idx];
+    });
+    setStandardAssign(newAssign);
+    setMethod("standard");
+  };
+
   return (
     <div className="content-pane">
       <h2>Ability Scores</h2>
       <div
-        style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}
+        style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}
       >
         {["pointbuy", "standard", "manual"].map((m) => (
           <button
@@ -499,6 +212,15 @@ function AbilitiesTab({ scores, setScores, method, setMethod, speciesBonus }) {
                 : "Manual"}
           </button>
         ))}
+        {selectedClass && (
+          <button
+            className="btn btn-secondary"
+            style={{ fontSize: "0.85rem", padding: "6px 14px", marginLeft: "auto", background: "var(--gold-dark)", borderColor: "var(--gold-dark)", color: "white" }}
+            onClick={handleRecommendStats}
+          >
+            ✨ Auto-Assign Recommended
+          </button>
+        )}
       </div>
 
       {method === "pointbuy" && (
@@ -549,14 +271,14 @@ function AbilitiesTab({ scores, setScores, method, setMethod, speciesBonus }) {
       >
         {ABILITY_KEYS.map((key, i) => {
           const bonus = speciesBonus?.[key] || 0;
+          const bgBonus = backgroundBonus?.[key] || 0;
           const base =
             method === "pointbuy"
               ? pbValues[key]
               : method === "standard"
                 ? standardAssign[key] || ""
-                : scores[key] || 10;
-          const total =
-            method === "manual" ? scores[key] : (parseInt(base) || 0) + bonus;
+                : manualScores[key] || 10;
+          const total = scores[key];
 
           return (
             <div
@@ -668,9 +390,9 @@ function AbilitiesTab({ scores, setScores, method, setMethod, speciesBonus }) {
                     type="number"
                     min={1}
                     max={30}
-                    value={scores[key] || 10}
+                    value={manualScores[key] || 10}
                     onChange={(e) =>
-                      setScores((s) => ({
+                      setManualScores((s) => ({
                         ...s,
                         [key]: parseInt(e.target.value) || 10,
                       }))
@@ -696,6 +418,16 @@ function AbilitiesTab({ scores, setScores, method, setMethod, speciesBonus }) {
                   }}
                 >
                   Species: {bonus > 0 ? `+${bonus}` : bonus}
+                </div>
+              )}
+              {bgBonus !== 0 && (
+                <div
+                  style={{
+                    fontSize: "0.8rem",
+                    color: bgBonus > 0 ? "var(--green, #2d6a4f)" : "var(--red)",
+                  }}
+                >
+                  Background: {bgBonus > 0 ? `+${bgBonus}` : bgBonus}
                 </div>
               )}
               <div
@@ -727,6 +459,8 @@ function SpeciesTab({
   onSelect,
   selectedSubrace,
   onSelectSubrace,
+  speciesAsi,
+  setSpeciesAsi,
 }) {
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => {
@@ -745,7 +479,8 @@ function SpeciesTab({
 
   const speciesObj = useMemo(() => {
     if (!selected) return null;
-    return getBestMatch(data.species, selected);
+    let match = getBestMatch(data.species, selected);
+    return resolveRaceWithCopy(match, data.species);
   }, [selected, data.species]);
 
   const subraces = useMemo(() => {
@@ -757,11 +492,11 @@ function SpeciesTab({
 
   const fluff = useMemo(() => {
     if (!speciesObj) return null;
-    return (
-      data.raceFluff.find(
+    let match = data.raceFluff?.find(
         (f) => f.name === selected && f.source === speciesObj.source,
-      ) || data.raceFluff.find((f) => f.name === selected)
-    );
+      ) || data.raceFluff?.find((f) => f.name === selected);
+    if (!match && speciesObj.fluff) match = speciesObj.fluff;
+    return resolveFluffWithCopy(match, data.raceFluff || []);
   }, [selected, speciesObj, data.raceFluff]);
 
   return (
@@ -802,13 +537,12 @@ function SpeciesTab({
         ) : (
           <div>
             <h2>{speciesObj.name}</h2>
-            {(fluff?.entries || speciesObj?.img) && (
               <div
                 style={{
                   marginBottom: 16,
-                  padding: "12px 16px",
-                  background: "rgba(212,165,116,0.1)",
-                  border: "1px solid var(--gold)",
+                  padding: fluff?.entries ? "12px 16px" : 0,
+                  background: fluff?.entries ? "rgba(212,165,116,0.1)" : "transparent",
+                  border: fluff?.entries ? "1px solid var(--gold)" : "none",
                   borderRadius: 4,
                 }}
               >
@@ -836,7 +570,6 @@ function SpeciesTab({
                 )}
                 <div style={{ clear: "both" }} />
               </div>
-            )}
             {speciesObj.speed && (
               <p>
                 <strong>Speed:</strong>{" "}
@@ -922,584 +655,81 @@ function SpeciesTab({
               </div>
             )}
           </div>
+          )}
+
+          {speciesObj && (
+            <div style={{ marginTop: 16, padding: "12px 16px", background: "rgba(255,255,255,0.5)", border: "1px solid var(--gold)", borderRadius: 4 }}>
+              <strong style={{ display: "block", marginBottom: 8, color: "var(--red-dark)" }}>Species Ability Score Adjustment</strong>
+              <p style={{ fontSize: "0.9rem", marginBottom: 12 }}>
+                Choose your ability score increases (override default species bonuses).
+              </p>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: "block", fontWeight: "bold", marginBottom: 4, fontSize: "0.9rem" }}>Adjustment Method:</label>
+                <select
+                  className="styled-select"
+                  value={speciesAsi.method}
+                  onChange={(e) => setSpeciesAsi({ ...speciesAsi, method: e.target.value })}
+                >
+                  <option value="none">None</option>
+                  <option value="default">Default (from Species)</option>
+                  <option value="flat">+1 to Three Scores</option>
+                  <option value="split">+2 to One, +1 to Another</option>
+                </select>
+              </div>
+              {speciesAsi.method === "flat" && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} style={{ flex: 1, minWidth: 120 }}>
+                      <label style={{ fontSize: "0.85rem" }}>Score {i} (+1)</label>
+                      <select
+                        className="styled-select"
+                        value={speciesAsi[`s${i}`]}
+                        onChange={(e) => setSpeciesAsi({ ...speciesAsi, [`s${i}`]: e.target.value })}
+                      >
+                        <option value="" disabled>-- Select --</option>
+                        {['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'].map(ab => (
+                          <option key={ab} value={ab} disabled={
+                            [1, 2, 3].filter(n => n !== i).map(n => speciesAsi[`s${n}`]).includes(ab)
+                          }>{ab}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {speciesAsi.method === "split" && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 120 }}>
+                    <label style={{ fontSize: "0.85rem" }}>Score (+2)</label>
+                    <select
+                      className="styled-select"
+                      value={speciesAsi.p2}
+                      onChange={(e) => setSpeciesAsi({ ...speciesAsi, p2: e.target.value })}
+                    >
+                      <option value="" disabled>-- Select --</option>
+                      {['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'].map(ab => (
+                        <option key={ab} value={ab} disabled={speciesAsi.p1 === ab}>{ab}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 120 }}>
+                    <label style={{ fontSize: "0.85rem" }}>Score (+1)</label>
+                    <select
+                      className="styled-select"
+                      value={speciesAsi.p1}
+                      onChange={(e) => setSpeciesAsi({ ...speciesAsi, p1: e.target.value })}
+                    >
+                      <option value="" disabled>-- Select --</option>
+                      {['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'].map(ab => (
+                        <option key={ab} value={ab} disabled={speciesAsi.p2 === ab}>{ab}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
         )}
       </div>
-    </div>
-  );
-}
-
-// ── Feature Choice Parsers ────────────────────────────────────────────────────
-function extractChoiceLists(entries) {
-  const CHOICE_RE =
-    /\b(choose|pick|select)\b[^.]{0,60}?\b(one|two|three|four|five|\d+)\b|one of the following|\d+\s+of the following/i;
-  const results = [];
-  const wordToNum = { one: 1, two: 2, three: 3, four: 4, five: 5, a: 1, an: 1 };
-
-  function parseCount(text) {
-    const m = text.match(/\b(one|two|three|four|five|a|an|\d+)\b/i);
-    if (m) return wordToNum[m[1].toLowerCase()] || parseInt(m[1], 10) || 1;
-    return 1;
-  }
-
-  function stripTags(str) {
-    if (typeof str !== "string") return "";
-    return str.replace(/\{@[a-z]+\s([^|}]+)[^}]*\}/gi, "$1");
-  }
-
-  function extractInlineItems(raw, clean) {
-    if (typeof raw !== "string") return [];
-    const tagMatches = [
-      ...raw.matchAll(/\{@(?:skill|feat|item|race|class)\s+([^|}\s][^|}]*)/gi),
-    ];
-    if (tagMatches.length >= 2)
-      return tagMatches.map((m) => ({ name: m[1].trim(), type: "item" }));
-    const colonIdx = clean.search(/:\s*/);
-    if (colonIdx !== -1) {
-      const after = clean.slice(colonIdx + 1);
-      const parts = after
-        .split(/,\s*|\s+or\s+/i)
-        .map((s) => s.replace(/[.!?]$/, "").trim())
-        .filter(
-          (s) =>
-            s.length > 1 &&
-            s.length < 60 &&
-            !/\b(you|your|the|a |an |and )\b/i.test(s),
-        );
-      if (parts.length >= 2)
-        return parts.map((name) => ({ name, type: "item" }));
-    }
-    return [];
-  }
-
-  function walk(arr, depth = 0) {
-    if (!Array.isArray(arr) || depth > 5) return;
-    for (let i = 0; i < arr.length; i++) {
-      const entry = arr[i];
-      if (typeof entry === "string") {
-        const clean = stripTags(entry);
-        if (CHOICE_RE.test(clean)) {
-          const next = arr[i + 1];
-          if (
-            next &&
-            typeof next === "object" &&
-            next.type === "list" &&
-            Array.isArray(next.items)
-          ) {
-            const namedItems = next.items.filter(
-              (it) =>
-                typeof it === "object" &&
-                it.name &&
-                it.name.length <= 50 &&
-                !/[.!?]$/.test(it.name.trim()) &&
-                !/\b(attack|saving throw|bonus action|reaction|spell slot)\b/i.test(
-                  it.name,
-                ),
-            );
-            if (namedItems.length >= 2)
-              results.push({
-                prompt: clean,
-                items: namedItems,
-                count: parseCount(clean),
-              });
-            else if (next.items.length >= 2) {
-              const strItems = next.items
-                .map((it) =>
-                  typeof it === "string"
-                    ? { name: stripTags(it), type: "item" }
-                    : it,
-                )
-                .filter(
-                  (it) =>
-                    it &&
-                    it.name &&
-                    it.name.length <= 60 &&
-                    !/[.!?]$/.test(it.name.trim()) &&
-                    !/\b(attack|saving throw|bonus action|reaction|spell slot|make a|force a|take a)\b/i.test(
-                      it.name,
-                    ),
-                );
-              if (strItems.length >= 2)
-                results.push({
-                  prompt: clean,
-                  items: strItems,
-                  count: parseCount(clean),
-                });
-            }
-          } else {
-            const inlineItems = extractInlineItems(entry, clean);
-            if (inlineItems.length >= 2)
-              results.push({
-                prompt: clean,
-                items: inlineItems,
-                count: parseCount(clean),
-              });
-          }
-        }
-      } else if (entry && typeof entry === "object") {
-        if (entry.type === "list" && entry.name) {
-          const cleanName = stripTags(entry.name);
-          if (CHOICE_RE.test(cleanName) && Array.isArray(entry.items)) {
-            const namedItems = entry.items.filter(
-              (it) => typeof it === "object" && it.name,
-            );
-            if (namedItems.length >= 2)
-              results.push({
-                prompt: cleanName,
-                items: entry.items,
-                count: parseCount(cleanName),
-              });
-          }
-        }
-        if (entry.entries) walk(entry.entries, depth + 1);
-        if (entry.items && entry.type !== "list") walk(entry.items, depth + 1);
-      }
-    }
-  }
-
-  if (Array.isArray(entries)) walk(entries, 0);
-  else if (entries && typeof entries === "object") walk([entries], 0);
-
-  const seen = new Set();
-  return results.filter((r) => {
-    const k = r.prompt.slice(0, 80);
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
-}
-
-function extractOptionSets(entries) {
-  const optionSets = [];
-  function walk(obj) {
-    if (!obj || typeof obj !== "object") return;
-    if (Array.isArray(obj)) {
-      obj.forEach(walk);
-      return;
-    }
-    if (obj.type === "options") {
-      const count = obj.count != null ? obj.count : 1;
-      const choices = [];
-      if (obj.entries) {
-        obj.entries.forEach((ent) => {
-          if (ent.type === "refOptionalfeature")
-            choices.push({ type: "optionalfeature", uid: ent.optionalfeature });
-          else if (ent.type === "refClassFeature")
-            choices.push({ type: "classFeature", uid: ent.classFeature });
-          else if (ent.type === "refSubclassFeature")
-            choices.push({ type: "subclassFeature", uid: ent.subclassFeature });
-          else if (ent.name)
-            choices.push({
-              type: "entries",
-              name: ent.name,
-              entries: ent.entries,
-            });
-        });
-      }
-      if (choices.length > 0) {
-        const setId = choices
-          .map((c) => c.uid || c.name || "")
-          .join("|")
-          .replace(/[^a-z0-9|]/gi, "")
-          .substring(0, 32);
-        optionSets.push({ count, choices, setId });
-      }
-    }
-    Object.values(obj).forEach(walk);
-  }
-  walk(entries);
-  return optionSets;
-}
-
-function formatPrerequisites(opt) {
-  if (!opt || !opt.prerequisite || !Array.isArray(opt.prerequisite)) return "";
-  const groupTexts = opt.prerequisite
-    .map((req) => {
-      const groupReqs = [];
-      if (req.level) {
-        if (typeof req.level === "object") {
-          let lvlStr = `Lvl ${req.level.level}`;
-          if (req.level.class && req.level.class.name)
-            lvlStr += ` ${req.level.class.name}`;
-          groupReqs.push(lvlStr);
-        } else {
-          groupReqs.push(`Lvl ${req.level}`);
-        }
-      }
-      if (req.pact) groupReqs.push(`Pact: ${req.pact}`);
-      if (req.patron)
-        groupReqs.push(
-          `Patron: ${typeof req.patron === "string" ? req.patron : req.patron.join("/")}`,
-        );
-      if (req.feature)
-        req.feature.forEach((f) =>
-          groupReqs.push(
-            `Feature: ${(typeof f === "string" ? f : f.name || "").split("|")[0]}`,
-          ),
-        );
-      if (req.spell)
-        req.spell.forEach((s) => {
-          if (typeof s === "string")
-            groupReqs.push(`Spell: ${s.split("#")[0]}`);
-          else if (s.entry) groupReqs.push(s.entry);
-        });
-      if (req.optionalfeature)
-        req.optionalfeature.forEach((f) =>
-          groupReqs.push(`Feature: ${f.split("|")[0]}`),
-        );
-      if (req.item) req.item.forEach((i) => groupReqs.push(i));
-      if (req.otherSummary)
-        groupReqs.push(req.otherSummary.entrySummary || req.otherSummary.entry);
-
-      if (req.ability) {
-        req.ability.forEach((a) => {
-          if (a.choose && a.choose.from) {
-            groupReqs.push(
-              `Ability: ${a.choose.from.join(" or ").toUpperCase()}`,
-            );
-          } else {
-            const abs = Object.keys(a)
-              .filter((k) => k !== "choose")
-              .map((k) => `${k.toUpperCase()} ${a[k]}`)
-              .join(" or ");
-            if (abs) groupReqs.push(abs);
-          }
-        });
-      }
-      if (req.race) {
-        const races = req.race
-          .map((r) => r.name + (r.subrace ? ` (${r.subrace})` : ""))
-          .join(" or ");
-        if (races) groupReqs.push(`Race: ${races}`);
-      }
-      if (req.proficiency) {
-        req.proficiency.forEach((p) => {
-          if (p.armor) groupReqs.push(`Armor: ${p.armor}`);
-          if (p.weapon) groupReqs.push(`Weapon: ${p.weapon}`);
-          if (p.weaponGroup) groupReqs.push(`Weapon Group: ${p.weaponGroup}`);
-        });
-      }
-      if (req.spellcasting || req.spellcasting2020 || req.spellcastingFeature)
-        groupReqs.push("Spellcasting Feature");
-      if (req.campaign)
-        groupReqs.push(`Campaign: ${req.campaign.join(" or ")}`);
-
-      return groupReqs.join(", ");
-    })
-    .filter((t) => t);
-  return groupTexts.length ? groupTexts.join(" OR ") : "";
-}
-
-function FeatureChoices({
-  feature,
-  data,
-  selectedClass,
-  classSource,
-  selectedLevel,
-  selectedOptions,
-  onToggleOption,
-  containerStyle,
-}) {
-  const optionSets = useMemo(
-    () => extractOptionSets(feature.entries || feature.entry),
-    [feature],
-  );
-  const choiceLists = useMemo(
-    () => extractChoiceLists(feature.entries || feature.entry),
-    [feature],
-  );
-
-  const optFeatureTypes = useMemo(() => {
-    if (
-      feature.name === "Ability Score Improvement" ||
-      feature.name === "Epic Boon"
-    )
-      return [];
-    const types = [];
-    const entriesStr = JSON.stringify(feature.entries || feature.entry || []);
-    const regex =
-      /\{@filter\s+[^|]+\|\s*optionalfeatures\s*\|(?:[^}]*?)featuretype=([^}|]+)/gi;
-    let match;
-    while ((match = regex.exec(entriesStr)) !== null) {
-      types.push(...match[1].split(";").map((t) => t.trim()));
-    }
-    const name = feature.name || "";
-    if (name.includes("Eldritch Invocation")) types.push("EI");
-    if (name.includes("Pact Boon")) types.push("PB");
-    if (name.includes("Elemental Discipline")) types.push("ED");
-    if (name.includes("Artificer Infusion") || name.includes("Infuse Item"))
-      types.push("AI");
-    if (name.includes("Maneuver")) types.push("MV", "MV:B", "MV:C2-UA");
-    if (name.includes("Arcane Shot")) types.push("AS", "AS:V1-UA", "AS:V2-UA");
-    if (name.includes("Rune Carver") || name.includes("Rune Magic"))
-      types.push("RN");
-    if (name.includes("Alchemical Formula")) types.push("AF");
-    if (name.includes("Fighting Style")) {
-      types.push("FS");
-      if (selectedClass === "Fighter") types.push("FS:F");
-      if (selectedClass === "Ranger") types.push("FS:R");
-      if (selectedClass === "Paladin") types.push("FS:P");
-      if (selectedClass === "Bard") types.push("FS:B");
-    }
-    if (name.includes("Metamagic") && feature.level <= 3) types.push("MM");
-    return [...new Set(types)].map((t) => t.toLowerCase());
-  }, [feature, selectedClass]);
-
-  const dynamicOptions = useMemo(() => {
-    if (!optFeatureTypes.length || !data.optionalFeatures) return [];
-    const candidates = new Map();
-    data.optionalFeatures.forEach((opt) => {
-      if (!opt.featureType || !opt.name) return;
-      const types = Array.isArray(opt.featureType)
-        ? opt.featureType
-        : [opt.featureType];
-      if (
-        types.some((t) => optFeatureTypes.includes(String(t).toLowerCase()))
-      ) {
-        if (!candidates.has(opt.name)) candidates.set(opt.name, []);
-        candidates.get(opt.name).push(opt);
-      }
-    });
-    const unique = [];
-    candidates.forEach((opts) => {
-      const selected = resolveFeatureWithCopy(
-        opts,
-        [data.optionalFeatures, data.classFeatures],
-        classSource,
-      );
-      if (selected) unique.push(selected);
-    });
-    console.log(
-      `[FeatureChoices] Fetched optional features for ${feature.name}:`,
-      unique,
-    );
-
-    const cLvl = selectedLevel || 1;
-    const checkPrereqs = (opt) => {
-      if (!opt.prerequisite) return true;
-      return opt.prerequisite.some((req) => {
-        if (req.level) {
-          let reqLvl =
-            typeof req.level === "object" ? req.level.level : req.level;
-          if (cLvl < reqLvl) return false;
-        }
-        if (req.pact) {
-          const pactName = `Pact of the ${req.pact}`;
-          if (
-            !Array.from(selectedOptions || []).some((s) =>
-              s.toLowerCase().includes(pactName.toLowerCase()),
-            )
-          )
-            return false;
-        }
-        return true;
-      });
-    };
-    return unique
-      .filter(checkPrereqs)
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [optFeatureTypes, data.optionalFeatures, selectedLevel, selectedOptions]);
-
-  if (
-    optionSets.length === 0 &&
-    choiceLists.length === 0 &&
-    dynamicOptions.length === 0
-  )
-    return null;
-
-  const renderCheckbox = (
-    key,
-    label,
-    descHtml,
-    groupKey,
-    maxCount,
-    prereqHtml = "",
-  ) => {
-    const isChecked = selectedOptions?.has(key);
-    let countInGroup = 0;
-    if (groupKey && maxCount > 1) {
-      for (const k of selectedOptions || []) {
-        if (k.startsWith(groupKey + "|||")) countInGroup++;
-      }
-    }
-    const disabled = !isChecked && maxCount > 1 && countInGroup >= maxCount;
-
-    return (
-      <label
-        key={key}
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 10,
-          padding: "8px 10px",
-          background: "rgba(255,255,255,0.7)",
-          border: "1px solid var(--gold)",
-          borderRadius: 6,
-          marginBottom: 6,
-          cursor: disabled ? "not-allowed" : "pointer",
-          opacity: disabled ? 0.6 : 1,
-          transition: "background 0.15s",
-        }}
-      >
-        <input
-          type={maxCount === 1 ? "radio" : "checkbox"}
-          checked={isChecked}
-          disabled={disabled}
-          onChange={() => onToggleOption(key, maxCount === 1 ? groupKey : null)}
-          style={{
-            marginTop: 4,
-            cursor: disabled ? "not-allowed" : "pointer",
-            width: 16,
-            height: 16,
-            flexShrink: 0,
-          }}
-        />
-        <div style={{ flex: 1 }}>
-          <strong
-            style={{
-              color: "var(--ink)",
-              fontSize: "0.95rem",
-              display: "block",
-            }}
-          >
-            {label}
-          </strong>
-          {prereqHtml && (
-            <div
-              style={{ fontSize: "0.8rem", color: "var(--red)", marginTop: 2 }}
-            >
-              Requires: {prereqHtml}
-            </div>
-          )}
-          {descHtml && (
-            <div
-              style={{
-                fontSize: "0.9rem",
-                color: "var(--ink-light)",
-                marginTop: 4,
-                lineHeight: 1.4,
-              }}
-              dangerouslySetInnerHTML={{ __html: descHtml }}
-            />
-          )}
-        </div>
-      </label>
-    );
-  };
-
-  return (
-    <div style={containerStyle || { paddingTop: 12, paddingBottom: 4 }}>
-      <div
-        style={{
-          fontSize: "0.95rem",
-          fontWeight: "bold",
-          color: "var(--red-dark)",
-          marginBottom: 8,
-          borderBottom: "1px solid var(--gold-dark)",
-          paddingBottom: 4,
-        }}
-      >
-        {feature.level !== undefined
-          ? `Lvl ${feature.level}: ${feature.name}`
-          : "Feature Choices"}
-      </div>
-      {optionSets.map((optSet) => (
-        <div key={optSet.setId} style={{ marginBottom: 12 }}>
-          <div
-            style={{ fontWeight: "bold", marginBottom: 6, fontSize: "0.95rem" }}
-          >
-            Choose {optSet.count}:
-          </div>
-          {optSet.choices.map((choice) => {
-            let name =
-              choice.name || (choice.uid ? choice.uid.split("|")[0] : "");
-            const key = `OptionSet|||${optSet.setId}|||${name}`;
-            let descHtml = "";
-            let prereqText = "";
-            if (choice.entries)
-              descHtml = cleanText(processEntries(choice.entries));
-            if (data.optionalFeatures) {
-              const cands = [
-                ...(data.optionalFeatures?.filter((f) => f.name === name) ||
-                  []),
-                ...(data.classFeatures?.filter((f) => f.name === name) || []),
-              ];
-              const found = resolveFeatureWithCopy(
-                cands,
-                [data.optionalFeatures, data.classFeatures],
-                classSource,
-              );
-              if (found) {
-                if (!descHtml)
-                  descHtml = cleanText(
-                    processEntries(found.entries || found.entry),
-                  );
-                prereqText = formatPrerequisites(found);
-              }
-            }
-            return renderCheckbox(
-              key,
-              name,
-              descHtml,
-              `OptionSet|||${optSet.setId}`,
-              optSet.count,
-              prereqText,
-            );
-          })}
-        </div>
-      ))}
-      {choiceLists.map((list, idx) => {
-        const groupKey = `ChoiceList|||${feature.name}|||${feature.level || 0}|||${idx}`;
-        return (
-          <div key={groupKey} style={{ marginBottom: 12 }}>
-            <div
-              style={{
-                fontWeight: "bold",
-                marginBottom: 6,
-                fontSize: "0.95rem",
-              }}
-            >
-              {cleanText(list.prompt)}
-            </div>
-            {list.items.map((item, itemIdx) => {
-              const name =
-                typeof item === "string"
-                  ? item
-                  : item.name || `Option ${itemIdx + 1}`;
-              const key = `${groupKey}|||${name}`;
-              let descHtml = "";
-              if (typeof item === "object" && (item.entries || item.entry))
-                descHtml = cleanText(
-                  processEntries(item.entries || item.entry),
-                );
-              return renderCheckbox(key, name, descHtml, groupKey, list.count);
-            })}
-          </div>
-        );
-      })}
-      {dynamicOptions.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
-          <div
-            style={{ fontWeight: "bold", marginBottom: 6, fontSize: "0.95rem" }}
-          >
-            Available Options:
-          </div>
-          {dynamicOptions.map((opt) => {
-            const key = `DynamicOpt|||${feature.name}|||${opt.name}`;
-            const descHtml = cleanText(
-              processEntries(opt.entries || opt.entry),
-            );
-            const prereqText = formatPrerequisites(opt);
-            return renderCheckbox(
-              key,
-              opt.name,
-              descHtml,
-              `DynamicOpt|||${feature.name}`,
-              99,
-              prereqText,
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
@@ -1517,6 +747,7 @@ function ClassTab({
   onSelectClassSkills,
   selectedOptions,
   onToggleOption,
+  selectedSpells,
 }) {
   const validClasses = useMemo(
     () =>
@@ -1663,7 +894,7 @@ function ClassTab({
     });
     return (
       matches.sort(
-        (a, b) => sourcePriority(a.source) - sourcePriority(b.source),
+        (a, b) => getGlobalSourcePriority(b.source) - getGlobalSourcePriority(a.source),
       )[0] || null
     );
   }, [selectedSubclass, selectedClass, data.subclasses]);
@@ -1681,21 +912,21 @@ function ClassTab({
             f.name?.trim().toLowerCase() === targetSub)
         );
       }) || [];
-    return (
-      matches.sort(
-        (a, b) => sourcePriority(a.source) - sourcePriority(b.source),
-      )[0] || null
-    );
-  }, [selectedSubclass, selectedClass, data.subclassFluff]);
+    let match = matches.sort(
+      (a, b) => getGlobalSourcePriority(b.source) - getGlobalSourcePriority(a.source),
+    )[0] || null;
+    if (!match && subclassObj?.fluff) match = subclassObj.fluff;
+    return resolveFluffWithCopy(match, data.subclassFluff || []);
+  }, [selectedSubclass, selectedClass, data.subclassFluff, subclassObj]);
 
   const classFluff = useMemo(() => {
     if (!selectedClass) return null;
-    return (
-      data.classFluff?.find(
+    let match = data.classFluff?.find(
         (f) => f.name === selectedClass && f.source === classSource,
-      ) || data.classFluff?.find((f) => f.name === selectedClass)
-    );
-  }, [selectedClass, classSource, data.classFluff]);
+      ) || data.classFluff?.find((f) => f.name === selectedClass);
+    if (!match && classObj?.fluff) match = classObj.fluff;
+    return resolveFluffWithCopy(match, data.classFluff || []);
+  }, [selectedClass, classSource, data.classFluff, classObj]);
 
   const classTableGroups = classObj?.classTableGroups || [];
 
@@ -1880,7 +1111,7 @@ function ClassTab({
               style={{
                 margin: "0 0 8px",
                 fontSize: "1.1em",
-                color: "var(--red-dark)",
+                color: "var(--ink)",
               }}
             >
               Select Subclass
@@ -2133,6 +1364,8 @@ function ClassTab({
                     selectedLevel={selectedLevel}
                     selectedOptions={selectedOptions}
                     onToggleOption={onToggleOption}
+                    subclassSelected={selectedSubclass}
+                    selectedSpells={selectedSpells}
                   />
                 ))}
               </div>
@@ -2184,13 +1417,12 @@ function ClassTab({
               </div>
             </div>
 
-            {(classFluff?.entries || classObj?.img) && (
               <div
                 style={{
                   marginBottom: 16,
-                  padding: "12px 16px",
-                  background: "rgba(212,165,116,0.08)",
-                  border: "1px solid var(--gold)",
+                  padding: classFluff?.entries ? "12px 16px" : 0,
+                  background: classFluff?.entries ? "rgba(212,165,116,0.08)" : "transparent",
+                  border: classFluff?.entries ? "1px solid var(--gold)" : "none",
                   borderRadius: 4,
                 }}
               >
@@ -2217,15 +1449,14 @@ function ClassTab({
                 )}
                 <div style={{ clear: "both" }} />
               </div>
-            )}
 
-            {selectedSubclass && (subclassIntro || subclassObj?.img) && (
+            {selectedSubclass && (
               <div
                 style={{
                   marginBottom: 16,
-                  padding: "12px 16px",
-                  background: "rgba(212,165,116,0.12)",
-                  border: "1px solid var(--gold)",
+                  padding: subclassIntro ? "12px 16px" : 0,
+                  background: subclassIntro ? "rgba(212,165,116,0.12)" : "transparent",
+                  border: subclassIntro ? "1px solid var(--gold)" : "none",
                   borderRadius: 4,
                 }}
               >
@@ -2238,6 +1469,7 @@ function ClassTab({
                   subclassShortName={selectedSubclass}
                   source={subclassObj?.source || classSource}
                 />
+                {subclassIntro && (
                 <div
                   style={{
                     fontSize: "0.75rem",
@@ -2250,6 +1482,7 @@ function ClassTab({
                 >
                   {subclassObj?.name || selectedSubclass}
                 </div>
+                )}
                 {subclassIntro && (
                   <EntryHTML
                     html={subclassIntro}
@@ -2279,7 +1512,7 @@ function ClassTab({
                       style={{
                         padding: "3px 4px",
                         background: "var(--parchment-dark)",
-                        color: "var(--red-dark)",
+                        color: "var(--ink)",
                         border: "1px solid var(--gold)",
                       }}
                     >
@@ -2289,7 +1522,7 @@ function ClassTab({
                       style={{
                         padding: "3px 4px",
                         background: "var(--parchment-dark)",
-                        color: "var(--red-dark)",
+                        color: "var(--ink)",
                         border: "1px solid var(--gold)",
                       }}
                     >
@@ -2299,7 +1532,7 @@ function ClassTab({
                       style={{
                         padding: "3px 4px",
                         background: "var(--parchment-dark)",
-                        color: "var(--red-dark)",
+                        color: "var(--ink)",
                         border: "1px solid var(--gold)",
                         textAlign: "left",
                       }}
@@ -2313,7 +1546,7 @@ function ClassTab({
                           style={{
                             padding: "3px 4px",
                             background: "var(--parchment-dark)",
-                            color: "var(--red-dark)",
+                            color: "var(--ink)",
                             border: "1px solid var(--gold)",
                           }}
                         >
@@ -2409,7 +1642,7 @@ function ClassTab({
                                   textAlign: "center",
                                 }}
                               >
-                                {String(val)}
+                                {cleanTag(val)}
                               </td>
                             );
                           });
@@ -2678,6 +1911,9 @@ function BackgroundTab({
   onSelect,
   selectedOptions,
   onToggleOption,
+  backgroundAsi,
+  setBackgroundAsi,
+  selectedSpells,
 }) {
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => {
@@ -2701,13 +1937,59 @@ function BackgroundTab({
     return match;
   }, [selected, data.backgrounds]);
 
+  const foundAbilities = useMemo(() => {
+    if (!bgObj) return [];
+    const allAbilities = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma'];
+    let found = [];
+    if (bgObj.ability) {
+      const codes = new Set();
+      bgObj.ability.forEach(a => {
+        if (a.choose?.weighted?.from) a.choose.weighted.from.forEach(c => codes.add(c));
+        else if (a.choose?.from) a.choose.from.forEach(c => codes.add(c));
+        Object.keys(a).forEach(k => { if (['str','dex','con','int','wis','cha'].includes(k)) codes.add(k); });
+      });
+      const map = { str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma' };
+      codes.forEach(c => { if (map[c]) found.push(map[c]); });
+    }
+    if (found.length === 0 && bgObj.entries) {
+      let asiEntry = null;
+      const findASI = (obj) => {
+        if (asiEntry) return;
+        if (typeof obj === 'string') {
+          if (obj.includes('Ability Scores:')) asiEntry = obj;
+          return;
+        }
+        if (Array.isArray(obj)) { obj.forEach(findASI); return; }
+        if (typeof obj === 'object' && obj !== null) {
+          if ((obj.name === 'Ability Scores' || obj.name === 'Ability Scores:') && (obj.entries || obj.entry)) {
+            const content = obj.entries ? (Array.isArray(obj.entries) ? obj.entries.join(' ') : obj.entries) : obj.entry;
+            asiEntry = "Ability Scores: " + content;
+            return;
+          }
+          if (obj.items) findASI(obj.items);
+          if (obj.entries) findASI(obj.entries);
+        }
+      };
+      findASI(bgObj.entries);
+      if (asiEntry) {
+        let text = asiEntry.replace(/{@ability\s+([^}]+)}/gi, (match, content) => {
+          const code = content.split('|')[0].trim().toLowerCase();
+          const map = { str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma' };
+          return map[code] || content;
+        });
+        found = allAbilities.filter(ab => new RegExp(`\\b${ab}\\b`, 'i').test(text));
+      }
+    }
+    return found;
+  }, [bgObj]);
+
   const fluff = useMemo(() => {
     if (!bgObj) return null;
-    return (
-      data.backgroundFluff.find(
+    let match = data.backgroundFluff?.find(
         (f) => f.name === selected && f.source === bgObj.source,
-      ) || data.backgroundFluff.find((f) => f.name === selected)
-    );
+      ) || data.backgroundFluff?.find((f) => f.name === selected);
+    if (!match && bgObj.fluff) match = bgObj.fluff;
+    return resolveFluffWithCopy(match, data.backgroundFluff || []);
   }, [selected, bgObj, data.backgroundFluff]);
 
   return (
@@ -2739,22 +2021,6 @@ function BackgroundTab({
             </div>
           ))}
         </div>
-        {bgObj && bgObj.entries && (
-          <FeatureChoices
-            feature={{ entries: bgObj.entries, name: bgObj.name }}
-            data={data}
-            selectedOptions={selectedOptions}
-            onToggleOption={onToggleOption}
-            containerStyle={{
-              padding: "10px 12px",
-              borderTop: "1px solid var(--border-color)",
-              background: "var(--parchment)",
-              flexShrink: 0,
-              maxHeight: "50%",
-              overflowY: "auto",
-            }}
-          />
-        )}
       </div>
       <div className="content-pane">
         {!bgObj ? (
@@ -2768,9 +2034,9 @@ function BackgroundTab({
               <div
                 style={{
                   marginBottom: 16,
-                  padding: "12px 16px",
-                  background: "rgba(212,165,116,0.1)",
-                  border: "1px solid var(--gold)",
+                  padding: fluff?.entries ? "12px 16px" : 0,
+                  background: fluff?.entries ? "rgba(212,165,116,0.1)" : "transparent",
+                  border: fluff?.entries ? "1px solid var(--gold)" : "none",
                   borderRadius: 4,
                 }}
               >
@@ -2781,6 +2047,7 @@ function BackgroundTab({
                   name={bgObj.name}
                   source={bgObj.source}
                 />
+                {fluff?.entries && (
                 <div
                   style={{
                     fontSize: "0.75rem",
@@ -2793,6 +2060,7 @@ function BackgroundTab({
                 >
                   {bgObj.name}
                 </div>
+                )}
                 {fluff?.entries && (
                   <EntryHTML
                     html={processEntries(
@@ -2817,7 +2085,7 @@ function BackgroundTab({
                   .flatMap((s) =>
                     Object.keys(s).filter(
                       (k) => k !== "choose" && s[k] === true,
-                    ),
+                    ).map(capitalizeSkill)
                   )
                   .join(", ")}
               </p>
@@ -2831,7 +2099,7 @@ function BackgroundTab({
                       .map(([k, v]) => {
                         if (k === "anyStandard") return `Any ${v} Standard`;
                         if (k === "any") return `Any ${v}`;
-                        if (v === true) return k;
+                        if (v === true) return capitalizeSkill(k);
                         return null;
                       })
                       .filter(Boolean);
@@ -2860,6 +2128,94 @@ function BackgroundTab({
                 <EntryHTML html={processEntries(bgObj.entries)} />
               </div>
             )}
+            {bgObj && (
+              <div style={{ marginTop: 16, padding: "12px 16px", background: "rgba(255,255,255,0.5)", border: "1px solid var(--gold)", borderRadius: 4 }}>
+                <strong style={{ display: "block", marginBottom: 8, color: "var(--red-dark)" }}>Background Ability Score Adjustment</strong>
+                <p style={{ fontSize: "0.9rem", marginBottom: 12 }}>
+                  {foundAbilities.length > 0 
+                    ? <>Background options: <strong>{foundAbilities.join(", ")}</strong></>
+                    : "Choose your ability score increases (if using 2024 rules)."
+                  }
+                </p>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ display: "block", fontWeight: "bold", marginBottom: 4, fontSize: "0.9rem" }}>Adjustment Method:</label>
+                  <select
+                    className="styled-select"
+                    value={backgroundAsi.method}
+                    onChange={(e) => setBackgroundAsi({ ...backgroundAsi, method: e.target.value })}
+                  >
+                    <option value="none">None (2014 Rules)</option>
+                    <option value="flat">+1 to Three Scores</option>
+                    <option value="split">+2 to One, +1 to Another</option>
+                  </select>
+                </div>
+                {backgroundAsi.method === "flat" && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} style={{ flex: 1, minWidth: 120 }}>
+                        <label style={{ fontSize: "0.85rem" }}>Score {i} (+1)</label>
+                        <select
+                          className="styled-select"
+                          value={backgroundAsi[`s${i}`]}
+                          onChange={(e) => setBackgroundAsi({ ...backgroundAsi, [`s${i}`]: e.target.value })}
+                        >
+                          <option value="" disabled>-- Select --</option>
+                          {(foundAbilities.length > 0 ? foundAbilities : ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma']).map(ab => (
+                            <option key={ab} value={ab} disabled={
+                              [1, 2, 3].filter(n => n !== i).map(n => backgroundAsi[`s${n}`]).includes(ab)
+                            }>{ab}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {backgroundAsi.method === "split" && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <label style={{ fontSize: "0.85rem" }}>Score (+2)</label>
+                      <select
+                        className="styled-select"
+                        value={backgroundAsi.p2}
+                        onChange={(e) => setBackgroundAsi({ ...backgroundAsi, p2: e.target.value })}
+                      >
+                        <option value="" disabled>-- Select --</option>
+                        {(foundAbilities.length > 0 ? foundAbilities : ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma']).map(ab => (
+                          <option key={ab} value={ab} disabled={backgroundAsi.p1 === ab}>{ab}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <label style={{ fontSize: "0.85rem" }}>Score (+1)</label>
+                      <select
+                        className="styled-select"
+                        value={backgroundAsi.p1}
+                        onChange={(e) => setBackgroundAsi({ ...backgroundAsi, p1: e.target.value })}
+                      >
+                        <option value="" disabled>-- Select --</option>
+                        {(foundAbilities.length > 0 ? foundAbilities : ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma']).map(ab => (
+                          <option key={ab} value={ab} disabled={backgroundAsi.p2 === ab}>{ab}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {bgObj && bgObj.entries && (
+              <FeatureChoices
+                feature={{ entries: bgObj.entries, name: bgObj.name }}
+                data={data}
+                selectedOptions={selectedOptions}
+                onToggleOption={onToggleOption}
+                selectedSpells={selectedSpells}
+                containerStyle={{
+                  marginTop: 16,
+                  paddingTop: 16,
+                  borderTop: "1px dashed var(--gold)",
+                }}
+              />
+            )}
           </div>
         )}
       </div>
@@ -2871,6 +2227,17 @@ function BackgroundTab({
 function BgExtraTab({ data, selectedDeity, onSelectDeity }) {
   const [deitySearch, setDeitySearch] = useState("");
   const [showDeityModal, setShowDeityModal] = useState(false);
+
+  useEffect(() => {
+    if (showDeityModal) {
+      window.__modalCount = (window.__modalCount || 0) + 1;
+      document.body.classList.add('modal-open');
+      return () => {
+        window.__modalCount = Math.max(0, (window.__modalCount || 0) - 1);
+        if (window.__modalCount === 0) document.body.classList.remove('modal-open');
+      };
+    }
+  }, [showDeityModal]);
 
   const filteredDeities = useMemo(() => {
     const q = deitySearch.toLowerCase();
@@ -3201,7 +2568,7 @@ function EquipmentChoice({
               >
                 <strong
                   style={{
-                    color: isSelected ? "var(--red-dark)" : "var(--ink)",
+                    color: "var(--ink)",
                   }}
                 >
                   Option {opt.id}
@@ -3330,6 +2697,9 @@ function SpellsTab({
   selectedSpells,
   onToggleSpell,
   scores,
+  selectedAsi,
+  extraFeats,
+  activeBgFeats,
 }) {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({
@@ -3341,6 +2711,7 @@ function SpellsTab({
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [selectedSpellDetail, setSelectedSpellDetail] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: "level", dir: "asc" });
+  const [featClassChoices, setFeatClassChoices] = useState({});
 
   const toggleFilter = (category, value) => {
     setFilters((prev) => {
@@ -3381,27 +2752,6 @@ function SpellsTab({
     </label>
   );
 
-  const getTimeStr = (s) =>
-    s.time
-      ? s.time
-          .map((t) => `${t.number} ${t.unit}${t.condition ? "*" : ""}`)
-          .join("/")
-          .trim()
-      : "—";
-
-  const getRangeStr = (s) => {
-    if (!s.range) return "—";
-    if (s.range.type === "point" && s.range.distance) {
-      const d = s.range.distance;
-      if (d.type === "self") return "Self";
-      if (d.type === "touch") return "Touch";
-      if (d.type === "unlimited") return "Unlimited";
-      if (d.amount) return `${d.amount} ${d.type}`;
-      return d.type || "—";
-    }
-    return s.range.type || "—";
-  };
-
   const getDurationCategory = (s) => {
     if (!s.duration || s.duration.length === 0) return "Other";
     if (s.duration.some((d) => d.concentration)) return "Concentration";
@@ -3433,9 +2783,54 @@ function SpellsTab({
     );
   }, [data.spells, selectedClass]);
 
+  const maxLevel = useMemo(() => {
+    if (!selectedClass) return 0;
+    const fullCasters = ["Bard", "Cleric", "Druid", "Sorcerer", "Wizard"];
+    if (fullCasters.includes(selectedClass))
+      return Math.min(9, Math.ceil(selectedLevel / 2));
+    if (selectedClass === "Warlock") {
+      if (selectedLevel >= 17) return 9;
+      if (selectedLevel >= 15) return 8;
+      if (selectedLevel >= 13) return 7;
+      if (selectedLevel >= 11) return 6;
+      if (selectedLevel >= 9) return 5;
+      if (selectedLevel >= 7) return 4;
+      if (selectedLevel >= 5) return 3;
+      if (selectedLevel >= 3) return 2;
+      return 1;
+    }
+    const halfCasters = ["Paladin", "Ranger", "Artificer"];
+    if (halfCasters.includes(selectedClass)) {
+      if (selectedLevel >= 17) return 5;
+      if (selectedLevel >= 13) return 4;
+      if (selectedLevel >= 9) return 3;
+      if (selectedLevel >= 5) return 2;
+      return (selectedLevel >= 2 || selectedClass === "Artificer") ? 1 : 0;
+    }
+    const thirdCasters = ["Fighter", "Rogue"];
+    if (thirdCasters.includes(selectedClass)) {
+      if (selectedLevel >= 19) return 4;
+      if (selectedLevel >= 13) return 3;
+      if (selectedLevel >= 7) return 2;
+      if (selectedLevel >= 3) return 1;
+      return 0;
+    }
+    return 0;
+  }, [selectedClass, selectedLevel]);
+
+  useEffect(() => {
+    window.__modalCount = (window.__modalCount || 0) + 1;
+    document.body.classList.add('modal-open');
+    return () => {
+      window.__modalCount = Math.max(0, (window.__modalCount || 0) - 1);
+      if (window.__modalCount === 0) document.body.classList.remove('modal-open');
+    };
+  }, []);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return classSpells.filter((s) => {
+      if (s.level > maxLevel) return false;
       if (q && !s.name.toLowerCase().includes(q)) return false;
       if (filters.levels.length > 0 && !filters.levels.includes(s.level))
         return false;
@@ -3462,87 +2857,7 @@ function SpellsTab({
 
       return true;
     });
-  }, [classSpells, search, filters]);
-
-  const maxLevel = useMemo(() => {
-    if (!selectedClass) return 0;
-    const fullCasters = ["Bard", "Cleric", "Druid", "Sorcerer", "Wizard"];
-    if (fullCasters.includes(selectedClass))
-      return Math.min(9, Math.ceil(selectedLevel / 2));
-    if (selectedClass === "Warlock") {
-      if (selectedLevel >= 9) return 5;
-      if (selectedLevel >= 7) return 4;
-      if (selectedLevel >= 5) return 3;
-      if (selectedLevel >= 3) return 2;
-      return 1;
-    }
-    const halfCasters = ["Paladin", "Ranger", "Artificer"];
-    if (halfCasters.includes(selectedClass)) {
-      if (selectedLevel >= 17) return 5;
-      if (selectedLevel >= 13) return 4;
-      if (selectedLevel >= 9) return 3;
-      if (selectedLevel >= 5) return 2;
-      return selectedLevel >= 2 ? 1 : 0;
-    }
-    return 0;
-  }, [selectedClass, selectedLevel]);
-
-  const schoolMap = {
-    a: "Abjuration",
-    c: "Conjuration",
-    d: "Divination",
-    e: "Enchantment",
-    v: "Evocation",
-    i: "Illusion",
-    n: "Necromancy",
-    t: "Transmutation",
-  };
-
-  const levelsPresent = useMemo(() => {
-    return [...new Set(filtered.map((s) => s.level))].sort((a, b) => a - b);
-  }, [filtered]);
-
-  const getSortedForLevel = (lvl) => {
-    return filtered
-      .filter((s) => s.level === lvl)
-      .sort((a, b) => {
-        let key = sortConfig.key === "level" ? "name" : sortConfig.key;
-        const getVal = (s, key) => {
-          if (key === "name") return s.name.toLowerCase();
-          if (key === "school") return s.school || "";
-          if (key === "time") return getTimeStr(s);
-          if (key === "conc")
-            return s.duration && s.duration.some((d) => d.concentration)
-              ? 0
-              : 1;
-          if (key === "ritual") return s.meta && s.meta.ritual ? 0 : 1;
-          if (key === "mat")
-            return s.components && (s.components.m || s.components.M) ? 0 : 1;
-          if (key === "range") return getRangeStr(s);
-          return "";
-        };
-        let va = getVal(a, key);
-        let vb = getVal(b, key);
-        let cmp =
-          typeof va === "number"
-            ? va - vb
-            : String(va).localeCompare(String(vb));
-        if (cmp === 0 && key !== "name") cmp = a.name.localeCompare(b.name);
-        return sortConfig.dir === "asc" ? cmp : -cmp;
-      });
-  };
-
-  const handleSort = (key) => {
-    if (sortConfig.key === key) {
-      if (sortConfig.dir === "asc") {
-        setSortConfig({ key, dir: "desc" });
-      } else {
-        setSortConfig({ key: "level", dir: "asc" }); // Reset to normal
-      }
-    } else {
-      setSortConfig({ key, dir: "asc" });
-    }
-  };
+  }, [classSpells, search, filters, maxLevel]);
 
   const limits = useMemo(() => {
     if (!classObj) return { cantrips: 0, spells: 0, type: "known" };
@@ -3623,40 +2938,178 @@ function SpellsTab({
     return { cantrips, spells, type };
   }, [classObj, selectedClass, selectedLevel, scores]);
 
+  const featFeatures = useMemo(() => {
+    const list = [];
+    Object.values(selectedAsi || {}).forEach((choice) => {
+      if (choice.type === "feat" && choice.featName) list.push(choice.featName);
+    });
+    (extraFeats || []).forEach((featName) => {
+      if (featName) list.push(featName);
+    });
+    (activeBgFeats || []).forEach((featName) => {
+      if (featName) list.push(featName);
+    });
+    return list;
+  }, [selectedAsi, extraFeats, activeBgFeats]);
+
+  const featSpellBlocks = useMemo(() => {
+    const blocks = [];
+    featFeatures.forEach((featName) => {
+      const cands = data.feats?.filter((f) => f.name === featName) || [];
+      const feat = resolveFeatureWithCopy(cands, [data.feats]);
+      if (!feat || !feat.additionalSpells) return;
+
+      const options = feat.additionalSpells.filter((e) => e.name).map((e) => e.name);
+      let activeOption = featClassChoices[featName];
+      if (!activeOption && options.length > 0) activeOption = options[0];
+
+      const activeEntries = options.length > 0
+        ? feat.additionalSpells.filter((e) => e.name === activeOption)
+        : feat.additionalSpells;
+
+      const groups = [];
+      const extract = (obj) => {
+        if (!obj) return;
+        if (Array.isArray(obj)) {
+          obj.forEach(extract);
+        } else if (typeof obj === "object" && obj !== null) {
+          if (obj.choose) {
+            const filterStr = typeof obj.choose === "string" ? obj.choose : obj.choose.fromFilter;
+            const countNum = obj.count || 1;
+            if (filterStr) {
+              let matches = data.spells.filter((s) => {
+                const criteria = {};
+                filterStr.split("|").forEach((p) => {
+                  const [k, v] = p.split("=");
+                  if (k && v) criteria[k.toLowerCase().trim()] = v.toLowerCase().trim();
+                });
+                if (criteria.level !== undefined) {
+                  const levels = criteria.level.split(";").map((l) => parseInt(l));
+                  if (!levels.includes(s.level)) return false;
+                }
+                if (criteria.class !== undefined) {
+                  const targetClasses = criteria.class.split(";").map((c) => c.trim());
+                  let hasClass = false;
+                  if (s._normalizedClasses) {
+                    if (targetClasses.some((tc) => s._normalizedClasses.has(tc))) hasClass = true;
+                  } else if (s.classes) {
+                    const check = (c) => targetClasses.some((tc) => (typeof c === "string" ? c : c.name).toLowerCase().includes(tc));
+                    if (Array.isArray(s.classes)) {
+                      if (s.classes.some(check)) hasClass = true;
+                    } else {
+                      if (s.classes.fromClassList && s.classes.fromClassList.some(check)) hasClass = true;
+                      if (s.classes.fromClassListVariant && s.classes.fromClassListVariant.some(check)) hasClass = true;
+                    }
+                  }
+                  if (!hasClass) return false;
+                }
+                if (criteria.school !== undefined) {
+                  const targetSchools = criteria.school.split(";").map((sc) => sc.toLowerCase());
+                  const sSchool = (s.school || "").toLowerCase();
+                  if (!targetSchools.some((ts) => sSchool === ts || sSchool.includes(ts))) return false;
+                }
+                return true;
+              });
+
+              const unique = new Map();
+              matches.forEach((s) => {
+                if (!unique.has(s.name)) unique.set(s.name, s);
+                else if (s.source === "XPHB") unique.set(s.name, s);
+              });
+              matches = Array.from(unique.values()).sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+
+              if (matches.length > 0) {
+                groups.push({
+                  label: `Choose ${countNum} ${filterStr.includes("level=0") ? "Cantrip" : "Spell"}${countNum > 1 ? "s" : ""}`,
+                  count: countNum,
+                  matches,
+                });
+              }
+            }
+          } else {
+            Object.entries(obj).forEach(([k, v]) => {
+              if (k === "choose" || k === "ability" || k === "name") return;
+              if (Array.isArray(v)) {
+                const fixedSpells = [];
+                v.forEach((item) => {
+                  if (typeof item === "string") {
+                    const cleanName = item.split("#")[0].split("|")[0].toLowerCase().trim();
+                    let cands = data.spells.filter((x) => x.name.toLowerCase() === cleanName);
+                    let s = cands.find((x) => x.source === "XPHB") || cands.find((x) => x.source === "PHB") || cands[0];
+                    if (s) fixedSpells.push(s);
+                  } else if (typeof item === "object") {
+                    extract(item);
+                  }
+                });
+
+                if (fixedSpells.length > 0) {
+                  const unique = new Map();
+                  fixedSpells.forEach((s) => {
+                    if (!unique.has(s.name)) unique.set(s.name, s);
+                    else if (s.source === "XPHB") unique.set(s.name, s);
+                  });
+                  const deduped = Array.from(unique.values()).sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+
+                  groups.push({
+                    label: `Granted Spells`,
+                    count: deduped.length,
+                    matches: deduped,
+                  });
+                }
+              } else if (typeof v === "object" && v !== null) {
+                extract(v);
+              }
+            });
+          }
+        }
+      };
+
+      activeEntries.forEach((e) => {
+        if (e.known) extract(e.known);
+        if (e.prepared) extract(e.prepared);
+        if (e.innate) extract(e.innate);
+      });
+
+      if (groups.length > 0) {
+        blocks.push({
+          featName,
+          options,
+          activeOption,
+          groups,
+        });
+      }
+    });
+    return blocks;
+  }, [featFeatures, data.feats, featClassChoices, data.spells]);
+
   const selectedCounts = useMemo(() => {
     let cantrips = 0;
     let leveled = 0;
-    selectedSpells.forEach((name) => {
-      const s = data.spells.find((x) => x.name === name);
-      if (s) {
-        if (s.level === 0) cantrips++;
-        else leveled++;
+
+    const unconsumedSpells = new Set(selectedSpells);
+    const classSpellNames = new Set(classSpells.map((s) => s.name));
+
+    if (featSpellBlocks) {
+      featSpellBlocks.forEach((block) => {
+        block.groups.forEach((g) => {
+          g.matches.forEach((m) => {
+            unconsumedSpells.delete(m.name);
+          });
+        });
+      });
+    }
+
+    unconsumedSpells.forEach((name) => {
+      if (classSpellNames.has(name)) {
+        const s = data.spells.find((x) => x.name === name);
+        if (s) {
+          if (s.level === 0) cantrips++;
+          else leveled++;
+        }
       }
     });
     return { cantrips, leveled };
-  }, [selectedSpells, data.spells]);
-
-  const thStyle = {
-    padding: "6px 8px",
-    cursor: "pointer",
-    userSelect: "none",
-    color: "var(--ink-light)",
-    textAlign: "left",
-    borderBottom: "2px solid var(--gold)",
-  };
-  const renderTh = (label, key, style = {}) => (
-    <th
-      style={{
-        ...thStyle,
-        ...style,
-        color: sortConfig.key === key ? "var(--red-dark)" : "var(--ink-light)",
-      }}
-      onClick={() => handleSort(key)}
-    >
-      {label}{" "}
-      {sortConfig.key === key ? (sortConfig.dir === "asc" ? "↑" : "↓") : ""}
-    </th>
-  );
+  }, [selectedSpells, data.spells, featSpellBlocks, classSpells]);
 
   return (
     <div className="split-view spells-split-view">
@@ -3879,7 +3332,7 @@ function SpellsTab({
           }}
         >
           <h3
-            style={{ margin: 0, fontSize: "1.1em", color: "var(--red-dark)" }}
+            style={{ margin: 0, fontSize: "1.1em", color: "var(--ink)" }}
           >
             Spells List
           </h3>
@@ -3907,152 +3360,119 @@ function SpellsTab({
           </button>
         </div>
         <div className="sidebar-list">
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "0.85rem",
-            }}
-          >
-            <thead
-              style={{
-                position: "sticky",
-                top: 0,
-                background: "var(--parchment)",
-                zIndex: 1,
-              }}
-            >
-              <tr>
-                {renderTh("Lvl", "level")}
-                {renderTh("Name", "name")}
-                {renderTh("Time", "time")}
-                {renderTh("School", "school")}
-                {renderTh("R", "ritual", { textAlign: "center", width: 20 })}
-                {renderTh("C", "conc", { textAlign: "center", width: 20 })}
-                {renderTh("M", "mat", { textAlign: "center", width: 20 })}
-                {renderTh("Range", "range")}
-              </tr>
-            </thead>
-            {!selectedClass ? (
-              <tbody>
-                <tr>
-                  <td
-                    colSpan="8"
-                    style={{
-                      padding: 10,
-                      textAlign: "center",
-                      fontStyle: "italic",
-                      color: "var(--ink-light)",
-                    }}
-                  >
-                    Select a class with spellcasting to see available spells.
-                  </td>
-                </tr>
-              </tbody>
-            ) : levelsPresent.length === 0 ? (
-              <tbody>
-                <tr>
-                  <td
-                    colSpan="8"
-                    style={{
-                      padding: 10,
-                      textAlign: "center",
-                      fontStyle: "italic",
-                      color: "var(--ink-light)",
-                    }}
-                  >
-                    No spells found.
-                  </td>
-                </tr>
-              </tbody>
-            ) : (
-              levelsPresent.map((lvl) => (
-                <tbody key={lvl}>
-                  <tr>
-                    <td
-                      colSpan="8"
-                      style={{
-                        padding: "6px 8px",
-                        background: "var(--parchment-dark)",
-                        color: "var(--red-dark)",
-                        fontWeight: "bold",
-                        borderTop: "2px solid var(--gold)",
-                        borderBottom: "1px solid var(--gold)",
-                        letterSpacing: "0.05em",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {lvl === 0 ? "Cantrips" : `Level ${lvl}`}
-                    </td>
-                  </tr>
-                  {getSortedForLevel(lvl).map((s, i) => {
-                    const isSel = selectedSpells.has(s.name);
-                    const isRitual = !!(s.meta && s.meta.ritual);
-                    const isConc = !!(
-                      s.duration && s.duration.some((d) => d.concentration)
-                    );
-                    const hasMat = !!(
-                      s.components &&
-                      (s.components.m || s.components.M)
-                    );
-                    return (
-                      <tr
-                        key={s.name + (s.source || "")}
-                        onClick={() => {
-                          onToggleSpell(s.name);
-                          setSelectedSpellDetail(s);
-                        }}
-                        onMouseEnter={() => setSelectedSpellDetail(s)}
-                        style={{
-                          cursor: "pointer",
-                          borderBottom: "1px solid rgba(212,175,55,0.2)",
-                          background: isSel
-                            ? "var(--red)"
-                            : i % 2 === 0
-                              ? "rgba(255,255,255,0.4)"
-                              : "transparent",
-                          color: isSel ? "white" : "var(--ink)",
-                        }}
-                      >
+          {(!selectedClass) ? (
+            <div style={{ padding: 10, textAlign: "center", fontStyle: "italic", color: "var(--ink-light)" }}>
+              Select a class with spellcasting to see available spells.
+            </div>
+          ) : (
+            <SpellTable
+              spells={filtered}
+              selectedSpells={selectedSpells}
+              onToggleSpell={onToggleSpell}
+              onSetDetail={setSelectedSpellDetail}
+              showSource={true}
+              appendBody={
+                <>
+                  {featSpellBlocks.length > 0 && (
+                    <tbody>
+                      <tr>
                         <td
-                          style={{ padding: "4px 8px", whiteSpace: "nowrap" }}
+                          colSpan={9}
+                          style={{
+                            padding: "6px 8px",
+                            background: "var(--parchment-dark)",
+                            color: "var(--ink)",
+                            fontWeight: "bold",
+                            borderTop: "2px solid var(--gold)",
+                            borderBottom: "1px solid var(--gold)",
+                            letterSpacing: "0.05em",
+                            textTransform: "uppercase",
+                          }}
                         >
-                          {s.level === 0 ? "C" : s.level}
-                        </td>
-                        <td style={{ padding: "4px 8px", fontWeight: 600 }}>
-                          {s.name}
-                        </td>
-                        <td
-                          style={{ padding: "4px 8px", whiteSpace: "nowrap" }}
-                        >
-                          {getTimeStr(s)}
-                        </td>
-                        <td
-                          style={{ padding: "4px 8px", whiteSpace: "nowrap" }}
-                        >
-                          {schoolMap[s.school?.toLowerCase()] || s.school}
-                        </td>
-                        <td style={{ padding: "4px 8px", textAlign: "center" }}>
-                          {isRitual ? "✦" : ""}
-                        </td>
-                        <td style={{ padding: "4px 8px", textAlign: "center" }}>
-                          {isConc ? "●" : ""}
-                        </td>
-                        <td style={{ padding: "4px 8px", textAlign: "center" }}>
-                          {hasMat ? "◆" : ""}
-                        </td>
-                        <td
-                          style={{ padding: "4px 8px", whiteSpace: "nowrap" }}
-                        >
-                          {getRangeStr(s)}
+                          Additional Spells from Feats
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              ))
-            )}
-          </table>
+                    </tbody>
+                  )}
+                  {featSpellBlocks.map((block) => (
+                    <tbody key={block.featName}>
+                      <tr style={{ borderBottom: "1px solid rgba(212,175,55,0.2)", background: "rgba(255,255,255,0.4)" }}>
+                        <td colSpan="9" style={{ padding: "6px 8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <strong style={{ color: "var(--ink)", fontSize: "0.95rem" }}>{block.featName}</strong>
+                            {block.options.length > 1 && (
+                              <select
+                                className="styled-select"
+                                style={{ width: "200px" }}
+                                value={block.activeOption || ""}
+                                onChange={(e) => setFeatClassChoices((prev) => ({ ...prev, [block.featName]: e.target.value }))}
+                              >
+                                {block.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                              </select>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {block.groups.map((g, i) => {
+                        const selectedInGroup = g.matches.filter(m => selectedSpells.has(m.name)).length;
+                        const isOver = g.label !== "Granted Spells" && selectedInGroup > g.count;
+                        return g.matches.length > 0 ? [
+                          <tr key={`label-${i}`}>
+                            <td colSpan="9" style={{ padding: "4px 8px", background: "rgba(0,0,0,0.03)", fontStyle: "italic", color: "var(--ink-light)" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span>{g.label}</span>
+                                {g.label !== "Granted Spells" && (
+                                  <span style={{ color: isOver ? "var(--red)" : "inherit", fontWeight: "bold", fontSize: "0.9rem" }}>
+                                    {selectedInGroup} / {g.count}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>,
+                          ...g.matches.map((s, j) => {
+                            const isSel = selectedSpells.has(s.name);
+                            const isRitual = !!(s.meta && s.meta.ritual);
+                            const isConc = !!(s.duration && s.duration.some((d) => d.concentration));
+                            const hasMat = !!(s.components && (s.components.m || s.components.M));
+                            return (
+                              <tr
+                                key={s.name + (s.source || "")}
+                                onClick={() => {
+                                  onToggleSpell(s.name);
+                                  setSelectedSpellDetail(s);
+                                }}
+                                onMouseEnter={() => setSelectedSpellDetail(s)}
+                                style={{
+                                  cursor: "pointer",
+                                  borderBottom: "1px solid rgba(212,175,55,0.2)",
+                                  background: isSel
+                                    ? "var(--red)"
+                                    : j % 2 === 0
+                                      ? "rgba(255,255,255,0.4)"
+                                      : "transparent",
+                                  color: isSel ? "white" : "var(--ink)",
+                                }}
+                              >
+                                <td style={{ padding: "4px 8px", whiteSpace: "nowrap" }}>{s.level === 0 ? "C" : s.level}</td>
+                                <td style={{ padding: "4px 8px", fontWeight: 600 }}>{s.name}</td>
+                                <td style={{ padding: "4px 8px", whiteSpace: "nowrap" }}>{getTimeStr(s)}</td>
+                                <td style={{ padding: "4px 8px", whiteSpace: "nowrap" }}>{schoolMap[s.school?.toLowerCase()] || s.school}</td>
+                                <td style={{ padding: "4px 8px", textAlign: "center" }}>{isRitual ? "✦" : ""}</td>
+                                <td style={{ padding: "4px 8px", textAlign: "center" }}>{isConc ? "●" : ""}</td>
+                                <td style={{ padding: "4px 8px", textAlign: "center" }}>{hasMat ? "◆" : ""}</td>
+                                <td style={{ padding: "4px 8px", whiteSpace: "nowrap" }}>{getRangeStr(s)}</td>
+                                <td style={{ padding: "4px 8px", whiteSpace: "nowrap", fontSize: "0.75rem", opacity: 0.7 }}>{s.source || ""}</td>
+                              </tr>
+                            );
+                          })
+                        ] : null;
+                      })}
+                    </tbody>
+                  ))}
+                </>
+              }
+            />
+          )}
         </div>
       </div>
       <div className="content-pane">
@@ -4537,6 +3957,7 @@ function FeatsTab({
   setSelectedAsi,
   extraFeats,
   setExtraFeats,
+  activeBgFeats,
 }) {
   const classObj = useMemo(
     () => getBestMatch(data.classes, selectedClass),
@@ -4603,6 +4024,30 @@ function FeatsTab({
         width: "100%",
       }}
     >
+      {activeBgFeats?.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <h3 style={{ margin: "0 0 12px", color: "var(--red-dark)", borderBottom: "1px solid var(--gold)", paddingBottom: 4 }}>
+            Background Feat{activeBgFeats.length > 1 ? "s" : ""}
+          </h3>
+          {activeBgFeats.map(featName => {
+            const feat = resolveFeatureWithCopy(
+              data.feats?.filter((f) => f.name === featName) || [],
+              [data.feats]
+            );
+            return (
+              <div key={featName} style={{ background: "rgba(255,255,255,0.6)", border: "1px solid var(--gold)", borderRadius: 6, padding: 16, marginBottom: 12 }}>
+                <strong style={{ fontSize: "1.05rem", color: "var(--red-dark)", display: "block", marginBottom: 6 }}>{featName}</strong>
+                {feat && (feat.entries || feat.entry) && (
+                  <div style={{ fontSize: "0.9rem", color: "var(--ink)", lineHeight: 1.5 }}>
+                    <EntryHTML html={processEntries(feat.entries || feat.entry)} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <h2 style={{ marginBottom: 20 }}>Feats & Ability Score Improvements</h2>
 
       {pickerCtx && (
@@ -4800,6 +4245,7 @@ function ReviewTab({
   selectedSpells,
   selectedAsi,
   extraFeats,
+  activeBgFeats,
   data,
 }) {
   const finalScores = { ...scores };
@@ -4824,6 +4270,9 @@ function ReviewTab({
       featFeatures.push(choice.featName);
   });
   extraFeats.forEach((featName) => {
+    if (featName) featFeatures.push(featName);
+  });
+  activeBgFeats?.forEach((featName) => {
     if (featName) featFeatures.push(featName);
   });
 
@@ -4979,13 +4428,13 @@ function ReviewTab({
         </div>
       )}
 
-      {selectedFeats.size > 0 && (
+      {featFeatures.length > 0 && (
         <div>
-          <h3>Selected Feats ({selectedFeats.size})</h3>
+          <h3>Selected Feats ({featFeatures.length})</h3>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {Array.from(selectedFeats).map((f) => (
+            {featFeatures.map((f, idx) => (
               <span
-                key={f}
+                key={`${f}-${idx}`}
                 style={{
                   background: "rgba(255,255,255,0.6)",
                   border: "1px solid var(--gold)",
@@ -5012,6 +4461,8 @@ export default function CharacterCreatorPage() {
   const [tabIndex, setTabIndex] = useState(0);
 
   // Selections
+  const [showRandomModal, setShowRandomModal] = useState(false);
+  const [randSettings, setRandSettings] = useState({ minLvl: 1, maxLvl: 20, type: 'any' });
   const [selectedClass, setSelectedClass] = useState(null);
   const [selectedLevel, setSelectedLevel] = useState(1);
   const [selectedSubclass, setSelectedSubclass] = useState(null);
@@ -5051,34 +4502,136 @@ export default function CharacterCreatorPage() {
   useEffect(() => {
     setSelectedClassSkills([]);
     setSelectedOptions(new Set());
+
+    if (selectedClass && !isRandomizingRef.current) {
+      const classStatPriorities = {
+        Barbarian: ["str", "con", "dex", "wis", "cha", "int"],
+        Bard: ["cha", "dex", "con", "wis", "int", "str"],
+        Cleric: ["wis", "con", "str", "dex", "int", "cha"],
+        Druid: ["wis", "con", "dex", "int", "cha", "str"],
+        Fighter: ["str", "con", "dex", "wis", "int", "cha"],
+        Monk: ["dex", "wis", "con", "str", "int", "cha"],
+        Paladin: ["str", "cha", "con", "wis", "dex", "int"],
+        Ranger: ["dex", "wis", "con", "str", "int", "cha"],
+        Rogue: ["dex", "con", "int", "wis", "cha", "str"],
+        Sorcerer: ["cha", "con", "dex", "wis", "int", "str"],
+        Warlock: ["cha", "con", "dex", "wis", "int", "str"],
+        Wizard: ["int", "con", "dex", "wis", "cha", "str"],
+        Artificer: ["int", "con", "dex", "wis", "cha", "str"],
+      };
+      const priority = classStatPriorities[selectedClass] || ["str", "dex", "con", "int", "wis", "cha"];
+      const newAssign = {};
+      const sortedArray = [15, 14, 13, 12, 10, 8];
+      priority.forEach((ab, idx) => {
+        newAssign[ab] = sortedArray[idx];
+      });
+      setStandardAssign(newAssign);
+      setAbilityMethod("standard");
+    }
   }, [selectedClass]);
 
   // Ability scores
-  const [abilityMethod, setAbilityMethod] = useState("pointbuy");
-  const [scores, setScores] = useState({
-    str: 10,
-    dex: 10,
-    con: 10,
-    int: 10,
-    wis: 10,
-    cha: 10,
-  });
+  const [abilityMethod, setAbilityMethod] = useState("standard");
+  const [manualScores, setManualScores] = useState({ str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 });
+  const [standardAssign, setStandardAssign] = useState({});
+  const [pbValues, setPbValues] = useState({ str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 });
+  const [backgroundAsi, setBackgroundAsi] = useState({ method: 'none', s1: '', s2: '', s3: '', p2: '', p1: '' });
+  const [speciesAsi, setSpeciesAsi] = useState({ method: 'none', s1: '', s2: '', s3: '', p2: '', p1: '' });
+  const [previewSpell, setPreviewSpell] = useState(null);
+  const [previewFeat, setPreviewFeat] = useState(null);
+  const isRandomizingRef = useRef(false);
+
+  useEffect(() => {
+    if (previewSpell || previewFeat) {
+      window.__modalCount = (window.__modalCount || 0) + 1;
+      document.body.classList.add('modal-open');
+      return () => {
+        window.__modalCount = Math.max(0, (window.__modalCount || 0) - 1);
+        if (window.__modalCount === 0) document.body.classList.remove('modal-open');
+      };
+    }
+  }, [previewSpell, previewFeat]);
+
+  // Setup event listener to catch any clicked spell inside an EntryHTML block
+  useEffect(() => {
+    const handlePreviewSpell = (e) => {
+      const spellName = e.detail;
+      if (!data?.spells) return;
+      const candidates = data.spells.filter(s => s.name.toLowerCase() === spellName.toLowerCase());
+      const spell = candidates.sort((a, b) => getGlobalSourcePriority(b.source) - getGlobalSourcePriority(a.source))[0];
+      if (spell) setPreviewSpell(spell);
+    };
+    const handlePreviewFeat = (e) => {
+      const featName = e.detail;
+      if (!data?.feats) return;
+      const candidates = data.feats.filter(f => f.name.toLowerCase() === featName.toLowerCase());
+      const feat = candidates.sort((a, b) => getGlobalSourcePriority(b.source) - getGlobalSourcePriority(a.source))[0];
+      if (feat) setPreviewFeat(feat);
+    };
+    document.addEventListener('preview-spell', handlePreviewSpell);
+    document.addEventListener('preview-feat', handlePreviewFeat);
+    return () => {
+      document.removeEventListener('preview-spell', handlePreviewSpell);
+      document.removeEventListener('preview-feat', handlePreviewFeat);
+    };
+  }, [data.spells, data.feats]);
 
   // Species ability bonus
   const speciesBonus = useMemo(() => {
-    if (!selectedSpecies) return {};
-    const speciesObj = getBestMatch(data.species, selectedSpecies);
-    const bonus = {};
-    if (speciesObj?.ability) {
-      speciesObj.ability.forEach((a) => {
-        Object.entries(a).forEach(([k, v]) => {
-          if (k !== "choose" && ABILITY_KEYS.includes(k))
-            bonus[k] = (bonus[k] || 0) + v;
+    const bonus = { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 };
+    if (!selectedSpecies || speciesAsi.method === 'none') return bonus;
+    
+    if (speciesAsi.method === 'default') {
+      const speciesObj = resolveRaceWithCopy(getBestMatch(data.species, selectedSpecies), data.species);
+      if (speciesObj?.ability) {
+        speciesObj.ability.forEach((a) => {
+          Object.entries(a).forEach(([k, v]) => {
+            if (k !== "choose" && ABILITY_KEYS.includes(k))
+              bonus[k] = (bonus[k] || 0) + v;
+          });
         });
-      });
+      }
+    } else {
+      const map = { 'Strength': 'str', 'Dexterity': 'dex', 'Constitution': 'con', 'Intelligence': 'int', 'Wisdom': 'wis', 'Charisma': 'cha' };
+      if (speciesAsi.method === 'flat') {
+        if (speciesAsi.s1 && map[speciesAsi.s1]) bonus[map[speciesAsi.s1]] += 1;
+        if (speciesAsi.s2 && map[speciesAsi.s2]) bonus[map[speciesAsi.s2]] += 1;
+        if (speciesAsi.s3 && map[speciesAsi.s3]) bonus[map[speciesAsi.s3]] += 1;
+      } else if (speciesAsi.method === 'split') {
+        if (speciesAsi.p2 && map[speciesAsi.p2]) bonus[map[speciesAsi.p2]] += 2;
+        if (speciesAsi.p1 && map[speciesAsi.p1]) bonus[map[speciesAsi.p1]] += 1;
+      }
     }
     return bonus;
-  }, [selectedSpecies, data.species]);
+  }, [selectedSpecies, data.species, speciesAsi]);
+
+  const backgroundBonus = useMemo(() => {
+    const bonus = { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 };
+    if (!selectedBackground || backgroundAsi.method === 'none') return bonus;
+    const map = { 'Strength': 'str', 'Dexterity': 'dex', 'Constitution': 'con', 'Intelligence': 'int', 'Wisdom': 'wis', 'Charisma': 'cha' };
+    if (backgroundAsi.method === 'flat') {
+      if (backgroundAsi.s1 && map[backgroundAsi.s1]) bonus[map[backgroundAsi.s1]] += 1;
+      if (backgroundAsi.s2 && map[backgroundAsi.s2]) bonus[map[backgroundAsi.s2]] += 1;
+      if (backgroundAsi.s3 && map[backgroundAsi.s3]) bonus[map[backgroundAsi.s3]] += 1;
+    } else if (backgroundAsi.method === 'split') {
+      if (backgroundAsi.p2 && map[backgroundAsi.p2]) bonus[map[backgroundAsi.p2]] += 2;
+      if (backgroundAsi.p1 && map[backgroundAsi.p1]) bonus[map[backgroundAsi.p1]] += 1;
+    }
+    return bonus;
+  }, [selectedBackground, backgroundAsi]);
+
+  const scores = useMemo(() => {
+    const final = {};
+    ABILITY_KEYS.forEach((k) => {
+      let base = 10;
+      if (abilityMethod === "pointbuy") base = pbValues[k];
+      else if (abilityMethod === "standard") base = standardAssign[k] || 8;
+      else if (abilityMethod === "manual") base = manualScores[k];
+      
+      final[k] = abilityMethod === "manual" ? base : (parseInt(base) || 0) + (speciesBonus?.[k] || 0) + (backgroundBonus?.[k] || 0);
+    });
+    return final;
+  }, [abilityMethod, pbValues, standardAssign, manualScores, speciesBonus, backgroundBonus]);
 
   const toggleSpell = useCallback((name) => {
     setSelectedSpells((prev) => {
@@ -5089,6 +4642,215 @@ export default function CharacterCreatorPage() {
     });
   }, []);
 
+  const bgObj = useMemo(() => {
+    if (!selectedBackground) return null;
+    return resolveBackgroundWithCopy(getBestMatch(data.backgrounds, selectedBackground), data.backgrounds);
+  }, [selectedBackground, data.backgrounds]);
+
+  const activeBgFeats = useMemo(() => {
+    if (!bgObj || !bgObj.entries) return [];
+    const feats = [];
+    const walk = (obj) => {
+      if (!obj) return;
+      if (typeof obj === "string") {
+        const matches = [...obj.matchAll(/\{@feat\s+([^|}]+)[^}]*\}/gi)];
+        matches.forEach((m) => feats.push(m[1].trim()));
+      } else if (Array.isArray(obj)) {
+        obj.forEach(walk);
+      } else if (typeof obj === "object") {
+        if (obj.entries) walk(obj.entries);
+        if (obj.entry) walk(obj.entry);
+        if (obj.items) walk(obj.items);
+      }
+    };
+    walk(bgObj.entries);
+    const uniqueFeats = [...new Set(feats)];
+    if (uniqueFeats.length === 0) return [];
+    
+    const optionSets = extractOptionSets(bgObj.entries);
+    const choiceLists = extractChoiceLists(bgObj.entries);
+    
+    const choiceFeats = new Set();
+    optionSets.forEach(os => {
+      os.choices.forEach(c => {
+        if (c.type === "optionalfeature" || c.type === "entries" || c.name) {
+          const name = c.name || (c.uid ? c.uid.split("|")[0] : "");
+          if (name) choiceFeats.add(name);
+        }
+      });
+    });
+    choiceLists.forEach(cl => {
+      cl.items.forEach(i => {
+        const name = typeof i === "string" ? i : (i.name || "");
+        if (name) choiceFeats.add(name);
+      });
+    });
+    
+    const result = [];
+    uniqueFeats.forEach(feat => {
+      if (choiceFeats.has(feat)) {
+        let isSelected = false;
+        selectedOptions.forEach(optKey => {
+          if (optKey.endsWith(`|||${feat}`)) isSelected = true;
+        });
+        if (isSelected) result.push(feat);
+      } else {
+        result.push(feat);
+      }
+    });
+    return result;
+  }, [bgObj, selectedOptions]);
+
+  const handleRandomize = (settings) => {
+    if (loading || noData || !data) return;
+
+    isRandomizingRef.current = true;
+
+    // Calculate random level within range
+    const min = Math.max(1, Math.min(20, settings.minLvl));
+    const max = Math.max(1, Math.min(20, settings.maxLvl));
+    const actualMin = Math.min(min, max);
+    const actualMax = Math.max(min, max);
+    const lvl = Math.floor(Math.random() * (actualMax - actualMin + 1)) + actualMin;
+
+    // Random Name
+    const firstNames = ["Aelar", "Brog", "Caeldrim", "Dorn", "Elara", "Fargrim", "Ghesh", "Halia", "Igan", "Jheri", "Kithri", "Lia", "Morgran", "Naivara", "Orsik", "Peren", "Quinn", "Rurik", "Seraphina", "Traubon", "Uthal", "Varis", "Westra", "Xander", "Yrsa", "Zook"];
+    const lastNames = ["Amakiir", "Battlehammer", "Cherrycheeks", "Dankil", "Erenaeth", "Frostbeard", "Galanodel", "High-hill", "Ilphelkiir", "Jast", "Kerrhylon", "Leagallow", "Murnig", "Naïlo", "Ousstyl", "Puck", "Qireht", "Raethran", "Siannodel", "Torunn", "Ungart", "Vander", "Wildwander", "Xiloscient", "Yaeldrin", "Zylkriss"];
+    setCharName(`${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`);
+
+    // Random Class
+    let validClasses = data.classes?.filter((c) => !c.isSidekick) || [];
+    if (settings.type === 'caster') {
+      const CASTER_CLASSES = ["Bard", "Cleric", "Druid", "Sorcerer", "Warlock", "Wizard", "Artificer"];
+      validClasses = validClasses.filter(c => CASTER_CLASSES.includes(c.name));
+    } else if (settings.type === 'martial') {
+      const MARTIAL_CLASSES = ["Barbarian", "Fighter", "Monk", "Paladin", "Ranger", "Rogue", "Blood Hunter"];
+      validClasses = validClasses.filter(c => MARTIAL_CLASSES.includes(c.name));
+    }
+
+    let chosenClassName = null;
+    if (validClasses.length > 0) {
+      chosenClassName = validClasses[Math.floor(Math.random() * validClasses.length)].name;
+      setSelectedClass(chosenClassName);
+    } else {
+      const allValid = data.classes?.filter((c) => !c.isSidekick) || [];
+      if (allValid.length > 0) {
+        chosenClassName = allValid[Math.floor(Math.random() * allValid.length)].name;
+        setSelectedClass(chosenClassName);
+      }
+    }
+    setSelectedLevel(lvl);
+
+    // Random Subclass (if level >= 3 and a class was chosen)
+    if (lvl >= 3 && chosenClassName) {
+      const targetCls = chosenClassName.trim().toLowerCase();
+      const availableSubs = data.subclasses?.filter((s) => {
+        const cName = s.className || s.class;
+        return cName?.trim().toLowerCase() === targetCls;
+      }) || [];
+      if (availableSubs.length > 0) {
+        const sub = availableSubs[Math.floor(Math.random() * availableSubs.length)];
+        setSelectedSubclass(sub.shortName || sub.name);
+      } else {
+        setSelectedSubclass(null);
+      }
+    } else {
+      setSelectedSubclass(null);
+    }
+
+    // Random Species
+    const validSpecies = data.species?.filter((r) => !r.isSidekick && r.name) || [];
+    let chosenSpecies = null;
+    if (validSpecies.length > 0) {
+      chosenSpecies = validSpecies[Math.floor(Math.random() * validSpecies.length)];
+      setSelectedSpecies(chosenSpecies.name);
+    }
+    
+    // Random Subrace
+    if (chosenSpecies && data.subraces) {
+      const validSubraces = data.subraces.filter((s) => s.raceName === chosenSpecies.name || s.race?.name === chosenSpecies.name);
+      if (validSubraces.length > 0) {
+        setSelectedSubrace(validSubraces[Math.floor(Math.random() * validSubraces.length)]);
+      } else {
+        setSelectedSubrace(null);
+      }
+    } else {
+      setSelectedSubrace(null);
+    }
+
+    // Random Background
+    const validBgs = data.backgrounds?.filter(b => b.name) || [];
+    if (validBgs.length > 0) {
+      setSelectedBackground(validBgs[Math.floor(Math.random() * validBgs.length)].name);
+    }
+
+    // Random Ability Scores
+    setAbilityMethod("standard");
+    const shuffled = [...STANDARD_ARRAY].sort(() => Math.random() - 0.5);
+    setStandardAssign({
+      str: shuffled[0], dex: shuffled[1], con: shuffled[2],
+      int: shuffled[3], wis: shuffled[4], cha: shuffled[5]
+    });
+
+    // Reset extras
+    setSelectedDeity(null);
+    setSelectedAsi({});
+    setExtraFeats([]);
+
+    // Randomize spells if class is a spellcaster
+    (() => {
+      if (!chosenClassName || !data?.spells) { setSelectedSpells(new Set()); return; }
+
+      // Compute max spell level for this class at randomizeLevel
+      const FULL   = ["Bard","Cleric","Druid","Sorcerer","Wizard"];
+      const HALF   = ["Paladin","Ranger","Artificer"];
+      const THIRD  = ["Fighter","Rogue"];
+      let maxSL = 0;
+      if (FULL.includes(chosenClassName))        maxSL = Math.min(9, Math.ceil(lvl / 2));
+      else if (chosenClassName === "Warlock")    maxSL = [1,1,2,2,3,3,4,4,5,5,5,5,5,5,5,5,5,5,5,5][lvl - 1];
+      else if (HALF.includes(chosenClassName))   maxSL = lvl >= 17 ? 5 : lvl >= 13 ? 4 : lvl >= 9 ? 3 : lvl >= 5 ? 2 : (lvl >= 2 || chosenClassName === "Artificer") ? 1 : 0;
+      else if (THIRD.includes(chosenClassName))  maxSL = lvl >= 19 ? 4 : lvl >= 13 ? 3 : lvl >= 7 ? 2 : lvl >= 3 ? 1 : 0;
+
+      if (maxSL === 0) { setSelectedSpells(new Set()); return; }
+
+      const cls = chosenClassName.toLowerCase();
+      const pool = data.spells.filter(s => {
+        if (s._normalizedClasses) return s._normalizedClasses.has(cls);
+        if (!s.classes) return false;
+        const match = c => (typeof c === 'string' ? c : c.name).toLowerCase() === cls;
+        if (Array.isArray(s.classes)) return s.classes.some(match);
+        if (s.classes.fromClassList) return s.classes.fromClassList.some(match);
+        return false;
+      });
+
+      const clsObj = data.classes?.find(c => c.name === chosenClassName);
+      let cantripCount = clsObj?.cantripProgression?.[lvl - 1] || 0;
+      let leveledCount = 0;
+      if (clsObj?.preparedSpellsProgression)     leveledCount = Math.min(clsObj.preparedSpellsProgression[lvl - 1] || 0, 10);
+      else if (clsObj?.spellsKnownProgression)   leveledCount = clsObj.spellsKnownProgression[lvl - 1] || 0;
+      else {
+        const TABLE = { Bard:[4,5,6,7,8,9,10,11,12,14,15,15,16,18,19,19,20,22,22,22], Warlock:[2,3,4,5,6,7,8,9,10,10,11,11,12,12,13,13,14,14,15,15], Sorcerer:[2,3,4,5,6,7,8,9,10,11,12,12,13,13,14,14,15,15,15,15] };
+        leveledCount = TABLE[chosenClassName]?.[lvl - 1] ?? Math.min(lvl + 2, 8);
+      }
+
+      const pick = (arr, n) => [...arr].sort(() => Math.random() - 0.5).slice(0, n);
+      const cantrips = pick(pool.filter(s => s.level === 0), cantripCount);
+      const leveled  = pick(pool.filter(s => s.level > 0 && s.level <= maxSL), leveledCount);
+      setSelectedSpells(new Set([...cantrips.map(s => s.name), ...leveled.map(s => s.name)]));
+    })();
+    setSelectedClassSkills([]);
+    setSelectedOptions(new Set());
+    setSpeciesAsi({ method: 'none', s1: '', s2: '', s3: '', p2: '', p1: '' });
+    setBackgroundAsi({ method: 'none', s1: '', s2: '', s3: '', p2: '', p1: '' });
+
+    // Jump to review
+    setTabIndex(TABS.indexOf("review"));
+
+    setTimeout(() => {
+      isRandomizingRef.current = false;
+    }, 50);
+  };
+
   function switchTab(idx) {
     if (idx < 0 || idx >= TABS.length) return;
     if (tabIndex === 0 && idx > 0 && !selectedClass) {
@@ -5098,11 +4860,7 @@ export default function CharacterCreatorPage() {
     setTabIndex(idx);
   }
 
-  function createCharacter() {
-    if (!charName.trim()) {
-      alert("Please enter a character name.");
-      return;
-    }
+  function buildCharacterObject() {
 
     const finalScores = { ...scores };
     Object.values(selectedAsi).forEach((choice) => {
@@ -5145,6 +4903,25 @@ export default function CharacterCreatorPage() {
     });
 
     extraFeats.forEach((featName) => {
+      if (!featName) return;
+      const cands = data.feats?.filter((f) => f.name === featName) || [];
+      const feat = resolveFeatureWithCopy(cands, [data.feats]);
+      featFeatures.push({
+        title: featName,
+        desc: feat ? cleanText(processEntries(feat.entries || feat.entry)) : "",
+        source: "feat",
+      });
+      if (feat && feat.ability) {
+        feat.ability.forEach((a) => {
+          Object.entries(a).forEach(([k, v]) => {
+            if (k !== "choose" && ABILITY_KEYS.includes(k))
+              finalScores[k] = Math.min(20, (finalScores[k] || 10) + v);
+          });
+        });
+      }
+    });
+
+    activeBgFeats.forEach((featName) => {
       if (!featName) return;
       const cands = data.feats?.filter((f) => f.name === featName) || [];
       const feat = resolveFeatureWithCopy(cands, [data.feats]);
@@ -5267,7 +5044,7 @@ export default function CharacterCreatorPage() {
 
     const raceFeatures = [];
     if (selectedSpecies) {
-      const speciesObj = getBestMatch(data.species, selectedSpecies);
+      const speciesObj = resolveRaceWithCopy(getBestMatch(data.species, selectedSpecies), data.species);
       if (speciesObj?.entries) {
         const walk = (obj) => {
           if (!obj) return;
@@ -5286,6 +5063,19 @@ export default function CharacterCreatorPage() {
         };
         walk(speciesObj.entries);
       }
+    }
+
+    // Species ASI Custom Feature Output
+    if (speciesAsi.method !== 'default' && speciesAsi.method !== 'none') {
+      let desc = '';
+      if (speciesAsi.method === 'flat') {
+        const parts = [speciesAsi.s1 && `+1 ${speciesAsi.s1}`, speciesAsi.s2 && `+1 ${speciesAsi.s2}`, speciesAsi.s3 && `+1 ${speciesAsi.s3}`].filter(Boolean);
+        desc = parts.join(', ');
+      } else if (speciesAsi.method === 'split') {
+        const parts = [speciesAsi.p2 && `+2 ${speciesAsi.p2}`, speciesAsi.p1 && `+1 ${speciesAsi.p1}`].filter(Boolean);
+        desc = parts.join(', ');
+      }
+      if (desc) raceFeatures.push({ title: "Custom Species Ability Score Adjustment", desc, source: 'race' });
     }
 
     const bgFeatures = [];
@@ -5316,6 +5106,19 @@ export default function CharacterCreatorPage() {
       }
     }
 
+    // Background ASI
+    if (backgroundAsi.method !== 'none') {
+      let desc = '';
+      if (backgroundAsi.method === 'flat') {
+        const parts = [backgroundAsi.s1 && `+1 ${backgroundAsi.s1}`, backgroundAsi.s2 && `+1 ${backgroundAsi.s2}`, backgroundAsi.s3 && `+1 ${backgroundAsi.s3}`].filter(Boolean);
+        desc = parts.join(', ');
+      } else if (backgroundAsi.method === 'split') {
+        const parts = [backgroundAsi.p2 && `+2 ${backgroundAsi.p2}`, backgroundAsi.p1 && `+1 ${backgroundAsi.p1}`].filter(Boolean);
+        desc = parts.join(', ');
+      }
+      if (desc) bgFeatures.push({ title: "Background Ability Score Adjustment", desc, source: 'background' });
+    }
+
     const skillProficiency = {};
     if (selectedClass) {
       const clsObj = getBestMatch(data.classes, selectedClass);
@@ -5341,6 +5144,7 @@ export default function CharacterCreatorPage() {
     selectedOptions.forEach((optKey) => {
       const parts = optKey.split("|||");
       const name = parts[parts.length - 1];
+      if (activeBgFeats.includes(name)) return;
       const cands = [
         ...(data.optionalFeatures?.filter((f) => f.name === name) || []),
         ...(data.classFeatures?.filter((f) => f.name === name) || []),
@@ -5402,13 +5206,46 @@ export default function CharacterCreatorPage() {
         .filter(Boolean);
     })();
 
+    const cantripsList = [];
+    const preparedSpellsList = [];
+    const spellsList = [];
+
+    const preparedClasses = ["Cleric", "Druid", "Paladin", "Wizard", "Artificer"];
+    const isPreparedClass = preparedClasses.includes(selectedClass);
+
+    Array.from(selectedSpells).forEach((name) => {
+      const s = data.spells.find((sp) => sp.name === name);
+      const lvl = s?.level || 0;
+      const spellObj = {
+        name,
+        level: lvl,
+        time: s?.time ? `${s.time[0]?.number || ''} ${s.time[0]?.unit || ''}`.trim() : "",
+        range: s?.range ? (s.range.distance ? `${s.range.distance.amount || ""} ${s.range.distance.type}`.trim() : s.range.type) : "",
+        ritual: s?.meta?.ritual || false,
+        concentration: s?.duration?.[0]?.concentration || false,
+        material: !!s?.components?.m || !!s?.components?.M,
+        description: s ? cleanText(processEntries(s.entries || [])) : "",
+        attackType: s?.spellAttack?.[0]?.toUpperCase() || "",
+        saveAbility: s?.savingThrow?.[0]?.toLowerCase() || "",
+        prepared: lvl > 0 ? isPreparedClass : false
+      };
+
+      if (lvl === 0) {
+        cantripsList.push(spellObj);
+      } else if (isPreparedClass) {
+        preparedSpellsList.push(spellObj);
+      } else {
+        spellsList.push(spellObj);
+      }
+    });
+
     const character = {
       charName: charName.trim(),
       charClass: selectedClass || "",
       charSubclass: selectedSubclass || "",
       level: selectedLevel,
       race: selectedSpecies || "",
-      profBonus: `+${pb}`,
+      profBonus: pb,
       str: finalScores.str || 10,
       dex: finalScores.dex || 10,
       con: finalScores.con || 10,
@@ -5427,21 +5264,34 @@ export default function CharacterCreatorPage() {
       feats: featFeatures,
       spellSlotsData,
       skillProficiency,
-      preparedSpells: Array.from(selectedSpells).map((name) => {
-        const s = data.spells.find((sp) => sp.name === name);
-        return {
-          name,
-          level: s?.level || 1,
-          description: s ? cleanText(processEntries(s.entries || [])) : "",
-        };
-      }),
+      cantripsList,
+      preparedSpellsList,
+      spellsList,
       inventory: [],
       spellAbility: getSpellAbility(selectedClass),
       activeTab: "features",
     };
 
+    return character;
+  }
+
+  function createCharacter() {
+    if (!charName.trim()) { alert("Please enter a character name."); return; }
+    const character = buildCharacterObject();
     localStorage.setItem("dndCharacter", JSON.stringify(character));
     navigate("/");
+  }
+
+  function createNpc() {
+    if (!charName.trim()) { alert("Please enter a name for the NPC."); return; }
+    const character = buildCharacterObject();
+    const npc = { ...character, id: Date.now().toString(), isNpc: true };
+    try {
+      const existing = JSON.parse(localStorage.getItem("dnd_npcs_global") || "[]");
+      existing.unshift(npc);
+      localStorage.setItem("dnd_npcs_global", JSON.stringify(existing));
+    } catch { localStorage.setItem("dnd_npcs_global", JSON.stringify([npc])); }
+    navigate("/npcs");
   }
 
   function getSpellAbility(cls) {
@@ -5580,6 +5430,7 @@ export default function CharacterCreatorPage() {
               onSelectClassSkills={setSelectedClassSkills}
               selectedOptions={selectedOptions}
               onToggleOption={toggleOption}
+              selectedSpells={selectedSpells}
             />
           )}
           {currentTab === "race" && (
@@ -5589,15 +5440,8 @@ export default function CharacterCreatorPage() {
               onSelect={setSelectedSpecies}
               selectedSubrace={selectedSubrace}
               onSelectSubrace={setSelectedSubrace}
-            />
-          )}
-          {currentTab === "abilities" && (
-            <AbilitiesTab
-              scores={scores}
-              setScores={setScores}
-              method={abilityMethod}
-              setMethod={setAbilityMethod}
-              speciesBonus={speciesBonus}
+              speciesAsi={speciesAsi}
+              setSpeciesAsi={setSpeciesAsi}
             />
           )}
           {currentTab === "background" && (
@@ -5607,6 +5451,9 @@ export default function CharacterCreatorPage() {
               onSelect={setSelectedBackground}
               selectedOptions={selectedOptions}
               onToggleOption={toggleOption}
+              backgroundAsi={backgroundAsi}
+              setBackgroundAsi={setBackgroundAsi}
+              selectedSpells={selectedSpells}
             />
           )}
           {currentTab === "bgextra" && (
@@ -5633,6 +5480,9 @@ export default function CharacterCreatorPage() {
               selectedSpells={selectedSpells}
               onToggleSpell={toggleSpell}
               scores={scores}
+              selectedAsi={selectedAsi}
+              extraFeats={extraFeats}
+              activeBgFeats={activeBgFeats}
             />
           )}
           {currentTab === "feats" && (
@@ -5644,8 +5494,25 @@ export default function CharacterCreatorPage() {
               setSelectedAsi={setSelectedAsi}
               extraFeats={extraFeats}
               setExtraFeats={setExtraFeats}
+              activeBgFeats={activeBgFeats}
             />
           )}
+        {currentTab === "abilities" && (
+          <AbilitiesTab
+            scores={scores}
+            manualScores={manualScores}
+            setManualScores={setManualScores}
+            method={abilityMethod}
+            setMethod={setAbilityMethod}
+            speciesBonus={speciesBonus}
+            backgroundBonus={backgroundBonus}
+            standardAssign={standardAssign}
+            setStandardAssign={setStandardAssign}
+            pbValues={pbValues}
+            setPbValues={setPbValues}
+            selectedClass={selectedClass}
+          />
+        )}
           {currentTab === "review" && (
             <ReviewTab
               charName={charName}
@@ -5661,6 +5528,7 @@ export default function CharacterCreatorPage() {
               selectedSpells={selectedSpells}
               selectedAsi={selectedAsi}
               extraFeats={extraFeats}
+              activeBgFeats={activeBgFeats}
             />
           )}
         </div>
@@ -5673,6 +5541,11 @@ export default function CharacterCreatorPage() {
           ) : (
             <div />
           )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <button className="btn btn-secondary" onClick={() => setShowRandomModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold' }}>
+              <span style={{ fontSize: '1.2rem' }}>🎲</span> Randomize
+            </button>
+          </div>
           {tabIndex < TABS.length - 1 ? (
             <button
               className="btn btn-primary"
@@ -5681,12 +5554,131 @@ export default function CharacterCreatorPage() {
               Next
             </button>
           ) : (
-            <button className="btn btn-primary" onClick={createCharacter}>
-              Create Character
-            </button>
+            <>
+              <button className="btn btn-secondary" onClick={createNpc}>
+                Create NPC
+              </button>
+              <button className="btn btn-primary" onClick={createCharacter}>
+                Create Character
+              </button>
+            </>
           )}
         </footer>
       </div>
+
+      {previewSpell && (
+        <ModalOverlay onClick={() => setPreviewSpell(null)} $zIndex={2000}>
+          <ModalBox $maxWidth="500px" onClick={(e) => e.stopPropagation()}>
+            <CloseBtn onClick={() => setPreviewSpell(null)}>&times;</CloseBtn>
+            <ModalTitle>{previewSpell.name}</ModalTitle>
+            <div style={{ color: "var(--ink-light)", fontSize: "0.85rem", marginBottom: 12 }}>
+              {previewSpell.level === 0
+                ? "Cantrip"
+                : `${previewSpell.level}${["st", "nd", "rd"][previewSpell.level - 1] || "th"}-level`}
+              {previewSpell.school &&
+                ` · ${schoolMap[previewSpell.school.toLowerCase()] || previewSpell.school}`}
+              {previewSpell.meta?.ritual && " (Ritual)"}
+              {previewSpell.meta?.concentration && " (Concentration)"}
+            {previewSpell.source && ` · ${previewSpell.source}`}
+            </div>
+            {previewSpell.time && (
+              <div style={{ margin: "4px 0", fontSize: "0.85rem" }}>
+                <strong>Casting Time:</strong>{" "}
+                {Array.isArray(previewSpell.time)
+                  ? previewSpell.time.map((t) => `${t.number} ${t.unit}`).join(", ")
+                  : previewSpell.time}
+              </div>
+            )}
+            {previewSpell.range && (
+              <div style={{ margin: "4px 0", fontSize: "0.85rem" }}>
+                <strong>Range:</strong>{" "}
+                {typeof previewSpell.range === "object"
+                  ? `${previewSpell.range.distance?.amount || ""} ${previewSpell.range.distance?.type || ""}`.trim()
+                  : previewSpell.range}
+              </div>
+            )}
+            {previewSpell.duration && (
+              <div style={{ margin: "4px 0", fontSize: "0.85rem" }}>
+                <strong>Duration:</strong>{" "}
+                {Array.isArray(previewSpell.duration)
+                  ? previewSpell.duration.map((d) =>
+                      d.type === "permanent" ? "Until dispelled" : d.type === "timed" ? `${d.concentration ? "Concentration, " : ""}${d.duration?.amount || ""} ${d.duration?.type || ""}`.trim() : d.type,
+                    ).join(", ")
+                  : previewSpell.duration}
+              </div>
+            )}
+            <div style={{ marginTop: 10, fontSize: "0.9rem", lineHeight: 1.6 }}>
+              <EntryHTML html={processEntries(previewSpell.entries)} />
+            </div>
+            {previewSpell.entriesHigherLevel && (
+              <div style={{ marginTop: 10, borderTop: "1px dashed var(--gold)", paddingTop: 8, fontSize: "0.9rem" }}>
+                <EntryHTML html={processEntries(previewSpell.entriesHigherLevel)} />
+              </div>
+            )}
+          </ModalBox>
+        </ModalOverlay>
+      )}
+
+      {previewFeat && (
+        <ModalOverlay onClick={() => setPreviewFeat(null)} $zIndex={2000}>
+          <ModalBox $maxWidth="500px" onClick={(e) => e.stopPropagation()}>
+            <CloseBtn onClick={() => setPreviewFeat(null)}>&times;</CloseBtn>
+            <ModalTitle>{previewFeat.name}</ModalTitle>
+            <div style={{ color: "var(--ink-light)", fontSize: "0.85rem", marginBottom: 12 }}>
+              {previewFeat.category === 'O' || previewFeat.category === 'Origin' ? 'Origin Feat' : previewFeat.category === 'G' ? 'General Feat' : previewFeat.category === 'EB' ? 'Epic Boon' : 'Feat'}
+              {previewFeat.source && ` · ${previewFeat.source}`}
+            </div>
+            {previewFeat.prerequisite && (
+              <div style={{ fontSize: "0.85rem", color: "var(--red)", fontStyle: "italic", marginBottom: 8 }}>
+                Requires: {formatPrerequisites(previewFeat)}
+              </div>
+            )}
+            {previewFeat.ability && (
+              <div style={{ fontSize: "0.9rem", color: "var(--ink)", marginBottom: 12, background: "rgba(255,255,255,0.5)", padding: 8, borderRadius: 4, border: "1px solid var(--gold-light)" }}>
+                <strong>Ability Score Increase:</strong>{" "}
+                {previewFeat.ability.map(a => {
+                    if (a.choose && a.choose.from) return `Choose ${a.choose.count || a.choose.amount || 1} from ${a.choose.from.join(', ').toUpperCase()}`;
+                    return Object.entries(a).filter(([k]) => k !== 'choose').map(([k, v]) => `${k.toUpperCase()} +${v}`).join(', ');
+                }).join('; ')}
+              </div>
+            )}
+            <div style={{ marginTop: 10, fontSize: "0.9rem", lineHeight: 1.6 }}>
+              <EntryHTML html={processEntries(previewFeat.entries || previewFeat.entry)} />
+            </div>
+          </ModalBox>
+        </ModalOverlay>
+      )}
+
+    {showRandomModal && (
+      <ModalOverlay onClick={() => setShowRandomModal(false)} $zIndex={2000}>
+        <ModalBox $maxWidth="350px" onClick={(e) => e.stopPropagation()}>
+          <CloseBtn onClick={() => setShowRandomModal(false)}>&times;</CloseBtn>
+          <ModalTitle>Randomize Character</ModalTitle>
+          
+          <div className="field" style={{ marginBottom: 12 }}>
+             <span className="field-label" style={{ display: "block", marginBottom: 4 }}>Level Range</span>
+             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+               <input type="number" min={1} max={20} value={randSettings.minLvl} onChange={(e) => setRandSettings(s => ({...s, minLvl: parseInt(e.target.value) || 1}))} style={{ width: "100%", padding: "8px", borderRadius: 4, border: "1px solid var(--gold)", background: "white", fontSize: "1rem" }} />
+               <span style={{ color: "var(--ink-light)" }}>to</span>
+               <input type="number" min={1} max={20} value={randSettings.maxLvl} onChange={(e) => setRandSettings(s => ({...s, maxLvl: parseInt(e.target.value) || 1}))} style={{ width: "100%", padding: "8px", borderRadius: 4, border: "1px solid var(--gold)", background: "white", fontSize: "1rem" }} />
+             </div>
+          </div>
+          
+          <div className="field" style={{ marginBottom: 20 }}>
+             <span className="field-label" style={{ display: "block", marginBottom: 4 }}>Class Type</span>
+             <select value={randSettings.type} onChange={(e) => setRandSettings(s => ({...s, type: e.target.value}))} style={{ width: "100%", padding: "8px", borderRadius: 4, border: "1px solid var(--gold)", background: "white", fontSize: "1rem" }} className="styled-select">
+               <option value="any">Any Class</option>
+               <option value="caster">Spellcasters Only</option>
+               <option value="martial">Martials Only</option>
+             </select>
+          </div>
+          
+          <button className="btn btn-primary" style={{ width: "100%", padding: "10px", fontSize: "1rem" }} onClick={() => { setShowRandomModal(false); handleRandomize(randSettings); }}>
+            Generate Character
+          </button>
+        </ModalBox>
+      </ModalOverlay>
+    )}
     </>
   );
 }
